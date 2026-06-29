@@ -33,6 +33,10 @@ const TANK_ROTATION_UNJAM_EPS: f32 = 1.0e-4;
 const PIVOT_ROTATION_ASSIST_STEP_SCALE: f32 = 0.25;
 const PIVOT_ROTATION_ASSIST_MAX_STEPS: u32 = 4;
 const SCOUT_CAR_RECOVERY_SEARCH_STEP_PX: f32 = config::TILE_SIZE as f32 * 0.5;
+const STATIC_ESCAPE_TRIGGER_TICKS: u16 = (config::TICK_HZ as u16) * 2;
+const STATIC_ESCAPE_DURATION_TICKS: f32 = config::TICK_HZ as f32;
+const STATIC_ESCAPE_MIN_DISTANCE_PX: f32 = config::TILE_SIZE as f32 * 0.5;
+const STATIC_ESCAPE_SEARCH_RADIUS_TILES: i32 = 4;
 
 /// Advance every moving unit along its waypoint path at its speed. Clamps the final landing
 /// tile to passable terrain (soft overlap with other units is allowed, so we don't resolve
@@ -454,7 +458,17 @@ pub(super) fn advance_moving_units(
                     .as_ref()
                     .map(|m| m.static_blocked_ticks)
                     .unwrap_or(0);
-                if static_blocked_ticks >= config::STATIC_BLOCKED_REPATH_TICKS
+                let active_combat_movement = combat_unit_with_active_movement_or_attack_order(e);
+                let static_escape_dir = active_combat_movement
+                    .then(|| nearest_solid_escape_dir(map, occ, e.pos_x, e.pos_y))
+                    .flatten();
+                if let Some(escape_dir) = static_escape_dir {
+                    if static_blocked_ticks >= STATIC_ESCAPE_TRIGGER_TICKS {
+                        if inject_static_escape(e, map, occ, escape_dir, speed) {
+                            continue;
+                        }
+                    }
+                } else if static_blocked_ticks >= config::STATIC_BLOCKED_REPATH_TICKS
                     && matches!(
                         e.order(),
                         Order::Move(_) | Order::AttackMove(_) | Order::Ability(_)
@@ -573,6 +587,122 @@ pub(super) fn advance_moving_units(
             }
         }
     }
+}
+
+fn combat_unit_with_active_movement_or_attack_order(e: &Entity) -> bool {
+    e.is_unit()
+        && e.kind != EntityKind::Worker
+        && !uses_oriented_vehicle_body(e.kind)
+        && e.can_attack()
+        && !e.path_is_empty()
+        && matches!(e.order(), Order::Move(_) | Order::Attack(_) | Order::AttackMove(_))
+}
+
+fn nearest_solid_escape_dir(map: &Map, occ: &Occupancy, x: f32, y: f32) -> Option<(f32, f32)> {
+    if !x.is_finite() || !y.is_finite() {
+        return None;
+    }
+    let ts = config::TILE_SIZE as f32;
+    let (cx, cy) = map.tile_of(x, y);
+    let mut best = None;
+    let mut best_d2 = f32::INFINITY;
+    for ty in cy as i32 - STATIC_ESCAPE_SEARCH_RADIUS_TILES
+        ..=cy as i32 + STATIC_ESCAPE_SEARCH_RADIUS_TILES
+    {
+        for tx in cx as i32 - STATIC_ESCAPE_SEARCH_RADIUS_TILES
+            ..=cx as i32 + STATIC_ESCAPE_SEARCH_RADIUS_TILES
+        {
+            if !occ.terrain_or_non_tank_trap_building_blocked_at_tile(tx, ty) {
+                continue;
+            }
+            let tile_x = (tx as f32 + 0.5) * ts;
+            let tile_y = (ty as f32 + 0.5) * ts;
+            let dx = x - tile_x;
+            let dy = y - tile_y;
+            let d2 = dx * dx + dy * dy;
+            if d2.is_finite() && d2 < best_d2 {
+                best = Some((dx, dy));
+                best_d2 = d2;
+            }
+        }
+    }
+    let (dx, dy) = best?;
+    let len = (dx * dx + dy * dy).sqrt();
+    (len > 1.0e-4 && len.is_finite()).then_some((dx / len, dy / len))
+}
+
+fn inject_static_escape(
+    e: &mut Entity,
+    map: &Map,
+    occ: &Occupancy,
+    escape_dir: (f32, f32),
+    speed_px_per_tick: f32,
+) -> bool {
+    if !escape_dir.0.is_finite() || !escape_dir.1.is_finite() || speed_px_per_tick <= 0.0 {
+        return false;
+    }
+    let max_distance = (speed_px_per_tick * STATIC_ESCAPE_DURATION_TICKS)
+        .max(STATIC_ESCAPE_MIN_DISTANCE_PX);
+    let angle = escape_dir.1.atan2(escape_dir.0);
+    let angle_offsets = [
+        0.0_f32,
+        std::f32::consts::FRAC_PI_6,
+        -std::f32::consts::FRAC_PI_6,
+        std::f32::consts::FRAC_PI_3,
+        -std::f32::consts::FRAC_PI_3,
+        std::f32::consts::FRAC_PI_2,
+        -std::f32::consts::FRAC_PI_2,
+        std::f32::consts::PI,
+    ];
+    for offset in angle_offsets {
+        let dir_angle = angle + offset;
+        let dir = (dir_angle.cos(), dir_angle.sin());
+        let mut distance = max_distance;
+        while distance >= STATIC_ESCAPE_MIN_DISTANCE_PX {
+            let candidate = (e.pos_x + dir.0 * distance, e.pos_y + dir.1 * distance);
+            if static_escape_candidate_is_legal(e, map, occ, candidate) {
+                e.push_waypoint(candidate);
+                if let Some(m) = e.movement.as_mut() {
+                    m.stuck_ticks = 0;
+                    m.last_progress_pos = (e.pos_x, e.pos_y);
+                    m.static_blocked_ticks = 0;
+                    m.sidestep_cooldown = config::SIDESTEP_COOLDOWN_TICKS;
+                }
+                return true;
+            }
+            distance -= config::TILE_SIZE as f32 * 0.25;
+        }
+    }
+    false
+}
+
+fn static_escape_candidate_is_legal(
+    e: &Entity,
+    map: &Map,
+    occ: &Occupancy,
+    candidate: (f32, f32),
+) -> bool {
+    if !candidate.0.is_finite() || !candidate.1.is_finite() {
+        return false;
+    }
+    let world_size = map.world_size_px();
+    if candidate.0 < 0.0
+        || candidate.1 < 0.0
+        || candidate.0 >= world_size
+        || candidate.1 >= world_size
+    {
+        return false;
+    }
+    if e.next_waypoint()
+        .is_some_and(|wp| distance_between(wp, candidate) <= ARRIVE_EPS)
+    {
+        return false;
+    }
+    if !unit_static_standable(occ, map, e.kind, candidate.0, candidate.1, e.facing()) {
+        return false;
+    }
+
+    true
 }
 
 fn inject_scout_car_reverse_recovery(e: &mut Entity, map: &Map, occ: &Occupancy) {

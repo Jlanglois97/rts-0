@@ -275,7 +275,7 @@ fn mortar_reveal_for(attacker: Option<&Entity>, owner: u32) -> Option<AttackReve
     })
 }
 
-fn mortar_damage(victim_kind: EntityKind, base: u32, inner_hit: bool) -> u32 {
+pub(crate) fn mortar_damage(victim_kind: EntityKind, base: u32, inner_hit: bool) -> u32 {
     if !combat::is_armored(victim_kind) {
         return combat::effective_damage(
             EntityKind::MortarTeam,

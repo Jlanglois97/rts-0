@@ -13,7 +13,7 @@ use crate::game::firing_reveal::{
 };
 use crate::game::fog::Fog;
 use crate::game::map::Map;
-use crate::game::mortar::{rotate_mortar_for_fire, MortarShellStore};
+use crate::game::mortar::{mortar_damage, rotate_mortar_for_fire, MortarShellStore};
 use crate::game::mortar_scatter::predicted_mortar_impact;
 use crate::game::services::dist2;
 use crate::game::services::line_of_sight::LineOfSight;
@@ -131,6 +131,7 @@ pub(in crate::game) fn combat_system(
     tick: u32,
 ) {
     let los = LineOfSight::with_smoke(map, smokes);
+    let mut committed_mortar_autocast_damage: HashMap<u32, u32> = HashMap::new();
     // Tick down cooldowns first.
     for id in entities.ids() {
         if let Some(e) = entities.get_mut(id) {
@@ -255,6 +256,11 @@ pub(in crate::game) fn combat_system(
                     || mortar_autocast_target_safe(
                         entities, teams, fog, spatial, owner, id, target_id, tick,
                     )
+                        && !mortar_autocast_target_has_lethal_commitment(
+                            entities,
+                            &committed_mortar_autocast_damage,
+                            target_id,
+                        )
             },
         );
         let Some(tid) = target else {
@@ -384,8 +390,17 @@ pub(in crate::game) fn combat_system(
                     ) {
                         continue;
                     }
+                    let committed_damage = intended_mortar_autocast_damage(entities, tid);
                     mortar_shells
                         .schedule(events, fog, teams, owner, id, px, py, mx, my, tick, true);
+                    if committed_damage > 0 {
+                        committed_mortar_autocast_damage
+                            .entry(tid)
+                            .and_modify(|damage| {
+                                *damage = damage.saturating_add(committed_damage);
+                            })
+                            .or_insert(committed_damage);
+                    }
                     if let Some(e) = entities.get_mut(id) {
                         e.set_attack_cd(cd_reset);
                     }
@@ -472,6 +487,19 @@ pub(in crate::game) fn combat_system(
     }
 }
 
+fn mortar_autocast_target_has_lethal_commitment(
+    entities: &EntityStore,
+    committed_damage: &HashMap<u32, u32>,
+    target: u32,
+) -> bool {
+    let Some(target_entity) = entities.get(target) else {
+        return false;
+    };
+    committed_damage
+        .get(&target)
+        .is_some_and(|damage| *damage >= target_entity.hp)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn mortar_autocast_target_safe(
     entities: &EntityStore,
@@ -486,6 +514,16 @@ fn mortar_autocast_target_safe(
     let (x, y) = mortar_aim_point(entities, target, tick);
     let (impact_x, impact_y) = predicted_mortar_impact(fog, teams, owner, attacker, x, y, tick);
     !mortar_autocast_would_hit_same_team_entity(entities, teams, spatial, owner, impact_x, impact_y)
+}
+
+fn intended_mortar_autocast_damage(entities: &EntityStore, target: u32) -> u32 {
+    let Some(target_entity) = entities.get(target) else {
+        return 0;
+    };
+    if target_entity.hp == 0 || target_entity.is_node() {
+        return 0;
+    }
+    mortar_damage(target_entity.kind, config::MORTAR_INNER_DAMAGE, true)
 }
 
 fn mortar_aim_point(entities: &EntityStore, target: u32, _tick: u32) -> (f32, f32) {
