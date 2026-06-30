@@ -1,5 +1,81 @@
 use super::*;
 
+fn mortar_launch_count(events: &HashMap<u32, Vec<Event>>, player: u32) -> usize {
+    events
+        .get(&player)
+        .map(|player_events| {
+            player_events
+                .iter()
+                .filter(|event| matches!(event, Event::MortarLaunch { .. }))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn ready_autocast_mortar(entities: &mut EntityStore, id: u32) {
+    if let Some(mortar) = entities.get_mut(id) {
+        mortar.set_facing(0.0);
+        mortar.set_weapon_facing(0.0);
+        mortar.set_weapon_setup(WeaponSetup::Deployed);
+        mortar.set_autocast_enabled(AbilityKind::MortarFire, true);
+    }
+}
+
+#[test]
+fn mortar_autocast_does_not_overcommit_lethal_fire() {
+    let mut entities = EntityStore::new();
+    let mortar_a = entities
+        .spawn_unit(1, EntityKind::MortarTeam, 100.0, 100.0)
+        .expect("first mortar should spawn");
+    let mortar_b = entities
+        .spawn_unit(1, EntityKind::MortarTeam, 100.0, 112.0)
+        .expect("second mortar should spawn");
+    let mortar_c = entities
+        .spawn_unit(1, EntityKind::MortarTeam, 100.0, 124.0)
+        .expect("third mortar should spawn");
+    let enemy_a = entities
+        .spawn_unit(2, EntityKind::Rifleman, 300.0, 100.0)
+        .expect("first target should spawn");
+    let enemy_b = entities
+        .spawn_unit(2, EntityKind::Rifleman, 300.0, 156.0)
+        .expect("second target should spawn");
+    for target_id in [enemy_a, enemy_b] {
+        entities
+            .get_mut(target_id)
+            .expect("target should exist")
+            .hp = config::MORTAR_OUTER_DAMAGE;
+    }
+    for mortar_id in [mortar_a, mortar_b, mortar_c] {
+        ready_autocast_mortar(&mut entities, mortar_id);
+    }
+
+    let events = run_combat_tick(&mut entities);
+
+    assert_eq!(
+        mortar_launch_count(&events, 1),
+        2,
+        "only enough autocast mortars to kill the available targets should fire"
+    );
+    let mortar_a = entities.get(mortar_a).expect("first mortar should exist");
+    let mortar_b = entities.get(mortar_b).expect("second mortar should exist");
+    let mortar_c = entities.get(mortar_c).expect("third mortar should exist");
+    assert_eq!(
+        mortar_a.target_id(),
+        Some(enemy_a),
+        "first mortar should take the nearest lethal target"
+    );
+    assert_eq!(
+        mortar_b.target_id(),
+        Some(enemy_b),
+        "second mortar should skip the already-covered target and fire at the next one"
+    );
+    assert_eq!(
+        mortar_c.attack_cd(),
+        0,
+        "third mortar should keep its shot when every visible target already has lethal fire committed"
+    );
+}
+
 #[test]
 fn mortar_autocast_prefers_safe_target_over_nearer_unsafe_target() {
     let mut entities = EntityStore::new();

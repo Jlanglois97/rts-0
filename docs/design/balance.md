@@ -270,7 +270,8 @@ folded into default targeting.
   autocast shots scatter from the intended impact point: if the point is visible to the firing team,
   the deterministic radial scatter has a one-tile median miss radius; otherwise it has a four-tile
   median miss radius. Autocast prefers targets whose scattered predicted impact avoids same-team
-  units/buildings when alternatives are available.
+  units/buildings when alternatives are available, and avoids assigning extra ready mortars to a
+  target that already has lethal autocast mortar fire committed during the current combat tick.
   Mortar impacts apply the same damage to friendly and enemy units/buildings; autocast skips
   scattered predicted impact points that would hit any same-team unit or building at its current position,
   while manual fire remains unrestricted.
