@@ -4973,7 +4973,7 @@ fn static_building_blockage_queues_repath_after_debounce() {
     let (w0x, w0y) = map.tile_center(11, 10);
     let (gx, gy) = map.tile_center(20, 10);
     let unit = entities
-        .spawn_unit(1, EntityKind::Rifleman, w0x - 16.5, w0y)
+        .spawn_unit(1, EntityKind::Worker, w0x - 16.5, w0y)
         .unwrap();
     set_path_direct(&mut entities, unit, vec![(w0x, w0y), (gx, gy)]);
     if let Some(e) = entities.get_mut(unit) {
@@ -5014,6 +5014,97 @@ fn static_building_blockage_queues_repath_after_debounce() {
     assert_eq!(e.move_phase(), Some(MovePhase::AwaitingPath));
     assert!(e.path_is_empty(), "stale blocked path should be cleared");
     assert_eq!(e.path_goal(), Some((gx, gy)));
+}
+
+#[test]
+fn combat_unit_stuck_on_building_wall_gets_temporary_escape_waypoint() {
+    let map = flat_map(1);
+    let mut entities = EntityStore::new();
+    let (w0x, w0y) = map.tile_center(11, 10);
+    let (gx, gy) = map.tile_center(20, 10);
+    let unit = entities
+        .spawn_unit(1, EntityKind::Rifleman, w0x - 16.5, w0y)
+        .expect("rifleman should spawn");
+    set_path_direct(&mut entities, unit, vec![(w0x, w0y)]);
+    if let Some(e) = entities.get_mut(unit) {
+        e.set_order(Order::move_to(gx, gy));
+        e.set_path_goal(Some((gx, gy)));
+        e.mark_move_phase(MovePhase::Moving);
+    }
+
+    let (bx, by) = map.tile_center(12, 10);
+    entities
+        .spawn_building(1, EntityKind::Depot, bx, by, true)
+        .expect("building spawn");
+
+    let mut inserted_escape = None;
+    for tick in 0..=config::TICK_HZ * 4 {
+        let occ = Occupancy::build(&map, &entities);
+        let spatial = SpatialIndex::build(&entities, map.size);
+        movement_system(&map, &mut entities, &mut [], &occ, &spatial, tick);
+        let e = entities.get(unit).expect("rifleman should exist");
+        if e.movement.as_ref().is_some_and(|m| m.path.len() >= 2) {
+            inserted_escape = e.next_waypoint();
+            break;
+        }
+    }
+
+    let e = entities.get(unit).expect("rifleman should exist");
+    let escape = inserted_escape
+        .expect("stuck combat unit should receive an escape waypoint");
+    assert!(
+        escape.0 < e.pos_x,
+        "escape waypoint should move directly away from the blocking building, pos=({:.2},{:.2}), escape={escape:?}",
+        e.pos_x,
+        e.pos_y
+    );
+    assert_eq!(
+        e.path_goal(),
+        Some((gx, gy)),
+        "temporary escape should preserve the original path goal"
+    );
+    assert!(
+        e.movement.as_ref().is_some_and(|m| m.path.len() >= 2),
+        "temporary escape should be inserted ahead of the original route"
+    );
+}
+
+#[test]
+fn combat_unit_stuck_on_tank_trap_does_not_use_static_escape() {
+    let map = flat_map(1);
+    let mut entities = EntityStore::new();
+    let (sx, sy) = map.tile_center(10, 10);
+    let (gx, gy) = map.tile_center(20, 10);
+    let tank = entities
+        .spawn_unit(1, EntityKind::Tank, sx, sy)
+        .expect("tank should spawn");
+    set_path_direct(&mut entities, tank, vec![(gx, gy)]);
+    if let Some(e) = entities.get_mut(tank) {
+        e.set_facing(0.0);
+        e.set_order(Order::move_to(gx, gy));
+        e.mark_move_phase(MovePhase::Moving);
+    }
+    let (trap_x, trap_y) = map.tile_center(11, 10);
+    entities
+        .spawn_building(1, EntityKind::TankTrap, trap_x, trap_y, true)
+        .expect("tank trap should spawn");
+
+    for tick in 0..config::STATIC_BLOCKED_REPATH_TICKS as u32 {
+        let occ = Occupancy::build(&map, &entities);
+        let spatial = SpatialIndex::build(&entities, map.size);
+        movement_system(&map, &mut entities, &mut [], &occ, &spatial, tick);
+    }
+
+    let e = entities.get(tank).expect("tank should exist");
+    assert_eq!(
+        e.move_phase(),
+        Some(MovePhase::AwaitingPath),
+        "tank-trap blockage should keep the existing repath behavior instead of injecting static escape"
+    );
+    assert!(
+        e.path_is_empty(),
+        "tank-trap blockage should not preserve the path by adding an escape waypoint"
+    );
 }
 
 /// A unit pressed against a building wall must physically reach its goal, not freeze

@@ -210,6 +210,18 @@ impl<'a> Occupancy<'a> {
         self.all_ground_blocked[idx] || self.vehicle_body_blocked[idx]
     }
 
+    pub(crate) fn terrain_or_non_tank_trap_building_blocked_at_tile(
+        &self,
+        tx: i32,
+        ty: i32,
+    ) -> bool {
+        if !self.map.in_bounds(tx, ty) {
+            return true;
+        }
+        let idx = (ty as u32 * self.map.size + tx as u32) as usize;
+        !self.map.is_passable(tx, ty) || self.all_ground_blocked[idx]
+    }
+
     pub(super) fn tank_trap_obstructs_vehicle_route(
         &self,
         attacker: &Entity,
