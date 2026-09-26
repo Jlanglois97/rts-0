@@ -193,7 +193,12 @@ fn expansion_reserve_expires_and_rearms_after_the_expansion_cycle() {
         &mut |_, _, _| true,
     );
     let reserve = |obs: &AiObservation, memory: &mut AiDecisionMemory| {
-        expansion_security::reserve_expansion(obs, &AiFacts::from_observation(obs), &JEFFS_AI, memory)
+        expansion_security::reserve_expansion(
+            obs,
+            &AiFacts::from_observation(obs),
+            &JEFFS_AI,
+            memory,
+        )
     };
     assert!(reserve(&obs, &mut memory));
     obs.tick += config::TICK_HZ * 60 - 1;

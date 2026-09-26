@@ -458,6 +458,13 @@ pub(crate) fn is_jeffs_ai_profile(id: &str) -> bool {
     )
 }
 
+/// Profiles running the current Jeff policy. A comparison freeze taken from the current Jeff
+/// belongs here so it keeps every existing current-Jeff behavior and differs only where the
+/// change under test branches on its own id. Older freezes deliberately stay outside this set.
+pub(crate) fn uses_current_jeffs_ai_policy(id: &str) -> bool {
+    matches!(id, JEFFS_AI_ID | JEFFS_AI_PRE_TANK_CATCHUP_ID)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,6 +502,11 @@ mod tests {
         assert!(is_jeffs_ai_profile(JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID));
         assert!(is_jeffs_ai_profile(JEFFS_AI_PRE_RIFLE_COVERAGE_ID));
         assert!(is_jeffs_ai_profile(JEFFS_AI_PRE_TANK_CATCHUP_ID));
+        assert!(uses_current_jeffs_ai_policy(JEFFS_AI_ID));
+        assert!(uses_current_jeffs_ai_policy(JEFFS_AI_PRE_TANK_CATCHUP_ID));
+        assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_BETA_ID));
+        assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID));
+        assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_PRE_RIFLE_COVERAGE_ID));
     }
 
     #[test]

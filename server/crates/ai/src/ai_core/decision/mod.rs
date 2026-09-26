@@ -11,10 +11,10 @@ use crate::ai_core::observation::{
     AiEntityState, AiEntitySummary, AiMapSummary, AiObservation, AiResourceSummary,
 };
 use crate::ai_core::profiles::{
-    is_jeffs_ai_profile, AiProfile, AttackPolicy, BarracksCurve, ExpansionContainmentPolicy,
-    ExpansionPolicy, ProductionPolicy, ResourcePolicy, TechTransitionPolicy, WorkerPolicy,
-    JEFFS_AI_BETA_ID, JEFFS_AI_ID, JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID,
-    JEFFS_AI_PRE_RIFLE_COVERAGE_ID,
+    is_jeffs_ai_profile, uses_current_jeffs_ai_policy, AiProfile, AttackPolicy, BarracksCurve,
+    ExpansionContainmentPolicy, ExpansionPolicy, ProductionPolicy, ResourcePolicy,
+    TechTransitionPolicy, WorkerPolicy, JEFFS_AI_BETA_ID, JEFFS_AI_ID,
+    JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID, JEFFS_AI_PRE_RIFLE_COVERAGE_ID, JEFFS_AI_PRE_TANK_CATCHUP_ID,
 };
 use crate::ai_shared;
 use crate::config;
@@ -267,7 +267,7 @@ where
     let defer_economy_for_panic = defensive_panic.active && !preserve_fast_tank_economy;
     let mut expansion_plan = plan_expansion(observation, &facts, profile, defer_economy_for_panic);
     expansion_security::prepare(observation, &facts, profile, memory, &mut placeable);
-    let expansion_footprint_blockers = if profile.id == JEFFS_AI_ID
+    let expansion_footprint_blockers = if uses_current_jeffs_ai_policy(profile.id)
         && expansion_security::predicts_natural_from_opening(observation)
     {
         expansion_security::clear_reserved_footprint(observation, memory, &mut actions)
@@ -309,7 +309,7 @@ where
 
     if (should_build_expansion_from_economy_manager(&economy_manager_output)
         || !retry_builder.is_empty())
-        && (profile.id != JEFFS_AI_ID || expansion_secured)
+        && (!uses_current_jeffs_ai_policy(profile.id) || expansion_secured)
     {
         if let Some(build_action) = try_build_expansion_resource_depot(
             observation,
@@ -323,7 +323,7 @@ where
         ) {
             // Track every secured-site order, not only the predicted-natural maps: without an
             // attempt record a rejected order is never retried and the reserve holds forever.
-            if profile.id == JEFFS_AI_ID {
+            if uses_current_jeffs_ai_policy(profile.id) {
                 memory
                     .expansion_security
                     .note_build_attempt(observation.tick, build_action.worker);
@@ -639,7 +639,7 @@ where
         &effective_unit_priorities,
     );
     let mut effective_unit_priorities = effective_unit_priorities;
-    if profile.id == JEFFS_AI_ID
+    if uses_current_jeffs_ai_policy(profile.id)
         && memory.expansion_security.site.is_some()
         && facts.unit_count(EntityKind::Rifleman) < 6
     {
@@ -678,7 +678,7 @@ where
         let key_tech_unit = production_policy
             .save_for_first_tech_unit
             .unwrap_or(EntityKind::Worker);
-        let security_recruits = profile.id == JEFFS_AI_ID
+        let security_recruits = uses_current_jeffs_ai_policy(profile.id)
             && memory.expansion_security.site.is_some()
             && facts.unit_count(EntityKind::Rifleman) < 6
             && building_kind == EntityKind::Barracks;
@@ -756,7 +756,7 @@ where
         frontal_exclusions.insert(tank_id);
     }
     sync_containment_recovery(observation, profile, memory);
-    let forward_tank_position = (profile.id == JEFFS_AI_ID)
+    let forward_tank_position = uses_current_jeffs_ai_policy(profile.id)
         .then(|| expansion_security::tank_staging_center(observation, map_analysis))
         .flatten();
     let forward_defensive_tank = forward_tank_position

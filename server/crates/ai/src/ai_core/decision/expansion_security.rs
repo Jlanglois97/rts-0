@@ -44,7 +44,7 @@ pub(super) fn expansion_is_next(
     facts: &AiFacts,
     profile: &AiProfile,
 ) -> bool {
-    profile.id == JEFFS_AI_ID
+    uses_current_jeffs_ai_policy(profile.id)
         && observation
             .owned
             .iter()
@@ -95,7 +95,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
     memory: &mut AiDecisionMemory,
     placeable: &mut F,
 ) {
-    if profile.id != JEFFS_AI_ID {
+    if !uses_current_jeffs_ai_policy(profile.id) {
         return;
     }
     let active_depot_count = observation
@@ -155,7 +155,8 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         };
     }
     if memory.expansion_security.site.is_none()
-        && ((profile.id == JEFFS_AI_ID && predicts_natural_from_opening(observation))
+        && ((uses_current_jeffs_ai_policy(profile.id)
+            && predicts_natural_from_opening(observation))
             || expansion_is_next(observation, facts, profile))
         && facts.building_count(EntityKind::ResourceDepot) < 2
     {
