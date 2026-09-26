@@ -505,8 +505,12 @@ mod tests {
         assert!(uses_current_jeffs_ai_policy(JEFFS_AI_ID));
         assert!(uses_current_jeffs_ai_policy(JEFFS_AI_PRE_TANK_CATCHUP_ID));
         assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_BETA_ID));
-        assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID));
-        assert!(!uses_current_jeffs_ai_policy(JEFFS_AI_PRE_RIFLE_COVERAGE_ID));
+        assert!(!uses_current_jeffs_ai_policy(
+            JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID
+        ));
+        assert!(!uses_current_jeffs_ai_policy(
+            JEFFS_AI_PRE_RIFLE_COVERAGE_ID
+        ));
     }
 
     #[test]

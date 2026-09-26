@@ -147,6 +147,49 @@ fn successful_expansion_attempt_does_not_time_out_after_later_depot_loss() {
 }
 
 #[test]
+fn jeff_rejects_depot_sites_whose_footprint_touches_a_resource_body() {
+    use crate::ai_core::decision::jeff::resource_body_blocks_site;
+    // Classic's natural had a Steel center 0.2px below the Depot footprint: outside the
+    // footprint tiles, but the server rejects any footprint the node body touches.
+    let ts = config::TILE_SIZE as f32;
+    let (tx, ty) = (40, 40);
+    let mut obs = security_observation();
+    obs.resources.clear();
+    obs.resources.push(resource(
+        400,
+        EntityKind::Steel,
+        tx as f32 * ts + 6.0,
+        (ty + 3) as f32 * ts + 0.2,
+    ));
+    assert!(resource_body_blocks_site(
+        &obs,
+        EntityKind::ResourceDepot,
+        tx,
+        ty
+    ));
+    assert!(!resource_body_blocks_site(
+        &obs,
+        EntityKind::SteelMine,
+        tx,
+        ty
+    ));
+
+    obs.resources.clear();
+    obs.resources.push(resource(
+        401,
+        EntityKind::Steel,
+        tx as f32 * ts - ts * 0.5 - 1.0,
+        (ty + 1) as f32 * ts,
+    ));
+    assert!(!resource_body_blocks_site(
+        &obs,
+        EntityKind::ResourceDepot,
+        tx,
+        ty
+    ));
+}
+
+#[test]
 fn walking_builder_keeps_the_site_until_the_order_is_dropped() {
     let mut obs = security_observation();
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);

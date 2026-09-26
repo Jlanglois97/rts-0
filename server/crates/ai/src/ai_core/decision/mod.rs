@@ -266,7 +266,21 @@ where
         .unwrap_or(false);
     let defer_economy_for_panic = defensive_panic.active && !preserve_fast_tank_economy;
     let mut expansion_plan = plan_expansion(observation, &facts, profile, defer_economy_for_panic);
-    expansion_security::prepare(observation, &facts, profile, memory, &mut placeable);
+    // Jeff's natural Depot must also clear resource node bodies, which the shared placement query
+    // does not check. Other profiles keep the shared answer unchanged.
+    let jeff_resource_bodies = uses_current_jeffs_ai_policy(profile.id);
+    let mut expansion_placeable = |building: EntityKind, tile_x: u32, tile_y: u32| {
+        placeable(building, tile_x, tile_y)
+            && !(jeff_resource_bodies
+                && jeff::resource_body_blocks_site(observation, building, tile_x, tile_y))
+    };
+    expansion_security::prepare(
+        observation,
+        &facts,
+        profile,
+        memory,
+        &mut expansion_placeable,
+    );
     let expansion_footprint_blockers = if uses_current_jeffs_ai_policy(profile.id)
         && expansion_security::predicts_natural_from_opening(observation)
     {
@@ -319,7 +333,7 @@ where
             profile,
             memory.expansion_security.site,
             !retry_builder.is_empty(),
-            &mut placeable,
+            &mut expansion_placeable,
         ) {
             // Track every secured-site order, not only the predicted-natural maps: without an
             // attempt record a rejected order is never retried and the reserve holds forever.
