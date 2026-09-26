@@ -187,6 +187,30 @@ pub(crate) fn footprint_placeable_from_snapshot(
             }
         }
     }
+    let resource_positions = map
+        .resources
+        .iter()
+        .filter(|resource| matches!(resource.kind.as_str(), kinds::STEEL | kinds::OIL))
+        .map(|resource| (resource.x, resource.y))
+        .chain(
+            snapshot
+                .entities
+                .iter()
+                .filter(|e| {
+                    e.owner == 0 && (is_kind(e, EntityKind::Steel) || is_kind(e, EntityKind::Oil))
+                })
+                .map(|e| (e.x, e.y)),
+        );
+    for position in resource_positions {
+        if crate::sdk::resource_body_blocks_footprint(
+            building,
+            position,
+            tile_size,
+            (left, top, right, bottom),
+        ) {
+            return false;
+        }
+    }
     if !rts_rules::economy::trainable_units(building).is_empty() {
         let spawn_x = tile_x + stats.foot_w / 2;
         let Some(spawn_y) = tile_y.checked_add(stats.foot_h) else {

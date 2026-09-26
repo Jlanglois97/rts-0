@@ -331,6 +331,11 @@ impl<'a> WorldQueries<'a> {
             right as f32 * tile_size,
             bottom as f32 * tile_size,
         );
+        if self.resources().iter().any(|resource| {
+            resource_body_blocks_footprint(building, resource.position, tile_size, footprint)
+        }) {
+            return KnownBuildSite::KnownBlocked(KnownBuildSiteBlocker::KnownResource);
+        }
         if self.owned().iter().any(|entity| {
             entity.kind.is_unit()
                 && unit_circle_touches_rect(
@@ -502,6 +507,20 @@ fn point_overlaps_building(point: (f32, f32), building: &AiEntity, tile_size: u3
         && point.1 <= building.position.1 + half_h + POINT_IN_RECT_EPS_PX
 }
 
+/// Mirrors the simulation's build-site rule: a resource node body is a half-tile circle, and any
+/// footprint it touches is rejected (Pump Jacks sit on Oil, and extractors never use this check).
+/// Checking only the node's center tile accepts sites the server refuses when a patch sits just
+/// outside the footprint edge.
+pub(crate) fn resource_body_blocks_footprint(
+    building: EntityKind,
+    resource_position: (f32, f32),
+    tile_size: f32,
+    footprint: (f32, f32, f32, f32),
+) -> bool {
+    !matches!(building, EntityKind::PumpJack | EntityKind::SteelMine)
+        && unit_circle_touches_rect(resource_position, tile_size * 0.5, footprint)
+}
+
 pub(crate) fn unit_circle_touches_rect(
     position: (f32, f32),
     radius: f32,
@@ -611,6 +630,69 @@ mod tests {
         assert_eq!(
             queries.known_resource_state(resource_id),
             Some(KnownResourceState::KnownConflict)
+        );
+    }
+
+    #[test]
+    fn resource_bodies_touching_a_footprint_edge_block_the_site() {
+        // Classic's natural put a Steel center 0.2px below a Depot footprint: the center tile was
+        // outside the footprint, but the server rejects any footprint the node body touches.
+        let game = Game::new_without_ai_controllers(&players(), 56);
+        let start = game.start_payload();
+        let snapshot = game.snapshot_for(1);
+        let frame = AiFrame::from_host(&start, &snapshot, 1, [], Some(&[1, 2])).unwrap();
+        let queries = WorldQueries::new(&frame);
+        let exclusions = KnownBuildSiteExclusions::default();
+        let own_start = (start.players[0].start_tile_x, start.players[0].start_tile_y);
+        let site = queries
+            .find_known_build_site_near(
+                queries.tile(own_start.0, own_start.1).unwrap(),
+                EntityKind::ResourceDepot,
+                &exclusions,
+            )
+            .unwrap();
+        let ts = start.map.tile_size as f32;
+        let left = site.x as f32 * ts;
+        let top = site.y as f32 * ts;
+        let bottom = top + 3.0 * ts;
+
+        let check = |position: (f32, f32)| {
+            let mut start = start.clone();
+            start.map.resources.push(ResourceNode {
+                id: 999_990,
+                kind: protocol::kinds::STEEL.to_string(),
+                x: position.0,
+                y: position.1,
+            });
+            let frame = AiFrame::from_host(&start, &snapshot, 1, [], Some(&[1, 2])).unwrap();
+            let known = WorldQueries::new(&frame).known_build_site(
+                EntityKind::ResourceDepot,
+                site,
+                &exclusions,
+            );
+            let occupied = occupied_tiles_from_snapshot(&start.map, &snapshot);
+            let legacy = footprint_placeable_from_snapshot(
+                &start.map,
+                &snapshot,
+                1,
+                EntityKind::ResourceDepot,
+                site.x,
+                site.y,
+                &occupied,
+            );
+            (known, legacy)
+        };
+
+        assert_eq!(
+            check((left + 6.0, bottom + 0.2)),
+            (
+                KnownBuildSite::KnownBlocked(KnownBuildSiteBlocker::KnownResource),
+                false
+            )
+        );
+        assert_eq!(
+            check((left - ts * 0.5 - 1.0, top + ts * 1.5)),
+            (KnownBuildSite::NoKnownConflict, true)
         );
     }
 
