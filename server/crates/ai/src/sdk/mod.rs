@@ -23,7 +23,7 @@ pub use rts_rules::faction::{AbilityKind, UpgradeKind};
 pub use rts_rules::EntityKind;
 pub use rulebook::{AiCost, AiEntityRule, AiFootprint, AiPrerequisites, AiRulebook};
 pub use strategy::AiStrategy;
-pub(crate) use world_queries::{resource_body_blocks_footprint, unit_circle_touches_rect};
+pub(crate) use world_queries::unit_circle_touches_rect;
 pub use world_queries::{
     AiTile, AiWorldPoint, KnownBuildSite, KnownBuildSiteBlocker, KnownBuildSiteExclusions,
     KnownResourceState, WorldQueries,
