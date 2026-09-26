@@ -276,8 +276,8 @@ where
     };
     let expansion_secured =
         expansion_security::update_and_stage(observation, map_analysis, memory, &mut actions);
-    let reserve_expansion = expansion_security::expansion_is_next(observation, &facts, profile)
-        && memory.expansion_security.site.is_some();
+    let reserve_expansion =
+        expansion_security::reserve_expansion(observation, &facts, profile, memory);
     let expansion_blocks_tech_path = expansion_plan.blocks_tech_path;
     let save_for_expansion = expansion_plan.should_save;
     if reserve_expansion && !expansion_secured {
@@ -321,9 +321,9 @@ where
             !retry_builder.is_empty(),
             &mut placeable,
         ) {
-            if profile.id == JEFFS_AI_ID
-                && expansion_security::predicts_natural_from_opening(observation)
-            {
+            // Track every secured-site order, not only the predicted-natural maps: without an
+            // attempt record a rejected order is never retried and the reserve holds forever.
+            if profile.id == JEFFS_AI_ID {
                 memory
                     .expansion_security
                     .note_build_attempt(observation.tick, build_action.worker);

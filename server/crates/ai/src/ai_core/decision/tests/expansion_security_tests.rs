@@ -147,6 +147,74 @@ fn successful_expansion_attempt_does_not_time_out_after_later_depot_loss() {
 }
 
 #[test]
+fn walking_builder_keeps_the_site_until_the_order_is_dropped() {
+    let mut obs = security_observation();
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let prepare = |obs: &AiObservation, memory: &mut AiDecisionMemory| {
+        expansion_security::prepare(
+            obs,
+            &AiFacts::from_observation(obs),
+            &JEFFS_AI,
+            memory,
+            &mut |_, _, _| true,
+        );
+    };
+    prepare(&obs, &mut memory);
+    let site = memory.expansion_security.site.unwrap();
+    memory.expansion_security.note_build_attempt(obs.tick, 1);
+
+    obs.pending_builds = vec![crate::ai_core::observation::AiBuildIntent::to_site(
+        1,
+        EntityKind::ResourceDepot,
+        site.0,
+        site.1,
+    )];
+    obs.tick += config::TICK_HZ * 10;
+    prepare(&obs, &mut memory);
+    assert_eq!(memory.expansion_security.site, Some(site));
+    assert_eq!(memory.expansion_security.retry_builder(), None);
+
+    obs.pending_builds.clear();
+    obs.tick += 1;
+    prepare(&obs, &mut memory);
+    assert_ne!(memory.expansion_security.site, Some(site));
+    assert_eq!(memory.expansion_security.retry_builder(), Some(1));
+}
+
+#[test]
+fn expansion_reserve_expires_and_rearms_after_the_expansion_cycle() {
+    let mut obs = security_observation();
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    expansion_security::prepare(
+        &obs,
+        &AiFacts::from_observation(&obs),
+        &JEFFS_AI,
+        &mut memory,
+        &mut |_, _, _| true,
+    );
+    let reserve = |obs: &AiObservation, memory: &mut AiDecisionMemory| {
+        expansion_security::reserve_expansion(obs, &AiFacts::from_observation(obs), &JEFFS_AI, memory)
+    };
+    assert!(reserve(&obs, &mut memory));
+    obs.tick += config::TICK_HZ * 60 - 1;
+    assert!(reserve(&obs, &mut memory));
+    obs.tick += 1;
+    assert!(!reserve(&obs, &mut memory));
+
+    let ts = config::TILE_SIZE as f32;
+    obs.owned.push(building_at(
+        98,
+        EntityKind::ResourceDepot,
+        Some(0),
+        40.5 * ts,
+        40.5 * ts,
+    ));
+    assert!(!reserve(&obs, &mut memory));
+    obs.owned.retain(|entity| entity.id != 98);
+    assert!(reserve(&obs, &mut memory));
+}
+
+#[test]
 fn expansion_security_requires_arrival_and_uncontested_dwell() {
     let mut obs = security_observation();
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
