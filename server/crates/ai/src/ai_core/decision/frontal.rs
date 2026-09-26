@@ -11,6 +11,7 @@ use self::formation::*;
 #[cfg(test)]
 use self::legacy_beta::{compact_group_near, containment_regroup_radius_tiles};
 use self::smoke::*;
+use crate::ai_core::profiles::JEFFS_AI_PRE_TANK_CATCHUP_ID;
 use rts_rules::faction::AbilityKind;
 
 const ENDGAME_SEARCH_OFFSETS: [(f32, f32); 17] = [
@@ -43,6 +44,7 @@ const MIN_CONTAINMENT_RIFLE_ESCORTS: usize = 2;
 const CONTAINMENT_HOME_RIFLE_RESERVE: usize = 4;
 const CONTAINMENT_ESCORT_SELECTION_RADIUS_TILES: f32 = 12.0;
 const CONTAINMENT_TANK_SPACING_TILES: f32 = 1.5;
+const CONTAINMENT_TANK_CATCH_UP_BEHIND_TILES: f32 = 1.5;
 const CONTAINMENT_ASSEMBLY_TOLERANCE_TILES: f32 = 1.75;
 const CONTAINMENT_LONGITUDINAL_SPREAD_TILES: f32 = 2.0;
 const CONTAINMENT_LATERAL_SLOP_TILES: f32 = 1.0;
@@ -218,6 +220,7 @@ pub(super) fn issue_frontal_wave(
                 enemy_base,
                 containment,
                 is_jeffs_ai_profile(profile.id),
+                profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
                 map_analysis,
                 memory,
             ) {
@@ -335,6 +338,7 @@ fn issue_expansion_containment_wave(
     enemy_base: EnemyBaseFact,
     policy: ExpansionContainmentPolicy,
     tight_formation: bool,
+    lead_anchor_tank_catchup: bool,
     map_analysis: Option<&AiMapAnalysis>,
     memory: &mut AiDecisionMemory,
 ) -> Option<AiIntent> {
@@ -778,6 +782,40 @@ fn issue_expansion_containment_wave(
 
         if waypoint.is_none() {
             let tanks_are_cohesive = tank_group_is_cohesive(observation, &tanks, toward_objective);
+            if !tanks_are_cohesive && lead_anchor_tank_catchup {
+                let lead_tank = frontmost_unit_id(observation, &tanks, toward_objective)?;
+                let rear_tank = rearmost_unit_id(observation, &tanks, toward_objective)?;
+                let lead_position = unit_position(observation, lead_tank)?;
+                let rear_position = unit_position(observation, rear_tank)?;
+                let direct_catch_up_point =
+                    tank_catch_up_point(lead_position, own_base, objective, observation.map)?;
+                let route_catch_up_point =
+                    defense::crossroads_wall_aware_approach_direction(observation).and_then(|_| {
+                        map_analysis.and_then(|analysis| {
+                            tank_catch_up_point_on_route(analysis, rear_position, lead_position)
+                        })
+                    });
+                let catch_up_point = route_catch_up_point.unwrap_or(direct_catch_up_point);
+
+                // Freeze the forward Tank at its current progress and give only the rear Tank a
+                // fresh point behind it. Centering a whole formation on the rear Tank's current
+                // position gives that Tank no forward destination and can make the pair wait
+                // forever when pathing is obstructed.
+                // On Crossroads, a direct recovery point can cut through a water wall. Use the
+                // compact-group route when it is available and preserve the lead Tank's existing
+                // attack-move so it does not stall inside the narrow approach corridor.
+                if route_catch_up_point.is_none() {
+                    actions::hold_position_units(actions, [lead_tank]);
+                }
+                actions::attack_move_units(
+                    actions,
+                    [rear_tank],
+                    catch_up_point.0,
+                    catch_up_point.1,
+                );
+                note_formation_command(memory, observation.tick);
+                return Some(AiIntent::Attack { units: tanks });
+            }
             let current_center = if tanks_are_cohesive {
                 group_center(observation, &tanks)?
             } else {
@@ -1081,6 +1119,80 @@ fn frontmost_unit_position(
                 .then_with(|| left.id.cmp(&right.id))
         })
         .map(|unit| (unit.x, unit.y))
+}
+
+fn frontmost_unit_id(
+    observation: &AiObservation,
+    unit_ids: &[u32],
+    toward_objective: (f32, f32),
+) -> Option<u32> {
+    observation
+        .owned
+        .iter()
+        .filter(|unit| unit_ids.contains(&unit.id))
+        .max_by(|left, right| {
+            let left_progress = left.x * toward_objective.0 + left.y * toward_objective.1;
+            let right_progress = right.x * toward_objective.0 + right.y * toward_objective.1;
+            left_progress
+                .total_cmp(&right_progress)
+                .then_with(|| left.id.cmp(&right.id))
+        })
+        .map(|unit| unit.id)
+}
+
+fn rearmost_unit_id(
+    observation: &AiObservation,
+    unit_ids: &[u32],
+    toward_objective: (f32, f32),
+) -> Option<u32> {
+    observation
+        .owned
+        .iter()
+        .filter(|unit| unit_ids.contains(&unit.id))
+        .min_by(|left, right| {
+            let left_progress = left.x * toward_objective.0 + left.y * toward_objective.1;
+            let right_progress = right.x * toward_objective.0 + right.y * toward_objective.1;
+            left_progress
+                .total_cmp(&right_progress)
+                .then_with(|| left.id.cmp(&right.id))
+        })
+        .map(|unit| unit.id)
+}
+
+fn unit_position(observation: &AiObservation, unit_id: u32) -> Option<(f32, f32)> {
+    observation
+        .owned
+        .iter()
+        .find(|unit| unit.id == unit_id)
+        .map(|unit| (unit.x, unit.y))
+}
+
+fn tank_catch_up_point(
+    lead_position: (f32, f32),
+    own_base: (f32, f32),
+    objective: (f32, f32),
+    map: AiMapSummary,
+) -> Option<(f32, f32)> {
+    let direction = normalized_direction(own_base, objective)?;
+    let distance = CONTAINMENT_TANK_CATCH_UP_BEHIND_TILES * map.tile_size as f32;
+    Some(clamp_to_map(
+        (
+            lead_position.0 - direction.0 * distance,
+            lead_position.1 - direction.1 * distance,
+        ),
+        map,
+    ))
+}
+
+fn tank_catch_up_point_on_route(
+    analysis: &AiMapAnalysis,
+    rear_position: (f32, f32),
+    lead_position: (f32, f32),
+) -> Option<(f32, f32)> {
+    // The final route point is the lead Tank's tile. Select the preceding passable tile so the
+    // rear Tank closes to formation distance without attempting to occupy the lead's space.
+    let route = analysis.compact_group_route(rear_position, lead_position, 1);
+    (route.len() >= 2).then(|| route[route.len() - 2])
 }
 
 fn enemy_natural_edge(

@@ -12,6 +12,11 @@ pub(crate) const JEFFS_AI_ID: &str = "jeffs_ai";
 pub(crate) const JEFFS_AI_BETA_ID: &str = "jeffs_ai_beta_967078d";
 pub(crate) const JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID: &str = "jeffs_ai_pre_defense_envelope";
 pub(crate) const JEFFS_AI_PRE_RIFLE_COVERAGE_ID: &str = "jeffs_ai_pre_rifle_coverage";
+/// Frozen immediately before the lead-anchor Tank catch-up controller.
+///
+/// This is comparison-only: it lets the arena test isolate the formation recovery change from
+/// every other active Jeff policy.
+pub(crate) const JEFFS_AI_PRE_TANK_CATCHUP_ID: &str = "jeffs_ai_pre_tank_catchup";
 
 const OPENING_UNITS: [EntityKind; 1] = [EntityKind::MachineGunner];
 const ARMORED_UNITS: [EntityKind; 2] = [EntityKind::Tank, EntityKind::ScoutCar];
@@ -188,6 +193,13 @@ pub(crate) static JEFFS_AI_PRE_DEFENSE_ENVELOPE: AiProfile = AiProfile {
 /// addressable only for deterministic balance comparisons.
 pub(crate) static JEFFS_AI_PRE_RIFLE_COVERAGE: AiProfile = AiProfile {
     id: JEFFS_AI_PRE_RIFLE_COVERAGE_ID,
+    ..JEFFS_AI_TEMPLATE
+};
+
+/// Frozen immediately before the lead-anchor Tank catch-up change. Keep this profile available
+/// only for deterministic before/after arena comparisons.
+pub(crate) static JEFFS_AI_PRE_TANK_CATCHUP: AiProfile = AiProfile {
+    id: JEFFS_AI_PRE_TANK_CATCHUP_ID,
     ..JEFFS_AI_TEMPLATE
 };
 
