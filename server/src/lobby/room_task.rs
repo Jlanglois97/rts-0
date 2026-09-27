@@ -58,10 +58,10 @@ pub(super) use types::{
 };
 
 pub(super) struct RoomTask {
-    room: String,
+    pub(in crate::lobby) room: String,
     mode: RoomMode,
     /// Connected players in join order (join order drives lobby display and host fallback).
-    order: Vec<u32>,
+    pub(in crate::lobby) order: Vec<u32>,
     /// Wall-clock creation/reset time for the public lobby browser age column.
     created_at_unix_ms: u64,
     pub(super) players: HashMap<u32, RoomPlayer>,
@@ -113,7 +113,7 @@ pub(super) struct RoomTask {
     recent_chat_times: HashMap<u32, std::collections::VecDeque<std::time::Instant>>,
     /// Per-connection observer perspective. This is read-only projection state and never an
     /// issuer/command capability.
-    observer_views: HashMap<u32, ObserverView>,
+    pub(in crate::lobby) observer_views: HashMap<u32, ObserverView>,
     /// Last accepted durable-decal repair request per connection; bounds reliable response spam.
     ground_decal_request_times: HashMap<u32, std::time::Instant>,
     /// Optional persistence sink for resolved matches. `None` disables match-history writes.

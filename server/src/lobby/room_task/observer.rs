@@ -1,16 +1,28 @@
 use std::collections::HashMap;
 use std::time::Instant as StdInstant;
 
-use super::super::connection::send_or_log;
 use super::super::live_tick::fanout_current_observer_snapshots;
-use super::super::projection::{observer_view_or_all, scope_observer_analysis};
+use super::super::projection::ObserverAnalysisAudience;
 use super::super::replay_session::ReplaySession;
 use super::super::snapshot_fanout::fanout_replay_snapshots;
 use super::types::{Phase, ReplayTickContext};
 use super::RoomTask;
-use crate::protocol::{Event, ServerMessage};
+use crate::protocol::Event;
 
 impl RoomTask {
+    pub(super) fn send_observer_analysis_to(&self, watcher_id: u32) {
+        let Phase::ReplayViewer(session) = &self.phase else {
+            return;
+        };
+        if self.projection_policy().observer_analysis_audience()
+            != ObserverAnalysisAudience::AllRecipients
+        {
+            return;
+        }
+        self.send_scoped_replay_observer_analysis(session, [watcher_id]);
+        self.send_replay_resource_history(session, [watcher_id], true);
+    }
+
     pub(super) fn fanout_current_observer_snapshots_to(
         &mut self,
         recipients: impl IntoIterator<Item = u32>,
@@ -61,25 +73,5 @@ impl RoomTask {
             &mut self.slow_tick_count,
             perf,
         );
-    }
-
-    pub(super) fn send_scoped_replay_observer_analysis(
-        &self,
-        session: &ReplaySession,
-        recipient_ids: impl IntoIterator<Item = u32>,
-    ) {
-        let analysis = session.game().observer_analysis();
-        for id in recipient_ids {
-            let Some(player) = self.players.get(&id) else {
-                continue;
-            };
-            let view = observer_view_or_all(self.observer_views.get(&id), session.game());
-            send_or_log(
-                &self.room,
-                id,
-                &player.msg_tx,
-                ServerMessage::ObserverAnalysis(scope_observer_analysis(analysis.clone(), &view)),
-            );
-        }
     }
 }

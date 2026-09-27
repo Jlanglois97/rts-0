@@ -9,8 +9,7 @@ use super::super::dev_replay::load_replay_artifact;
 use super::super::launch::{LaunchPrediction, StartPayloadBuilder, StartPayloadRecipient};
 use super::super::participants::replay_viewer;
 use super::super::projection::{
-    observer_view_from_selection, scope_observer_analysis, ObserverAnalysisAudience,
-    ProjectionPolicy, RecipientRole,
+    observer_view_from_selection, scope_observer_analysis, ObserverAnalysisAudience, RecipientRole,
 };
 use super::super::replay_seek;
 use super::super::replay_session::{
@@ -284,69 +283,9 @@ impl RoomTask {
         );
     }
 
-    pub(super) fn send_observer_analysis_to(&self, watcher_id: u32) {
-        let Phase::ReplayViewer(session) = &self.phase else {
-            return;
-        };
-        if self.projection_policy().observer_analysis_audience()
-            != ObserverAnalysisAudience::AllRecipients
-        {
-            return;
-        }
-        self.send_scoped_replay_observer_analysis(session, [watcher_id]);
-        self.send_replay_resource_history(session, [watcher_id], true);
-    }
-
-    fn send_replay_resource_history(
-        &self,
-        session: &ReplaySession,
-        recipient_ids: impl IntoIterator<Item = u32>,
-        replace: bool,
-    ) {
-        if session.artifact.players.len() != 2 {
-            return;
-        }
-        let samples = if replace {
-            session.resource_history.samples.clone()
-        } else {
-            session
-                .resource_history
-                .samples
-                .last()
-                .copied()
-                .into_iter()
-                .collect()
-        };
-        for id in recipient_ids {
-            if let Some(player) = self.players.get(&id) {
-                send_or_log(
-                    &self.room,
-                    id,
-                    &player.msg_tx,
-                    ServerMessage::ReplayResourceHistory {
-                        replace,
-                        samples: samples.clone(),
-                    },
-                );
-            }
-        }
-    }
-
     fn broadcast_room_time_state_for(&self, session: &ReplaySession) {
         let msg = ServerMessage::RoomTimeState(session.state());
         self.broadcast(&msg);
-    }
-
-    fn broadcast_observer_analysis_for(
-        &self,
-        session: &ReplaySession,
-        projection_policy: ProjectionPolicy,
-    ) {
-        if projection_policy.observer_analysis_audience() != ObserverAnalysisAudience::AllRecipients
-        {
-            return;
-        }
-        self.send_scoped_replay_observer_analysis(session, self.order.clone());
     }
 
     fn clear_pending_snapshots_for(&self, recipients: impl IntoIterator<Item = u32>) {
