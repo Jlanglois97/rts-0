@@ -267,7 +267,7 @@ fn tank_attack_move_ignores_tank_trap_while_acquiring_anti_tank_gun() {
 }
 
 #[test]
-fn tank_destroys_only_commanded_tank_trap_on_first_shot() {
+fn tank_destroys_only_commanded_tank_trap_on_second_shot() {
     let map = open_map(12);
     let mut entities = EntityStore::new();
     let tank = entities
@@ -296,10 +296,9 @@ fn tank_destroys_only_commanded_tank_trap_on_first_shot() {
         &map,
     );
 
-    assert_eq!(
-        entities.get(trap).expect("trap should exist").hp,
-        0,
-        "first Tank shot should destroy the trap"
+    assert!(
+        (1..uncommanded_trap_hp).contains(&entities.get(trap).expect("trap should exist").hp),
+        "first Tank shot should leave the trap damaged"
     );
     assert_eq!(
         entities
@@ -317,6 +316,12 @@ fn tank_destroys_only_commanded_tank_trap_on_first_shot() {
             &map,
         );
     }
+
+    assert_eq!(
+        entities.get(trap).expect("trap should exist").hp,
+        0,
+        "second Tank shot should destroy the trap"
+    );
 
     assert_eq!(
         entities

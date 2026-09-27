@@ -167,7 +167,7 @@ fn burst_damages_front_only_and_emits_fixed_rays_without_hidden_viewer_data() {
 
 #[test]
 fn scout_car_burst_cannot_one_shot_completed_resource_buildings() {
-    for (kind, max_hp) in [(EntityKind::SteelMine, 25), (EntityKind::PumpJack, 37)] {
+    for (kind, max_hp) in [(EntityKind::SteelMine, 37), (EntityKind::PumpJack, 56)] {
         let map = open_map(16);
         let mut entities = EntityStore::new();
         let attacker = entities
