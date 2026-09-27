@@ -214,7 +214,8 @@ pub(super) fn issue_frontal_wave(
         } else if profile.id != JEFFS_AI_BETA_ID
             && (plan.should_attack() || relaxed_start || containment_active)
         {
-            if let Some(intent) = issue_expansion_containment_wave(
+            let orders_start = actions.emitted_len();
+            let intent = issue_expansion_containment_wave(
                 actions,
                 observation,
                 plan,
@@ -224,8 +225,10 @@ pub(super) fn issue_frontal_wave(
                 profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
                 map_analysis,
                 memory,
-            ) {
-                return Some(intent);
+            );
+            note_containment_holds(actions, memory, orders_start);
+            if intent.is_some() {
+                return intent;
             }
         }
     }
@@ -331,6 +334,48 @@ pub(super) fn sync_containment_recovery(
     memory.containment_contact_last_tick = None;
 }
 
+/// Record which units the push left holding: a Hold marks a unit, any other order replaces it.
+fn note_containment_holds(
+    actions: &AiActionContext<'_>,
+    memory: &mut AiDecisionMemory,
+    orders_start: usize,
+) {
+    for (unit, hold) in actions.unit_orders_since(orders_start) {
+        if hold {
+            memory.containment_held_tanks.insert(unit);
+        } else {
+            memory.containment_held_tanks.remove(&unit);
+        }
+    }
+}
+
+/// A Tank the push put on Hold that is still standing (not moving or under an attack order).
+/// It shoots whatever enters its range on its own and never chases, so it needs no new order.
+fn tank_is_holding(observation: &AiObservation, memory: &AiDecisionMemory, tank_id: u32) -> bool {
+    memory.containment_held_tanks.contains(&tank_id)
+        && observation
+            .owned
+            .iter()
+            .any(|unit| unit.id == tank_id && unit.state == AiEntityState::Idle)
+}
+
+/// Hold the given push Tanks, skipping those already holding. Holding again would clear the
+/// target a holding Tank picked for itself: while it reloads the turret swings back toward the
+/// hull, and it has to re-acquire and turn again before the next shot.
+fn hold_containment_tanks(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    memory: &AiDecisionMemory,
+    tanks: impl IntoIterator<Item = u32>,
+) -> Option<Vec<u32>> {
+    actions::hold_position_units(
+        actions,
+        tanks
+            .into_iter()
+            .filter(|tank| !tank_is_holding(observation, memory, *tank)),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn issue_expansion_containment_wave(
     actions: &mut AiActionContext<'_>,
@@ -359,6 +404,17 @@ fn issue_expansion_containment_wave(
     memory
         .containment_active_riflemen
         .retain(|rifleman| owned.contains(rifleman));
+    // A Tank seen moving or attacking was given another order since the push held it.
+    let still_standing: BTreeSet<u32> = observation
+        .owned
+        .iter()
+        .filter(|unit| unit.state == AiEntityState::Idle)
+        .map(|unit| unit.id)
+        .collect();
+    let active_tanks = memory.containment_active_tanks.clone();
+    memory
+        .containment_held_tanks
+        .retain(|tank| active_tanks.contains(tank) && still_standing.contains(tank));
 
     let assembling = !memory.containment_wave_launched || memory.containment_recovery_active;
     if assembling {
@@ -371,7 +427,11 @@ fn issue_expansion_containment_wave(
         if memory.containment_active_tanks.len() != required_tanks
             || memory.containment_active_scout.is_none()
         {
-            let tank_exclusions: BTreeSet<u32> = memory.home_defensive_tank.into_iter().collect();
+            let tank_exclusions: BTreeSet<u32> = memory
+                .home_defensive_tank
+                .into_iter()
+                .chain(memory.later_bases.guards.iter().copied())
+                .collect();
             let mut tanks = actions::select_ready_combat_units_excluding(
                 &observation.owned,
                 &[EntityKind::Tank],
@@ -455,7 +515,7 @@ fn issue_expansion_containment_wave(
             if formation_command_due(memory, observation.tick) {
                 issue_containment_formation(actions, observation, &formation, false);
                 if river_opening_guard && assembled {
-                    actions::hold_position_units(actions, tanks.iter().copied());
+                    hold_containment_tanks(actions, observation, memory, tanks.iter().copied());
                 }
                 note_formation_command(memory, observation.tick);
             }
@@ -571,10 +631,13 @@ fn issue_expansion_containment_wave(
         false
     };
 
+    // Only a Tank under an attack order chases its target out of position. A holding Tank picked
+    // its target from where it stands, inside its current range, so it is left to shoot.
     let current_tank_target_outside_leash = stationary_range_ready
         && tanks.iter().any(|tank_id| {
             tanks_by_id
                 .get(tank_id)
+                .filter(|_| !tank_is_holding(observation, memory, *tank_id))
                 .and_then(|tank| tank.target_id)
                 .is_some_and(|target_id| {
                     !tank_can_fire_at_visible_target(
@@ -586,7 +649,7 @@ fn issue_expansion_containment_wave(
                 })
         });
     if current_tank_target_outside_leash {
-        actions::hold_position_units(actions, tanks.iter().copied());
+        hold_containment_tanks(actions, observation, memory, tanks.iter().copied());
         memory.containment_focus_target = None;
         memory.containment_focus_stable_since = None;
     }
@@ -646,10 +709,16 @@ fn issue_expansion_containment_wave(
                         );
                         smoke_issued = smoke_expiry_before.is_none()
                             && memory.containment_smoke_expires_tick.is_some();
+                        let holding: Vec<u32> = tanks
+                            .iter()
+                            .copied()
+                            .filter(|tank| tank_is_holding(observation, memory, *tank))
+                            .collect();
                         issue_hp_aware_tank_volley(
                             actions,
                             observation,
                             &tanks,
+                            &holding,
                             target,
                             policy.tank_standoff_tiles,
                             memory.containment_smoke_target,
@@ -662,7 +731,7 @@ fn issue_expansion_containment_wave(
                     ) {
                         actions::attack_units(actions, tanks.iter().copied(), target);
                     } else {
-                        actions::hold_position_units(actions, tanks.iter().copied());
+                        hold_containment_tanks(actions, observation, memory, tanks.iter().copied());
                     }
                 } else if endgame_search_active {
                     memory.endgame_search_waypoint =
@@ -676,12 +745,12 @@ fn issue_expansion_containment_wave(
                     );
                     actions::attack_move_units(actions, tanks.iter().copied(), next.0, next.1);
                 } else {
-                    actions::hold_position_units(actions, tanks.iter().copied());
+                    hold_containment_tanks(actions, observation, memory, tanks.iter().copied());
                     memory.containment_focus_target = None;
                     memory.containment_focus_stable_since = None;
                 }
             } else {
-                actions::hold_position_units(actions, tanks.iter().copied());
+                hold_containment_tanks(actions, observation, memory, tanks.iter().copied());
             }
 
             let scout_point = if let Some(smoke_launch_point) = smoke_reposition {
@@ -806,7 +875,7 @@ fn issue_expansion_containment_wave(
                 // compact-group route when it is available and preserve the lead Tank's existing
                 // attack-move so it does not stall inside the narrow approach corridor.
                 if route_catch_up_point.is_none() {
-                    actions::hold_position_units(actions, [lead_tank]);
+                    hold_containment_tanks(actions, observation, memory, [lead_tank]);
                 }
                 actions::attack_move_units(
                     actions,

@@ -384,6 +384,7 @@ fn smoke_is_applied_to_healthy_rear_tank_and_focus_is_preserved() {
         &mut actions,
         &observation,
         &[1, 3],
+        &[],
         100,
         13.5,
         memory.containment_smoke_target,
@@ -596,6 +597,7 @@ fn lone_local_tank_is_suppressed_while_grouped_tanks_hold_fire() {
         &mut actions,
         &observation,
         &[1, 3],
+        &[],
         focus,
         13.5,
         memory.containment_smoke_target,
@@ -748,4 +750,75 @@ fn endgame_search_ring_rotates_with_the_players() {
         );
         assert_eq!(rotated, (world_size - original.0, world_size - original.1));
     }
+}
+
+fn held_tank_observation(tank_state: AiEntityState) -> AiObservation {
+    let mut tank = target_test_entity(1, EntityKind::Tank, 20.0 * 32.0, 20.0 * 32.0);
+    tank.state = tank_state;
+    tank.target_id = Some(100);
+    let mut other = target_test_entity(3, EntityKind::Tank, 22.0 * 32.0, 20.0 * 32.0);
+    other.owner = 1;
+    regroup_test_observation(vec![tank, other])
+}
+
+fn held_units(commands: &[Command]) -> Vec<u32> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::HoldPosition { units, .. } => Some(units.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn a_tank_the_push_already_holds_is_not_held_again() {
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    memory.containment_held_tanks.insert(1);
+
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    hold_containment_tanks(&mut actions, &observation, &memory, [1, 3]);
+    // Tank 1 keeps the target it picked while holding; tank 3 was never held by the push.
+    assert_eq!(held_units(&actions.into_commands()), vec![3]);
+}
+
+#[test]
+fn a_held_tank_seen_moving_or_attacking_is_held_again() {
+    for state in [AiEntityState::Move, AiEntityState::Attack] {
+        let observation = held_tank_observation(state);
+        let facts = AiFacts::from_observation(&observation);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        memory.containment_held_tanks.insert(1);
+
+        let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+        hold_containment_tanks(&mut actions, &observation, &memory, [1]);
+        assert_eq!(held_units(&actions.into_commands()), vec![1], "{state:?}");
+    }
+}
+
+#[test]
+fn any_order_other_than_hold_releases_a_held_tank() {
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+
+    let start = actions.emitted_len();
+    actions::hold_position_units(&mut actions, [1, 3]);
+    actions::attack_units(&mut actions, [3], 100);
+    note_containment_holds(&actions, &mut memory, start);
+    assert_eq!(memory.containment_held_tanks, BTreeSet::from([1]));
+}
+
+#[test]
+fn volley_leaves_already_holding_tanks_on_their_own_targets() {
+    // Both tanks are out of reach of every target, so neither is assigned a volley shot.
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    issue_hp_aware_tank_volley(&mut actions, &observation, &[1, 3], &[1], 100, 13.5, None);
+    assert_eq!(held_units(&actions.into_commands()), vec![3]);
 }

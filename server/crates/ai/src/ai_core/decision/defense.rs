@@ -1183,7 +1183,7 @@ fn defensive_firing_sector_is_clear(
         })
 }
 
-fn defensive_position_is_open(
+pub(super) fn defensive_position_is_open(
     observation: &AiObservation,
     map_analysis: Option<&AiMapAnalysis>,
     x: f32,

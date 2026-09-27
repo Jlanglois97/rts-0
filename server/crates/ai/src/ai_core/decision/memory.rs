@@ -47,6 +47,8 @@ struct IncompleteResourceDepotMemory {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AiDecisionMemory {
     pub(super) expansion_security: super::expansion_security::ExpansionSecurity,
+    /// Jeff's bases beyond the natural: dry-well unlocks, the site being taken and its guards.
+    pub(super) later_bases: super::later_bases::LaterBases,
     profile_id: Option<&'static str>,
     attack_first_size: Option<usize>,
     next_attack_size: usize,
@@ -81,6 +83,9 @@ pub(crate) struct AiDecisionMemory {
     pub(super) containment_repush_count: usize,
     pub(super) containment_recall_active: bool,
     pub(super) containment_contact_last_tick: Option<u32>,
+    /// Push Tanks whose latest order was Hold Position. A holding Tank picks its own targets in
+    /// range without moving; sending Hold again would clear that target.
+    pub(super) containment_held_tanks: BTreeSet<u32>,
     pub(super) containment_focus_target: Option<u32>,
     pub(super) containment_focus_stable_since: Option<u32>,
     pub(super) containment_smoke_target: Option<u32>,
@@ -101,6 +106,7 @@ impl AiDecisionMemory {
     pub(crate) fn for_profile(profile: &AiProfile) -> Self {
         Self {
             expansion_security: Default::default(),
+            later_bases: Default::default(),
             profile_id: Some(profile.id),
             attack_first_size: Some(profile.attack.first_attack_size),
             next_attack_size: profile.attack.first_attack_size,
@@ -132,6 +138,7 @@ impl AiDecisionMemory {
             containment_repush_count: 0,
             containment_recall_active: false,
             containment_contact_last_tick: None,
+            containment_held_tanks: BTreeSet::new(),
             containment_focus_target: None,
             containment_focus_stable_since: None,
             containment_smoke_target: None,
@@ -233,6 +240,7 @@ impl AiDecisionMemory {
         self.containment_repush_count = 0;
         self.containment_recall_active = false;
         self.containment_contact_last_tick = None;
+        self.containment_held_tanks.clear();
         self.containment_focus_target = None;
         self.containment_focus_stable_since = None;
         self.containment_smoke_target = None;

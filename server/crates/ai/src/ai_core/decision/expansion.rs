@@ -247,7 +247,6 @@ pub(super) fn expansion_resource_depot_site<F>(
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
-    let stats = config::building_stats(kind)?;
     let resources = expansion_candidate_resources(observation);
     if resources.is_empty() {
         return None;
@@ -268,10 +267,26 @@ where
             return placeable(kind, tile.0, tile.1).then_some(tile);
         }
     }
+    generic_expansion_depot_site(observation, expansion, kind, &resources, placeable)
+}
+
+/// The shared best-site search over every free resource cluster, without any profile's
+/// hand-placed natural. Jeff's bases beyond the natural use this directly.
+pub(super) fn generic_expansion_depot_site<F>(
+    observation: &AiObservation,
+    expansion: ExpansionPolicy,
+    kind: EntityKind,
+    resources: &[&AiResourceSummary],
+    placeable: &mut F,
+) -> Option<(u32, u32)>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    let stats = config::building_stats(kind)?;
     let mut best = None;
-    for anchor in expansion_anchor_tiles(observation, &resources) {
+    for anchor in expansion_anchor_tiles(observation, resources) {
         let cluster_resources =
-            expansion_cluster_resources_for_anchor(observation, anchor, &resources);
+            expansion_cluster_resources_for_anchor(observation, anchor, resources);
         if cluster_resources.is_empty() {
             continue;
         }

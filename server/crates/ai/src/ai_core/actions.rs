@@ -48,6 +48,36 @@ impl<'a> AiActionContext<'a> {
         &self.command_trace
     }
 
+    pub(crate) fn emitted_len(&self) -> usize {
+        self.emitted.len()
+    }
+
+    /// Units given an order since `start`, in emission order, each flagged when the order was a
+    /// Hold Position.
+    pub(crate) fn unit_orders_since(&self, start: usize) -> Vec<(u32, bool)> {
+        self.emitted
+            .iter()
+            .skip(start)
+            .flat_map(|action| {
+                let (units, hold): (&[u32], bool) = match action {
+                    AiActionRequest::HoldPosition { units, .. } => (units, true),
+                    AiActionRequest::Move { units, .. }
+                    | AiActionRequest::AttackMove { units, .. }
+                    | AiActionRequest::Attack { units, .. }
+                    | AiActionRequest::Gather { units, .. }
+                    | AiActionRequest::Build { units, .. }
+                    | AiActionRequest::SetupAntiTankGuns { units, .. }
+                    | AiActionRequest::UseAbility { units, .. } => (units, false),
+                    AiActionRequest::Train { .. }
+                    | AiActionRequest::SetRally { .. }
+                    | AiActionRequest::AdjustProductionRepeat { .. }
+                    | AiActionRequest::Research { .. } => (&[], false),
+                };
+                units.iter().map(move |unit| (*unit, hold))
+            })
+            .collect()
+    }
+
     pub(crate) fn emit_action(&mut self, action: AiActionRequest) {
         let command = crate::action_emitter::emit_request(action.clone());
         self.command_trace.push(command_trace_label(&command));

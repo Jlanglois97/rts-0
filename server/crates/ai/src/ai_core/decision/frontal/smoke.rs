@@ -32,6 +32,7 @@ pub(super) fn issue_hp_aware_tank_volley(
     actions: &mut AiActionContext<'_>,
     observation: &AiObservation,
     tanks: &[u32],
+    already_holding: &[u32],
     primary_target: u32,
     range_tiles: f32,
     excluded_target: Option<u32>,
@@ -68,9 +69,9 @@ pub(super) fn issue_hp_aware_tank_volley(
         let assigned = remaining_tanks.drain(..assigned_count).collect::<Vec<_>>();
         actions::attack_units(actions, assigned, target.id);
     }
-    if !remaining_tanks.is_empty() {
-        actions::hold_position_units(actions, remaining_tanks);
-    }
+    // Tanks without a volley target hold. One already holding keeps its own target.
+    remaining_tanks.retain(|tank| !already_holding.contains(tank));
+    actions::hold_position_units(actions, remaining_tanks);
 }
 
 pub(super) fn maybe_issue_isolation_smoke(

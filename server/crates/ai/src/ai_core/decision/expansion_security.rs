@@ -505,6 +505,7 @@ pub(super) fn surplus_tank_for_forward_base(
                 && Some(unit.id) != memory.home_defensive_tank
                 && !memory.containment_active_tanks.contains(&unit.id)
                 && !memory.containment_opening_tanks.contains(&unit.id)
+                && !memory.later_bases.guards.contains(&unit.id)
         })
         .min_by_key(|unit| unit.id)
         .map(|unit| unit.id)

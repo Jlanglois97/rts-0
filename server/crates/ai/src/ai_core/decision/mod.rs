@@ -31,6 +31,7 @@ mod expansion_security;
 mod frontal;
 mod geometry;
 mod jeff;
+mod later_bases;
 mod memory;
 mod policies;
 mod production;
@@ -355,6 +356,26 @@ where
         let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
         actions.holdback_resources(steel, oil);
     }
+    // Jeff's bases beyond the natural. A second Factory that is due takes priority this decision.
+    let factory_due = uses_current_jeffs_ai_policy(profile.id)
+        && should_build_extra_factory(
+            observation,
+            &facts,
+            profile,
+            planned_in_intents(&intents, EntityKind::Factory),
+        );
+    let later_base = later_bases::plan(
+        observation,
+        &facts,
+        profile,
+        memory,
+        map_analysis,
+        &mut actions,
+        &builder_pools,
+        factory_due,
+        &mut expansion_placeable,
+    );
+    intents.extend(later_base.intents.iter().cloned());
 
     let economy_plan = economy_manager_output.plan.clone();
     let save_worker_training_for_tech = defer_economy_for_panic;
@@ -751,6 +772,13 @@ where
                 balance_unit_priorities: production_policy.balance_unit_priorities,
             },
             |unit| {
+                // While a new base is being taken, fresh Tanks and Riflemen join its guards.
+                if let Some((x, y)) = later_base
+                    .rally
+                    .filter(|_| matches!(unit, EntityKind::Tank | EntityKind::Rifleman))
+                {
+                    return Some((x, y, RallyKind::AttackMove));
+                }
                 if unit == EntityKind::Rifleman {
                     rifleman_rally
                         .map(|(x, y)| (x, y, RallyKind::Move))
@@ -784,6 +812,8 @@ where
     }
     frontal_exclusions.extend(memory.expansion_security.riflemen.iter().copied());
     frontal_exclusions.extend(expansion_footprint_blockers.iter().copied());
+    // New-base guards stay out of the push until the base is covered.
+    frontal_exclusions.extend(memory.later_bases.guards.iter().copied());
     let frontal_wave = plan_frontal_wave(
         observation,
         attack_policy,
@@ -1089,6 +1119,17 @@ where
             {
                 intents.push(AiIntent::Stage { units });
             }
+        }
+
+        let guard_units = later_bases::issue_guard_orders(
+            &mut actions,
+            observation,
+            memory,
+            &later_base.guard_posts,
+            &local_defense_assigned,
+        );
+        if !guard_units.is_empty() {
+            intents.push(AiIntent::Move { units: guard_units });
         }
 
         let containment_needs_control = profile.id != JEFFS_AI_BETA_ID
