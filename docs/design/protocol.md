@@ -1885,8 +1885,8 @@ emits up to five ray events per viewer. The server resolves damage immediately a
 the client animates short moving streaks along these fixed rays. Ordinary attacks
 omit the field. Version 56 remains decodable.
 
-Prototype ray projection requires current team visibility along the ray (sampled
-every four world pixels) and omits impacts on victims hidden by fog, concealment, or smoke, including bodies
-whose edges cross into visible space. Rays crossing hidden space are also omitted
+Prototype ray projection requires current team visibility in every tile intersected by the ray
+and omits impacts on victims hidden by fog, concealment, or smoke, including bodies whose edges
+cross into visible space. Rays crossing hidden space are also omitted
 rather than exposing hidden impact positions.
 This can hide some firing feedback at fog edges; it never changes authoritative damage.

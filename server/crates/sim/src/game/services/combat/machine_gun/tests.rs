@@ -229,3 +229,30 @@ fn hidden_incidental_victims_do_not_disclose_impact_positions() {
         );
     }
 }
+
+#[test]
+fn ray_visibility_checks_hidden_corner_slivers_and_team_vision() {
+    let map = open_map(16);
+    let mut grid = vec![true; 16 * 16];
+    grid[3 * 16 + 4] = false;
+    let fog = Fog::from_checkpoint_grids(
+        16,
+        16,
+        BTreeMap::from([(1, grid), (2, vec![true; 16 * 16])]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let enemies = TeamRelations::from_player_teams([(1, 1), (2, 2)]);
+    let allies = TeamRelations::from_player_teams([(1, 1), (2, 1)]);
+    let start = (100.0, 100.0);
+    let end = (200.0, 199.0);
+    // This ray spends less than half a pixel in hidden tile (4, 3). Four-pixel samples
+    // miss it, although the transmitted trajectory would disclose the hidden segment.
+    assert!(!ray_visible(&map, &fog, &enemies, 1, start, end));
+    assert!(!ray_visible(&map, &fog, &enemies, 1, end, start));
+    assert!(ray_visible(&map, &fog, &allies, 1, start, end));
+    assert!(ray_visible(&map, &fog, &enemies, 1, start, (120.0, 120.0)));
+    assert!(ray_visible(&map, &fog, &enemies, 1, start, start));
+    assert!(!ray_visible(&map, &fog, &enemies, 1, start, (-1.0, 100.0)));
+}

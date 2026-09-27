@@ -10,7 +10,7 @@ use crate::game::fog::Fog;
 use crate::game::map::Map;
 use crate::game::services::geometry::{
     building_rect_for_entity, segment_intersects_rect, segment_intersects_unit_body,
-    unit_body_for_entity,
+    unit_body_for_entity, RectBody,
 };
 use crate::game::services::line_of_sight::LineOfSight;
 use crate::game::services::spatial::SpatialIndex;
@@ -88,6 +88,41 @@ fn clear_endpoint(los: &LineOfSight<'_>, start: (f32, f32), end: (f32, f32)) -> 
         start.0 + (end.0 - start.0) * low,
         start.1 + (end.1 - start.1) * low,
     )
+}
+
+// Short weapon rays have a bounded tile rectangle. Test tile intersections instead of sampling
+// points: a diagonal can cross an arbitrarily short hidden sliver near a tile corner.
+fn ray_visible(
+    map: &Map,
+    fog: &Fog,
+    teams: &TeamRelations,
+    viewer: u32,
+    start: (f32, f32),
+    end: (f32, f32),
+) -> bool {
+    if !map.contains_world_point(start.0, start.1) || !map.contains_world_point(end.0, end.1) {
+        return false;
+    }
+    let (sx, sy) = map.tile_of(start.0, start.1);
+    let (ex, ey) = map.tile_of(end.0, end.1);
+    let ts = crate::config::TILE_SIZE as f32;
+    for y in sy.min(ey)..=sy.max(ey) {
+        for x in sx.min(ex)..=sx.max(ex) {
+            let rect = RectBody {
+                min_x: x as f32 * ts,
+                min_y: y as f32 * ts,
+                max_x: (x + 1) as f32 * ts,
+                max_y: (y + 1) as f32 * ts,
+            };
+            let center = map.tile_center(x, y);
+            if segment_intersects_rect(start, end, rect).is_some()
+                && !projection::team_visible_world(viewer, center.0, center.1, fog, teams)
+            {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -222,19 +257,7 @@ pub(super) fn fire(
         for &(victim, end) in &rays {
             // Do not expose an incidental hidden victim or its impact position. Require the
             // entire ray to be currently visible, preventing trajectories across hidden gaps.
-            let steps = ((end.0 - start.0).hypot(end.1 - start.1) / 4.0)
-                .ceil()
-                .max(1.0) as u32;
-            if !(0..=steps).all(|i| {
-                let t = i as f32 / steps as f32;
-                projection::team_visible_world(
-                    *viewer,
-                    start.0 + (end.0 - start.0) * t,
-                    start.1 + (end.1 - start.1) * t,
-                    fog,
-                    teams,
-                )
-            }) {
+            if !ray_visible(map, fog, teams, *viewer, start, end) {
                 continue;
             }
             // A visible impact can still belong to a hidden body whose edge crosses into
