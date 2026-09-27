@@ -139,7 +139,7 @@ review.
 | Terrain, health, selection, placement, and drag colors | None in Rust; rendering-only choices | `client/src/config.js` `COLORS` except resource identity colors that should stay consistent with Steel/Oil presentation | UI-only presentation data | None | Exclusion list in future config parity check | Client owns visual palette; it does not affect simulation, wire DTO shape, or authoritative fog | No compact impact |
 | Fog overlay alpha | Authoritative fog visibility is in sim snapshots; alpha is not a Rust value | `client/src/config.js` `MAIN_MAP_FOG_*` (`0.30` explored, `0.60` unexplored) and `MINIMAP_FOG_*` (`0.48` explored, `0.80` unexplored) | UI-only presentation data | Client config contracts pin the separate viewport/minimap values | Exclusion list in future config parity check | Client owns opacity; Rust owns which tiles/entities are visible. Main-map fog is intentionally lighter so terrain and roads remain legible, while minimap tuning remains unchanged. | No compact impact |
 | Camera defaults | None in Rust | `client/src/config.js` `CAMERA` | UI-only presentation data | None | Exclusion list in future config parity check | Client-only input/render affordance | No compact impact |
-| Anti-tank gun field-of-fire preview | `server/crates/rules/src/balance.rs` `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD` is authoritative at 30 degrees total | `client/src/config.js` `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD` | balance scalar / advisory UI mirror | `scripts/check-faction-catalog-parity.mjs` checks the client preview against the Rust field-of-fire constant | Keep the preview Rust-owned because it represents the authoritative deployed firing arc | Not client-only: the client preview represents an authoritative firing arc | No compact impact |
+| Anti-tank gun field-of-fire preview | `server/crates/rules/src/balance.rs` `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD` is authoritative at 40 degrees total | `client/src/config.js` `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD` | balance scalar / advisory UI mirror | `scripts/check-faction-catalog-parity.mjs` checks the client preview against the Rust field-of-fire constant | Keep the preview Rust-owned because it represents the authoritative deployed firing arc | Not client-only: the client preview represents an authoritative firing arc | No compact impact |
 
 ### Parity exclusions after the split
 
@@ -423,7 +423,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
   Mortar impacts apply the same damage to friendly and enemy units/buildings, and manual fire
   remains unrestricted even when the selected impact point would hit same-team units or buildings.
 - anti-tank guns fire only while deployed, with `ANTI_TANK_GUN_DEPLOYED_RANGE_TILES = 20` and
-  `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD = 30 degrees total`; packed, setting-up, and tearing-down guns
+  `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD = 40 degrees total`; packed, setting-up, and tearing-down guns
   cannot fire. AT guns cannot target infantry-sized units (Workers, Golems, Warriors, Riflemen,
   Panzerfausts, or Machine Gunners), either automatically or through direct Attack orders.
   Crewed support weapons, vehicles, Ekat, and buildings remain legal targets. A deployed gun's setup cone remains fixed while its body and barrel turn together at

@@ -21,7 +21,7 @@ pub const MORTAR_OUTER_DAMAGE: u32 = 40;
 pub const MORTAR_INNER_DAMAGE: u32 = 100;
 
 pub const ANTI_TANK_GUN_DEPLOYED_RANGE_TILES: u32 = 20;
-pub const ANTI_TANK_GUN_FIELD_OF_FIRE_RAD: f32 = 30.0_f32 * std::f32::consts::PI / 180.0;
+pub const ANTI_TANK_GUN_FIELD_OF_FIRE_RAD: f32 = 40.0_f32 * std::f32::consts::PI / 180.0;
 /// Anti-Tank Gun hits deal 30% of their normal damage to infantry-sized targets.
 pub const ANTI_TANK_GUN_INFANTRY_DAMAGE_MULTIPLIER: f32 = 0.30;
 
