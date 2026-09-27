@@ -357,6 +357,7 @@ export class Minimap {
     this._drawResourceLayer();
     this._drawPlayerOwnedEntityOutline(entities);
     this._drawEntities(entities, { foregroundPlayerOnly: true, attackFlashIds });
+    this._drawEntities(entities.filter((entity) => entity.aboveFogReveal), { attackFlashIds });
     if (!capturePresentation) this._drawArtilleryFiringMarkers(now);
     if (!capturePresentation) this._drawViewport();
     if (!capturePresentation) this._drawPings(now);

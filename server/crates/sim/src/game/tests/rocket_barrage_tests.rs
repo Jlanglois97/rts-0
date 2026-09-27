@@ -137,6 +137,58 @@ fn first_barrage_is_free_and_unloads_sixteen_rockets() {
 }
 
 #[test]
+fn hidden_rocket_truck_is_revealed_by_launch_without_hitting_an_enemy() {
+    let (mut game, launcher, target) = fixture(0);
+    let pos = game
+        .state
+        .entities
+        .get(launcher)
+        .map(|entity| (entity.pos_x, entity.pos_y))
+        .unwrap();
+    assert!(!game.state.fog.is_visible_world(2, pos.0, pos.1));
+    order_barrage(&mut game, launcher, target);
+
+    let mut last_launch_tick = None;
+    for _ in 0..=config::ROCKET_BARRAGE_UNLOAD_TICKS + 2 {
+        let events = game.tick();
+        if events.iter().any(|(player, events)| {
+            *player == 1
+                && events.iter().any(|event| {
+                    matches!(event, Event::MortarLaunch { from, rocket: true, .. } if *from == launcher)
+                })
+        }) {
+            last_launch_tick = Some(game.tick_count());
+        }
+    }
+    let last_launch_tick = last_launch_tick.expect("barrage should launch rockets");
+    advance_to_fog_refresh(&mut game);
+    let view = game
+        .snapshot_for(2)
+        .entities
+        .into_iter()
+        .find(|entity| entity.id == launcher)
+        .expect("launching truck should be visible to the enemy without an impact");
+    assert!(!view.vision_only);
+    assert!(
+        game.snapshot_for(2).visible_tiles
+            [(pos.1 / config::TILE_SIZE as f32) as usize * game.state.map.width as usize
+                + (pos.0 / config::TILE_SIZE as f32) as usize] == 0,
+        "the reveal must not expose the underlying terrain"
+    );
+
+    while game.tick_count() < last_launch_tick + config::TICK_HZ * 13 / 2 + 2 {
+        game.tick();
+    }
+    assert!(
+        game.snapshot_for(2)
+            .entities
+            .iter()
+            .all(|entity| entity.id != launcher),
+        "the truck should disappear after 6.5 seconds from the last launch"
+    );
+}
+
+#[test]
 fn barrage_click_waits_for_a_truck_facing_away_then_fires_once() {
     let (mut game, launcher, target) = fixture(0);
     let entity = game.state.entities.get_mut(launcher).unwrap();

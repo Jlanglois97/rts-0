@@ -44,6 +44,22 @@ export function runMinimapPresentationContracts({ installWindowStub, fakeRendera
     "own buildings use assigned player color");
   assert(minimap._blipColor({ owner: 2, kind: KIND.BARRACKS }) === "#d55e00",
     "other buildings use assigned player color");
+  const drawOrder = [];
+  const revealedRocket = { id: 7, owner: 2, kind: KIND.ROCKET_LAUNCHER, aboveFogReveal: true };
+  minimap._ensureTransform = () => true;
+  minimap._minimapEntities = () => [revealedRocket];
+  minimap._drawTerrainLayer = () => {};
+  minimap._forestLayer.draw = () => {};
+  minimap._drawEntities = (entities) => {
+    if (entities.includes(revealedRocket)) drawOrder.push("rocket");
+  };
+  minimap._drawFog = () => drawOrder.push("fog");
+  minimap._roadMarkingLayer.draw = () => {};
+  minimap._drawResourceLayer = () => {};
+  minimap._drawPlayerOwnedEntityOutline = () => {};
+  minimap.render(null, { capturePresentation: true });
+  assert(drawOrder.lastIndexOf("rocket") > drawOrder.indexOf("fog"),
+    "a firing-revealed Rocket Truck remains visible above minimap fog");
   minimap.destroy();
   assert(canvas.width === 242 && canvas.height === 242, "teardown restores rematch base dimensions");
 }

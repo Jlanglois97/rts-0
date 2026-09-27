@@ -1997,6 +1997,8 @@ export class Minimap {
 `commandsEnabled` may be a boolean or a zero-argument predicate. When `state.controlPolicy` is the
 lab policy, the minimap uses that policy so lab operators can issue minimap commands even though
 their start payload remains spectator-shaped.
+Snapshot-backed `aboveFogReveal` units draw again above the minimap fog with their ordinary unit
+icons, so a firing-revealed Rocket Truck remains visible there for its authoritative reveal window.
 
 `lobby.js`
 ```js
