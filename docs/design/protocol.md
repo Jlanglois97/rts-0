@@ -1885,7 +1885,7 @@ restored keyframe to the target tick. Analysis state is not serialized separatel
 first-impact/range endpoint, not a live target center. Compact attacks append
 `shotOrigin` at slot 6: `[1, from, to, revealOrNull, toPosOrNull, weaponKindOrNull, shotOrigin]`.
 `to: 0` denotes a miss or an endpoint without a disclosed victim. Each MG cycle
-emits up to five ray events per viewer. The server resolves damage immediately and
+emits up to three ray events per viewer. The server resolves damage immediately and
 the client animates short moving streaks along these fixed rays. Ordinary attacks
 omit the field. Version 56 remains decodable.
 

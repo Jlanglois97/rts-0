@@ -35,10 +35,14 @@ fn cone_geometry_has_expected_single_target_and_dense_coverage() {
     let mut rng = SmallRng::seed_from_u64(721);
     let (mut single, mut dense) = (0, 0);
     for _ in 0..30000 {
-        let angle: f32 = rng.gen_range(-rules::MG_HALF_SPREAD_RAD..=rules::MG_HALF_SPREAD_RAD);
-        let end = (100.0 + angle.cos() * 214.0, 300.0 + angle.sin() * 214.0);
-        single += usize::from(
-            first_hit(
+        for ray in 0..rules::MG_BURST_BULLETS {
+            let angle: f32 = if ray == 0 {
+                0.0
+            } else {
+                rng.gen_range(-rules::MG_HALF_SPREAD_RAD..=rules::MG_HALF_SPREAD_RAD)
+            };
+            let end = (100.0 + angle.cos() * 214.0, 300.0 + angle.sin() * 214.0);
+            let single_hit = first_hit(
                 &map,
                 &entities,
                 &teams,
@@ -49,27 +53,31 @@ fn cone_geometry_has_expected_single_target_and_dense_coverage() {
                 (100.0, 300.0),
                 end,
             )
-            .is_some(),
-        );
-        dense += usize::from(
-            first_hit(
-                &map,
-                &entities,
-                &teams,
-                &[center, left, right],
-                attacker,
-                1,
-                center,
-                (100.0, 300.0),
-                end,
-            )
-            .is_some(),
-        );
+            .is_some();
+            if ray == 0 {
+                assert!(single_hit, "clear aimed ray must hit the selected target");
+            }
+            single += usize::from(single_hit);
+            dense += usize::from(
+                first_hit(
+                    &map,
+                    &entities,
+                    &teams,
+                    &[center, left, right],
+                    attacker,
+                    1,
+                    center,
+                    (100.0, 300.0),
+                    end,
+                )
+                .is_some(),
+            );
+        }
     }
-    let single_dps = single as f32 / 30000.0 * 25.0;
-    let dense_dps = dense as f32 / 30000.0 * 25.0;
-    assert!((7.6..8.5).contains(&single_dps), "single DPS {single_dps}");
-    assert!(dense_dps > 23.0, "dense DPS {dense_dps}");
+    let single_dps = single as f32 / 30000.0 * 5.0;
+    let dense_dps = dense as f32 / 30000.0 * 5.0;
+    assert!((7.0..8.0).contains(&single_dps), "single DPS {single_dps}");
+    assert!(dense_dps > 12.0, "dense DPS {dense_dps}");
 }
 
 #[test]
@@ -139,7 +147,7 @@ fn burst_damages_front_only_and_emits_fixed_rays_without_hidden_viewer_data() {
         209.2,
         1,
     );
-    assert_eq!(entities.get(front).unwrap().hp, 35);
+    assert_eq!(entities.get(front).unwrap().hp, 39);
     assert_eq!(entities.get(rear).unwrap().hp, 45);
     assert_eq!(
         events[&1]
@@ -152,9 +160,54 @@ fn burst_damages_front_only_and_emits_fixed_rays_without_hidden_viewer_data() {
                 }
             ))
             .count(),
-        5
+        rules::MG_BURST_BULLETS
     );
     assert!(events[&3].is_empty());
+}
+
+#[test]
+fn scout_car_burst_cannot_one_shot_completed_resource_buildings() {
+    for (kind, max_hp) in [(EntityKind::SteelMine, 25), (EntityKind::PumpJack, 37)] {
+        let map = open_map(16);
+        let mut entities = EntityStore::new();
+        let attacker = entities
+            .spawn_unit(1, EntityKind::ScoutCar, 100.0, 100.0)
+            .unwrap();
+        let target = entities
+            .spawn_building(2, kind, 180.0, 100.0, true)
+            .unwrap();
+        let fog = visible_fog(&map, &entities);
+        let spatial = SpatialIndex::build(&entities, map.width, map.height);
+        let mut events = HashMap::from([(1, vec![]), (2, vec![])]);
+        fire(
+            &map,
+            &mut entities,
+            &TeamRelations::from_player_teams([(1, 1), (2, 2)]),
+            &spatial,
+            &LineOfSight::new(&map),
+            &fog,
+            &SmokeCloudStore::new(),
+            &mut SmallRng::seed_from_u64(1),
+            &mut events,
+            &mut vec![],
+            attacker,
+            target,
+            rules::weapon_profile(rules::WeaponKind::ScoutCarMg).unwrap(),
+            250.0,
+            1,
+        );
+        let remaining_hp = entities.get(target).unwrap().hp;
+        assert!(
+            (max_hp - 9..=max_hp - 3).contains(&remaining_hp),
+            "{kind:?} takes one to three Scout Car rays, not a lethal burst"
+        );
+        assert!(matches!(events[&1].first(), Some(Event::Attack { to, .. }) if *to == target));
+        let target_rays = events[&1]
+            .iter()
+            .filter(|event| matches!(event, Event::Attack { to, .. } if *to == target))
+            .count();
+        assert_eq!(max_hp - remaining_hp, target_rays as u32 * 3, "{kind:?}");
+    }
 }
 
 #[test]
@@ -219,7 +272,7 @@ fn hidden_incidental_victims_do_not_disclose_impact_positions() {
         );
         assert_eq!(
             entities.get(hidden).unwrap().hp,
-            35,
+            39,
             "{hidden_by}: authoritative hits still resolve"
         );
         assert!(
@@ -299,7 +352,7 @@ fn shooting_traps_does_not_disclose_a_concealed_shooter() {
     );
     assert!(entities.get(trap).unwrap().hp < hp);
     assert!(reveals.is_empty());
-    assert_eq!(events[&1].len(), 5, "owner still sees all five rays");
+    assert_eq!(events[&1].len(), 3, "owner still sees all three rays");
     assert!(events[&1]
         .iter()
         .all(|event| matches!(event, Event::Attack { reveal: None, .. })));
