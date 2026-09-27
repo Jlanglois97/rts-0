@@ -59,6 +59,8 @@ mod participants;
 mod projection;
 mod reconstruction;
 mod replay_branch;
+mod replay_observer_delivery;
+mod replay_resource_history;
 mod replay_seek;
 mod replay_session;
 mod replay_validation;

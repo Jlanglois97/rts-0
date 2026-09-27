@@ -448,9 +448,9 @@ fn replay_seek_started_reaches_every_viewer_before_incremental_results() {
 #[test]
 fn replay_join_and_seek_emit_authoritative_analysis() {
     let players = replay_test_players(2);
-    let (_live, artifact) = replay_test_artifact(&players, 4);
+    let (_live, artifact) = replay_test_artifact(&players, 35);
     let mut replay = ReplaySession::new(artifact).unwrap();
-    for _ in 0..3 {
+    for _ in 0..30 {
         replay.enqueue_for_current_tick().unwrap();
         replay.tick(None);
     }
@@ -471,8 +471,12 @@ fn replay_join_and_seek_emit_authoritative_analysis() {
     assert!(join_messages
         .iter()
         .any(|msg| matches!(msg, ServerMessage::Start(_))));
+    assert!(join_messages.iter().any(|msg| matches!(msg,
+        ServerMessage::ReplayResourceHistory { replace: true, samples }
+            if samples.iter().map(|sample| sample.tick).collect::<Vec<_>>() == vec![0, 30]
+    )));
     let join_analysis = take_observer_analysis(&writer, "replay join");
-    assert_eq!(join_analysis.tick, 3);
+    assert_eq!(join_analysis.tick, 30);
     assert_eq!(join_analysis.players.len(), 2);
 
     task.on_seek_room_time_to(99, 1);
@@ -484,6 +488,12 @@ fn replay_join_and_seek_emit_authoritative_analysis() {
     assert_eq!(reset_analysis.tick, 0);
 
     task.on_tick(TokioInstant::now());
+    let completed_messages: Vec<_> =
+        std::iter::from_fn(|| writer.reliable_rx.try_recv().ok()).collect();
+    assert!(completed_messages.iter().any(|msg| matches!(msg,
+        ServerMessage::ReplayResourceHistory { replace: true, samples }
+            if samples.iter().map(|sample| sample.tick).collect::<Vec<_>>() == vec![0]
+    )));
     let seek_analysis = take_observer_analysis(&writer, "replay seek completion");
     assert_eq!(seek_analysis.tick, 1);
     assert_eq!(seek_analysis.players.len(), 2);
@@ -1212,6 +1222,11 @@ fn confirmed_late_replay_join_receives_current_ended_state_immediately() {
     assert_eq!(snapshot.tick, end_tick);
     let analysis = take_observer_analysis(&writer, "late ended replay join");
     assert_eq!(analysis.tick, end_tick);
+    assert!(matches!(
+        writer.reliable_rx.try_recv().unwrap(),
+        ServerMessage::ReplayResourceHistory { replace: true, samples }
+            if samples.first().is_some_and(|sample| sample.tick == 0)
+    ));
     assert!(matches!(
         writer.reliable_rx.try_recv().unwrap(),
         ServerMessage::GameOver {

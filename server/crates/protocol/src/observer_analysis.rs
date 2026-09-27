@@ -70,6 +70,15 @@ pub struct ObserverAnalysisResourceTotals {
     pub oil: u32,
 }
 
+/// A complete replay collection timeline or one new, one-second sample.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayResourceSample {
+    pub tick: u32,
+    pub steel: i64,
+    pub oil: i64,
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ObserverAnalysisResources {
@@ -288,5 +297,22 @@ mod tests {
             json["players"][0]["aiDiagnostics"]["lines"][1],
             "goal=Production status=Selected blockers=- intents=Train:Rifleman"
         );
+    }
+
+    #[test]
+    fn replay_resource_history_serializes_signed_samples() {
+        let msg = ServerMessage::ReplayResourceHistory {
+            replace: true,
+            samples: vec![ReplayResourceSample {
+                tick: 30,
+                steel: 12,
+                oil: -4,
+            }],
+        };
+        let json = serde_json::to_value(msg).unwrap();
+        assert_eq!(json["t"], "replayResourceHistory");
+        assert_eq!(json["replace"], true);
+        assert_eq!(json["samples"][0]["tick"], 30);
+        assert_eq!(json["samples"][0]["oil"], -4);
     }
 }

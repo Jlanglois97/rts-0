@@ -9,8 +9,7 @@ use super::super::dev_replay::load_replay_artifact;
 use super::super::launch::{LaunchPrediction, StartPayloadBuilder, StartPayloadRecipient};
 use super::super::participants::replay_viewer;
 use super::super::projection::{
-    observer_view_from_selection, scope_observer_analysis, ObserverAnalysisAudience,
-    ProjectionPolicy, RecipientRole,
+    observer_view_from_selection, scope_observer_analysis, ObserverAnalysisAudience, RecipientRole,
 };
 use super::super::replay_seek;
 use super::super::replay_session::{
@@ -284,33 +283,9 @@ impl RoomTask {
         );
     }
 
-    pub(super) fn send_observer_analysis_to(&self, watcher_id: u32) {
-        let Phase::ReplayViewer(session) = &self.phase else {
-            return;
-        };
-        if self.projection_policy().observer_analysis_audience()
-            != ObserverAnalysisAudience::AllRecipients
-        {
-            return;
-        }
-        self.send_scoped_replay_observer_analysis(session, [watcher_id]);
-    }
-
     fn broadcast_room_time_state_for(&self, session: &ReplaySession) {
         let msg = ServerMessage::RoomTimeState(session.state());
         self.broadcast(&msg);
-    }
-
-    fn broadcast_observer_analysis_for(
-        &self,
-        session: &ReplaySession,
-        projection_policy: ProjectionPolicy,
-    ) {
-        if projection_policy.observer_analysis_audience() != ObserverAnalysisAudience::AllRecipients
-        {
-            return;
-        }
-        self.send_scoped_replay_observer_analysis(session, self.order.clone());
     }
 
     fn clear_pending_snapshots_for(&self, recipients: impl IntoIterator<Item = u32>) {
@@ -358,6 +333,9 @@ impl RoomTask {
                         perf.as_mut(),
                     );
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                    if advance.completed {
+                        self.send_replay_resource_history(&session, self.order.clone(), true);
+                    }
                 }
                 Ok(_) => {}
                 Err(err) => {
@@ -375,6 +353,7 @@ impl RoomTask {
                         perf.as_mut(),
                     );
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                    self.send_replay_resource_history(&session, self.order.clone(), true);
                 }
             }
         } else if session.has_remaining_ticks() {
@@ -417,6 +396,14 @@ impl RoomTask {
                 perf.as_mut(),
             );
             self.broadcast_observer_analysis_for(&session, context.projection_policy);
+            if session
+                .resource_history
+                .samples
+                .last()
+                .is_some_and(|sample| sample.tick == session.current_tick())
+            {
+                self.send_replay_resource_history(&session, self.order.clone(), false);
+            }
             self.broadcast_replay_chat(replay_chat);
         } else {
             self.broadcast_room_time_state_for(&session);
@@ -467,10 +454,17 @@ impl RoomTask {
             None => return,
         }
 
+        let mut canceled_seek = false;
         if let Phase::ReplayViewer(session) = &mut self.phase {
+            canceled_seek = session.is_seeking() && speed == ReplaySession::PAUSED_SPEED;
             session.set_speed(player_id, speed);
             let state = session.state();
             self.broadcast(&ServerMessage::RoomTimeState(state));
+        }
+        if canceled_seek {
+            if let Phase::ReplayViewer(session) = &self.phase {
+                self.send_replay_resource_history(session, self.order.clone(), true);
+            }
         }
     }
 
@@ -697,6 +691,9 @@ impl RoomTask {
                 );
                 if send_analysis {
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                }
+                if !session.is_seeking() {
+                    self.send_replay_resource_history(&session, self.order.clone(), true);
                 }
             }
             Err(err) => {

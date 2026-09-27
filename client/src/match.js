@@ -432,6 +432,7 @@ export class Match {
     this.onRoomTimeState = (m) => this.applyRoomTimeState(m);
     this.onLivePauseState = (m) => this.applyLivePauseState(m);
     this.onObserverAnalysis = (m) => this.observerDiagnostics?.applyObserverAnalysis(m);
+    this.onReplayResourceHistory = (m) => this.observerDiagnostics?.applyReplayResourceHistory(m);
     this.onResize = this.handleResize.bind(this);
     this.onMenuKeyDown = this.handleMenuKeyDown.bind(this);
     this.onGiveUpOpen = this.openGiveUpConfirm.bind(this);
@@ -457,6 +458,7 @@ export class Match {
     this.net.on(S.ROOM_TIME_STATE, this.onRoomTimeState);
     this.net.on(S.LIVE_PAUSE_STATE, this.onLivePauseState);
     this.net.on(S.OBSERVER_ANALYSIS, this.onObserverAnalysis);
+    this.net.on(S.REPLAY_RESOURCE_HISTORY, this.onReplayResourceHistory);
     window.addEventListener("resize", this.onResize);
     window.addEventListener("keydown", this.onMenuKeyDown, true);
     if (!this.replayViewer) {
@@ -489,6 +491,7 @@ export class Match {
     this.observerDiagnostics = new MatchObserverDiagnostics({
       root: dom.gameScreen,
       capabilities: this.capabilities,
+      replayViewer: this.replayViewer,
       observerAnalysisOverlayPreferences: options.observerAnalysisOverlayPreferences || null,
       aiDiagnosticsPanelPreferences: options.aiDiagnosticsPanelPreferences || null,
       getEntities: () => this.state.entitiesInterpolated(1, { includePrediction: false }),
@@ -1249,6 +1252,7 @@ export class Match {
     this.net.off(S.ROOM_TIME_STATE, this.onRoomTimeState);
     this.net.off(S.LIVE_PAUSE_STATE, this.onLivePauseState);
     this.net.off(S.OBSERVER_ANALYSIS, this.onObserverAnalysis);
+    this.net.off(S.REPLAY_RESOURCE_HISTORY, this.onReplayResourceHistory);
     window.removeEventListener("keydown", this.onMenuKeyDown, true);
     this.roomTimeControls?.destroy();
     this.observerDiagnostics?.destroy();
@@ -1318,6 +1322,7 @@ export class Match {
     this.net.off(S.ROOM_TIME_STATE, this.onRoomTimeState);
     this.net.off(S.LIVE_PAUSE_STATE, this.onLivePauseState);
     this.net.off(S.OBSERVER_ANALYSIS, this.onObserverAnalysis);
+    this.net.off(S.REPLAY_RESOURCE_HISTORY, this.onReplayResourceHistory);
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("keydown", this.onMenuKeyDown, true);
     if (!this.replayViewer) {

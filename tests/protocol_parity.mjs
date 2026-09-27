@@ -687,6 +687,7 @@ assert(
   S.OBSERVER_ANALYSIS === "observerAnalysis",
   "observerAnalysis server message tag must match Rust",
 );
+assert(S.REPLAY_RESOURCE_HISTORY === "replayResourceHistory", "replay resource history tag matches Rust");
 for (const field of [
   "units_lost",
   "buildings_lost",
