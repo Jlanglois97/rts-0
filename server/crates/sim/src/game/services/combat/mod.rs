@@ -27,6 +27,7 @@ mod damage;
 mod events;
 mod machine_gun;
 mod panzerfaust;
+mod pre_movement;
 mod priority;
 mod projection;
 mod shot_blocker_index;
@@ -50,6 +51,8 @@ use weapons::{
     rotate_anti_tank_gun_for_combat, rotate_vehicle_weapon_for_combat, tick_deployed_weapon_setup,
     update_attack_move_no_target_teardown, uses_vehicle_weapon_policy,
 };
+
+pub(in crate::game) use pre_movement::hold_charged_attack_move_tanks;
 
 #[cfg(test)]
 #[allow(clippy::too_many_arguments)]

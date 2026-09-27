@@ -368,10 +368,13 @@ shot to prepare the next engagement during reload, or when the prepared target i
 fireable on the ready tick. Tanks additionally rerank automatic targets every five ticks, staggered
 by entity id, so a newly relevant higher-priority threat can replace a still-legal reload target
 within one-sixth of a second. Other reload, setup, and aiming ticks revalidate only the committed
-target. A targetless travelling movement order may scan during reload:
-Attack Move uses the acquired target to stop a non-Mortar unit at the first in-range engagement,
-while an ordinary Move does so only for moving-fire units and keeps following its commanded path.
-Both then follow the same committed-target rule. Except for the Tank's five-tick rerank, a
+target. A Tank on unfinished Attack Move may scan during reload even when its path is empty
+after an engagement; other units retain the travelling and targetless exception. Attack Move uses
+the acquired target to stop a non-Mortar unit at the first in-range engagement. A charged Tank
+also checks before movement would reset its stationary range.
+Ordinary travelling Tanks rely on the post-movement pass. An ordinary Move uses the reload scan
+only for moving-fire units and keeps following its commanded path. Both movement orders then follow
+the same committed-target rule. Except for the Tank's five-tick rerank, a
 still-fireable prepared target receives the next shot even if a higher-priority threat appeared
 during reload. The post-shot pass may then select that higher-priority threat for the following
 cycle. Tank coax fire has no independent retained
