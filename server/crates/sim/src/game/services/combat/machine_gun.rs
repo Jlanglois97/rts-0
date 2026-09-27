@@ -31,7 +31,7 @@ pub(super) fn is_machine_gun(kind: rules::WeaponKind) -> bool {
     )
 }
 
-/// A bounded ray query shared by the five bullets in a burst. Friendly infantry is transparent;
+/// A bounded ray query shared by the three bullets in a burst. Friendly infantry is transparent;
 /// friendly tanks and opaque buildings absorb bullets without taking damage.
 #[allow(clippy::too_many_arguments)]
 fn first_hit(
@@ -161,8 +161,13 @@ pub(super) fn fire(
         .collect();
     let mut hits = BTreeMap::<u32, u32>::new();
     let mut rays = Vec::with_capacity(rules::MG_BURST_BULLETS);
-    for _ in 0..rules::MG_BURST_BULLETS {
-        let spread = rng.gen_range(-rules::MG_HALF_SPREAD_RAD..=rules::MG_HALF_SPREAD_RAD);
+    for ray in 0..rules::MG_BURST_BULLETS {
+        // The aimed ray always follows the selected target; the other two scatter.
+        let spread = if ray == 0 {
+            0.0
+        } else {
+            rng.gen_range(-rules::MG_HALF_SPREAD_RAD..=rules::MG_HALF_SPREAD_RAD)
+        };
         let direction = angle + spread;
         let end = clear_endpoint(
             los,

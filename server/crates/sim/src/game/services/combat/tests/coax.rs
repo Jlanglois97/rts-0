@@ -83,7 +83,7 @@ fn tank_coax_fires_in_arc_with_small_arms_damage_and_weapon_event() {
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
-        vec!["tank_coax".to_string(); 5]
+        vec!["tank_coax".to_string(); 3]
     );
 }
 
@@ -117,7 +117,7 @@ fn clear_obstacle_area_coax_bullets_can_be_intercepted_by_infantry() {
 
     assert_eq!(
         entities.get(worker).expect("worker should exist").hp,
-        worker_hp - 8
+        worker_hp - 6
     );
     assert_eq!(entities.get(trap).expect("trap should exist").hp, trap_hp);
 }
@@ -186,12 +186,12 @@ fn tank_coax_attack_events_remain_fog_projected() {
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
-        vec!["tank_coax".to_string(); 5],
+        vec!["tank_coax".to_string(); 3],
         "the attacker team should receive coax feedback"
     );
     assert_eq!(
         attack_weapon_kinds(&events, 2, tank),
-        vec!["tank_coax".to_string(); 5],
+        vec!["tank_coax".to_string(); 3],
         "the visible victim owner should receive coax feedback"
     );
     assert!(
@@ -342,8 +342,8 @@ fn tank_coax_prioritizes_infantry_over_nearer_fallback_targets() {
     );
     assert_eq!(
         entities.get(nearer_tank).expect("tank should exist").hp,
-        tank_hp_before - 1,
-        "off-axis burst bullets may hit the nearer vehicle while aiming at infantry"
+        tank_hp_before,
+        "seeded spread rays miss the nearer vehicle while aiming at infantry"
     );
 }
 
@@ -404,7 +404,7 @@ fn tank_coax_rejects_infantry_when_enemy_hard_blocker_would_take_the_shot() {
 
     assert_eq!(
         blocker_hp_before - entities.get(blocker).expect("blocker should exist").hp,
-        2,
+        1,
         "the intervening hard blocker should be selected as the legal fallback target"
     );
     assert_eq!(
@@ -442,14 +442,14 @@ fn tank_cannon_and_coax_same_tick_emit_cannon_before_coax() {
 
     assert_eq!(
         hp_before - entities.get(target).expect("target should exist").hp,
-        62,
+        61,
         "same-tick cannon and coax should both damage a surviving armored target"
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
         [
             vec!["tank_cannon".to_string()],
-            vec!["tank_coax".to_string(); 5]
+            vec!["tank_coax".to_string(); 3]
         ]
         .concat(),
         "Tank cannon attack feedback must be emitted before the same-tick coax feedback"
