@@ -547,8 +547,8 @@ Map policy:
 
 - Authored-map schema v10 requires compact non-overlapping `[y, xStart, xEnd]` forest spans and an
   explicit `noEntrenchmentTiles` overlay. Loading
-  expands every forest tile into the existing stealth, no-vehicle, no-building, damage-reduction, and
-  slow-movement vectors before `Map` construction. Earlier schemas and v9 documents missing the
+  expands every forest tile into the stealth, no-vehicle, no-building, and damage-reduction
+  vectors before `Map` construction. Slow movement remains an independent authored overlay. Earlier schemas and v9 documents missing the
   required forest array are rejected rather than migrated.
 - `GameState.map` remains authoritative runtime state because systems read terrain, selected starts,
   permanent base sites, six sparse gameplay-overlay tile sets, vehicle tree-trunk collision, and
@@ -572,7 +572,7 @@ Map policy:
   differs, the importer rejects the payload; it must not fall back to regenerating a map from seed
   or silently accepting a nearby map.
 
-Concealment applies to units, not buildings or doodads. Sight rays traverse at most three
+Concealment applies to units, not buildings or doodads. Sight rays traverse at most four
 concealment tiles, excluding the origin and including the target, while weapon line of fire remains
 unrestricted by concealment. This lets a unit at a forest edge retain normal outward vision while
 limiting vision through a forest interior. Owners and allies always receive their units. Enemy

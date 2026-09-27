@@ -377,15 +377,15 @@ mod tests {
     }
 
     #[test]
-    fn fog_sight_reaches_three_concealment_tiles_but_not_the_fourth() {
+    fn fog_sight_reaches_four_concealment_tiles_but_not_the_fifth() {
         let mut map = flat_map(10);
-        map.concealment_tiles = (2..=5).map(|x| (x, 4)).collect();
+        map.concealment_tiles = (2..=6).map(|x| (x, 4)).collect();
         let los = LineOfSight::new(&map);
         let origin = map.tile_center(1, 4);
         assert!(los.tile_visible_from_world(origin, (2, 4)));
-        assert!(los.tile_visible_from_world(origin, (4, 4)));
-        assert!(!los.tile_visible_from_world(origin, (5, 4)));
-        assert!(los.clear_between_world_points(origin, map.tile_center(6, 4)));
+        assert!(los.tile_visible_from_world(origin, (5, 4)));
+        assert!(!los.tile_visible_from_world(origin, (6, 4)));
+        assert!(los.clear_between_world_points(origin, map.tile_center(7, 4)));
     }
 
     #[test]
@@ -399,10 +399,10 @@ mod tests {
     #[test]
     fn diagonal_fog_sight_counts_entered_tiles_not_corner_neighbors() {
         let mut map = flat_map(10);
-        map.concealment_tiles = (2..=5).flat_map(|x| (2..=5).map(move |y| (x, y))).collect();
+        map.concealment_tiles = (2..=6).flat_map(|x| (2..=6).map(move |y| (x, y))).collect();
         let los = LineOfSight::new(&map);
         let origin = map.tile_center(1, 1);
-        assert!(los.tile_visible_from_world(origin, (4, 4)));
-        assert!(!los.tile_visible_from_world(origin, (5, 5)));
+        assert!(los.tile_visible_from_world(origin, (5, 5)));
+        assert!(!los.tile_visible_from_world(origin, (6, 6)));
     }
 }

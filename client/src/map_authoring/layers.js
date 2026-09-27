@@ -21,7 +21,7 @@ export const MAP_AUTHORING_LAYERS = Object.freeze([
   Object.freeze({
     id: MAP_AUTHORING_LAYER.FOREST,
     label: "Forest",
-    description: "Composite tiles with trees and all five gameplay effects",
+    description: "Composite tiles with trees and four gameplay effects",
   }),
   Object.freeze({
     id: MAP_AUTHORING_LAYER.CONCEALMENT,

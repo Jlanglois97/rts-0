@@ -393,8 +393,8 @@ profiles and explicit activation/autocast policy instead of being folded into de
   the entity-centre tile. Slow movement multiplies the movement budget after the base-terrain
   modifier (so a slowed road is 1.125x base speed). Infantry-like A* routing converts that same
   0.75x ratio into deterministic cardinal/diagonal tile costs and declines the clear-segment
-  shortcut when its sampled centerline crosses slow terrain. This lets infantry take a faster
-  open-ground detour without treating forests as impassable. Damage reduction applies after weapon
+  shortcut when its sampled centerline crosses slow terrain. Forest tiles do not add the slow
+  movement effect; authored slow tiles remain independent. Damage reduction applies after weapon
   armor, facing, falloff, and entrenchment calculations to direct fire, Mortar,
   Artillery, loaded Panzerfaust, and damaging ability projectiles; fractional non-zero damage rounds
   up.

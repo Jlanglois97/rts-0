@@ -612,7 +612,7 @@ export class MapEditorSession {
       noBuildingTiles: mergedOverlayTiles(draft.noBuildingTiles, forestTiles),
       noEntrenchmentTiles: normalizeOverlayTiles(draft.noEntrenchmentTiles, draft),
       damageReductionTiles: mergedOverlayTiles(draft.damageReductionTiles, forestTiles),
-      slowMovementTiles: mergedOverlayTiles(draft.slowMovementTiles, forestTiles),
+      slowMovementTiles: normalizeOverlayTiles(draft.slowMovementTiles, draft),
     };
   }
 

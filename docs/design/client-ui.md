@@ -1105,7 +1105,7 @@ texture per tile.
 
 The Terrain palette exposes Forest as compound content with a configurable 1–31-tile brush; the
 separate operation rail applies it with Brush or removes it with Erase.
-Forest painting is the single source for its tree scatter and its five composite gameplay effects. The draft
+Forest painting is the single source for its tree scatter and its four composite gameplay effects. The draft
 stores the exact tile area as compact inclusive `[y, xStart, xEnd]` row spans; generated trees use
 reserved deterministic ids, while ordinary doodads remain independently authored. Symmetry expands
 the forest stroke before the span mask is updated. Erasing removes both the semantic area and only
@@ -1120,7 +1120,7 @@ forest tile.
 
 The Gameplay overlays palette can select any combination of Concealment, No vehicles, No buildings,
 No entrenchment, Damage reduction, and Slowed movement, then paint or erase the selected layers in one brush or box stroke. Forest is a
-separate composite authoring tile: materialization unions its spans into all five runtime layers,
+separate composite authoring tile: materialization unions its spans into four runtime layers,
 while all six effect tiles remain independently paintable. No entrenchment prevents eligible infantry
 from digging or occupying trenches on the tile and is automatically authored beneath roads. The viewport uses distinct colors and icons,
 including a closed eye, no-entry sign, crossed building, half shield, and mired boot on affected tiles. A single

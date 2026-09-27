@@ -1529,7 +1529,7 @@ authoritative movement speed as defined in `balance.md`. The schema also has fla
 `doodads`, `forestSpans`, `concealmentTiles`, `noVehicleTiles`, `noBuildingTiles`,
 `noEntrenchmentTiles`, `damageReductionTiles`, and `slowMovementTiles` arrays. A forest span is the compact encoding of the first-class composite
 Forest tile: `[y, xStart, xEnd]` with inclusive bounds. Spans may not overlap and each Forest tile
-materializes into all five gameplay layers. Explicit overlay records remain bounded,
+materializes into the concealment, no-vehicle, no-building, and damage-reduction gameplay layers. Slow movement remains independently authored. Explicit overlay records remain bounded,
 unique, in-bounds tile-coordinate pairs and can independently supplement forest-derived layers.
 Schema v10 is the only accepted authored-map schema. Older documents are rejected rather than
 migrated, and every shipped map declares `forestSpans` even when it is empty.
