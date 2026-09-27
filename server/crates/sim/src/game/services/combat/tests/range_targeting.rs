@@ -286,6 +286,7 @@ fn deployed_anti_tank_gun_fires_at_long_range() {
                     to,
                     reveal: Some(reveal),
                     to_pos: Some(to_pos),
+                    shot_origin: None,
                     weapon_kind: Some(weapon_kind),
                 } if *from == at_id
                     && *to == tank_id

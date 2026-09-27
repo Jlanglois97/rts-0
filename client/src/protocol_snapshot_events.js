@@ -14,7 +14,7 @@ export function decodeCompactEvent(record, index) {
   const eventKind = readCode(fields[0], EVENT_BY_CODE, "event.kind");
   switch (eventKind) {
     case EVENT.ATTACK:
-      if (fields.length < 3 || fields.length > 6) {
+      if (fields.length < 3 || fields.length > 7) {
         throw new Error(`attack event ${index} field count mismatch`);
       }
       {
@@ -32,6 +32,9 @@ export function decodeCompactEvent(record, index) {
         if (fields.length > 5) {
           const weaponKind = readOptionalWeaponKind(fields[5], "event.weaponKind");
           if (weaponKind) ev.weaponKind = weaponKind;
+        }
+        if (fields.length > 6 && fields[6] != null) {
+          ev.shotOrigin = decodeCompactPoint(fields[6], "event.shotOrigin");
         }
         return ev;
       }

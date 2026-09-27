@@ -992,7 +992,7 @@ policy is centralized instead of scattered through services.
   `attack_profile(kind) -> AttackProfile`, and weapon-aware direct damage/facing helpers such
   as `effective_damage_for_weapon(profile, victim_kind, base_dmg, victim_terrain) -> u32`. The
   Tank coax profile is a live secondary Tank weapon (`tank_coax`, 6 tiles, 4 damage, 12-tick
-  cooldown, small arms, single-target direct fire). The Panzerfaust loaded-shot target predicate
+  cooldown, small arms; the unmerged MG prototype replaces its shot with a five-ray burst). The Panzerfaust loaded-shot target predicate
   for Scout Cars, Tanks, and Command Cars lives here as rules vocabulary while the one-shot state machine stays in
   the sim combat service.
 - `rules::target` — pure `TargetFacts` snapshots for target policy consumers. Facts include unit,
@@ -1927,3 +1927,12 @@ where hull facing changes through translation/curvature. These helpers are pure 
 the wire protocol or client contract.
 
 ---
+
+### Machine-gun cone prototype
+
+`services/combat/machine_gun.rs` resolves five first-hit rays for each Machine Gunner,
+Scout Car, and Tank coax firing cycle. It reuses the tick spatial grid, body geometry,
+and terrain/smoke LOS. Burst-local hit totals and rays are temporary derived values;
+there is no new durable projectile state or Game API. Damage is aggregated per victim
+before existing protection rounding. See the balance prototype section and compact
+version-57 attack ray contract for tuning and per-viewer projection.

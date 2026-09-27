@@ -805,3 +805,17 @@ assert(
 }
 
 // ---------------------------------------------------------------------------
+
+// First-hit MG rays survive decoding and enter the visual queue with fixed endpoints.
+{
+  const { decodeCompactEvent } = await import("../../client/src/protocol_snapshot_events.js");
+  const { VisualEffectBuffers } = await import("../../client/src/state_visual_effects.js");
+  const ray = decodeCompactEvent([EVENT_CODE[EVENT.ATTACK], 10, 0, null, [300, 105], WEAPON_KIND_CODE[WEAPON_KIND.MACHINE_GUNNER_MG], [100, 100]], 0);
+  assert(ray.shotOrigin[0] === 100 && ray.to === 0, "MG miss ray origin and sentinel survive decoding");
+  const buffers = new VisualEffectBuffers();
+  buffers.applySnapshotEvents([ray, ray], 1000, () => null);
+  assert(buffers.muzzleFlashes.length === 2, "MG miss rays render without target entities");
+  assert(buffers.muzzleFlashes[1].createdAt === 1020, "burst tracers launch separately");
+  assert(buffers.muzzleFlashes[0].targetPos.x === 300, "ray endpoint remains fixed");
+  assertThrows(() => decodeCompactEvent([EVENT_CODE[EVENT.ATTACK], 10, 0, null, [300, 105], WEAPON_KIND_CODE[WEAPON_KIND.MACHINE_GUNNER_MG], [Infinity, 100]], 0), "nonfinite MG ray origin rejected");
+}

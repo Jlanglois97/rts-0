@@ -102,6 +102,7 @@ mod tests {
             to: 2,
             reveal: None,
             to_pos: None,
+            shot_origin: None,
             weapon_kind: None,
         };
         let p1_events = vec![

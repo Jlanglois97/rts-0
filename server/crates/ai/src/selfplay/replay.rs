@@ -1081,6 +1081,7 @@ mod tests {
                 to: 99,
                 reveal: None,
                 to_pos: None,
+                shot_origin: None,
                 weapon_kind: None,
             },
             &snapshot,

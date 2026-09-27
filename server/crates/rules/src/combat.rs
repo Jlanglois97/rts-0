@@ -1,5 +1,8 @@
 //! Pure combat rules: classification predicates and damage formula.
 
+pub const MG_HALF_SPREAD_RAD: f32 = std::f32::consts::PI / 24.0;
+pub const MG_BURST_BULLETS: usize = 5;
+
 use crate::defs::{self, ArmorClass, WeaponClass};
 use crate::terrain::{self, TerrainKind};
 use crate::{movement_body_class, EntityKind, MovementBodyClass};

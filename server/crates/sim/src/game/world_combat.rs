@@ -180,6 +180,7 @@ mod tests {
                 to: 9,
                 reveal: None,
                 to_pos: Some(position),
+                shot_origin: None,
                 weapon_kind: None,
             }],
         )])
@@ -285,6 +286,7 @@ mod tests {
             to: 7,
             reveal: None,
             to_pos: None,
+            shot_origin: None,
             weapon_kind: None,
         };
         assert!(!is_hostile_weapon_activity(&event));
@@ -327,6 +329,7 @@ mod tests {
             to: 9,
             reveal: None,
             to_pos: Some([100.0, 100.0]),
+            shot_origin: None,
             weapon_kind: None,
         };
         let events = HashMap::from([

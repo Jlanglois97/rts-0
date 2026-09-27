@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::config;
 use crate::game::entity::{EntityKind, EntityStore};
-use crate::game::firing_reveal::{record_firing_reveals_for_victim_team, FiringRevealSource};
+use crate::game::firing_reveal::FiringRevealSource;
 use crate::game::fog::Fog;
 use crate::game::map::Map;
 use crate::game::smoke::SmokeCloudStore;
@@ -17,7 +17,6 @@ use crate::rules::terrain::{self, TerrainKind};
 use super::activation::{
     secondary_weapon_target_passes_activation, SecondaryWeaponActivationConstraints,
 };
-use super::damage::apply_damage;
 use super::priority::{self, AttackPriorityContext, TargetCandidate};
 use super::projection::{combat_target_distance_sq, max_building_combat_extent_px};
 use super::shot_blocker_index::ShotBlockerIndex;
@@ -100,45 +99,27 @@ pub(super) fn fire_tank_coax_system(
                 continue;
             }
         }
-        let shot_victim = apply_damage(
+        super::machine_gun::fire(
             map,
             entities,
-            blockers,
             teams,
-            events,
+            spatial,
+            los,
             fog,
+            smokes,
             rng,
+            events,
+            firing_reveals,
             id,
             tid,
             weapon_profile,
-            weapon_profile.dmg,
-            snapshot.owner,
-            snapshot.pos_x,
-            snapshot.pos_y,
-            tx,
-            ty,
-            0.0,
+            snapshot.range_px,
             tick,
         );
         let cooldown = entities
             .get(id)
             .map(|e| moving_attack_cooldown(e, weapon_profile.cooldown))
             .unwrap_or(weapon_profile.cooldown);
-        if let Some(shot) = shot_victim.filter(|shot| shot.reveals_attacker) {
-            let player_ids = events.keys().copied().collect::<Vec<_>>();
-            record_firing_reveals_for_victim_team(
-                firing_reveals,
-                player_ids,
-                fog,
-                map,
-                teams,
-                shot.victim_owner,
-                snapshot.owner,
-                id,
-                (snapshot.pos_x, snapshot.pos_y),
-                tick,
-            );
-        }
         if let Some(e) = entities.get_mut(id) {
             e.set_weapon_cooldown(weapon_profile.id, cooldown);
         }

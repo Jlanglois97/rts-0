@@ -321,6 +321,8 @@ const approvedCurrentFactionFiles = new Set([
   "server/crates/sim/src/game/services/combat/mod.rs",
   // Tank coax is a Tank-only secondary weapon until catalog combat roles/weapon slots exist.
   "server/crates/sim/src/game/services/combat/coax.rs",
+  // MG prototype preserves the existing Tank hard-blocker rule for friendly bullet interception.
+  "server/crates/sim/src/game/services/combat/machine_gun.rs",
   // Panzerfaust research installs Rifleman-specific disposable-weapon behavior; the global
   // catalog still owns Rifleman admission while this service owns its loaded-shot runtime.
   "server/crates/sim/src/game/services/combat/panzerfaust.rs",

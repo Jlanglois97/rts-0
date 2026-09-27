@@ -486,6 +486,7 @@ mod tests {
             to: 20,
             reveal: None,
             to_pos: None,
+            shot_origin: None,
             weapon_kind: None,
         };
         let per_player_events = HashMap::from([(1, vec![attack.clone()])]);

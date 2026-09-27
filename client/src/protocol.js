@@ -366,3 +366,5 @@ export const cmd = Object.freeze({
   setRally: (building, x, y, queued = false, kind = ORDER_STAGE.MOVE) =>
     withQueued({ c: CMD.SET_RALLY, building, x, y, kind }, queued),
 });
+
+// MG prototype: Attack.shotOrigin (compact v57, slot 6) fixes the ray origin; toPos fixes its endpoint.
