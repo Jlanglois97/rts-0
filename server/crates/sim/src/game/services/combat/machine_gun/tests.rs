@@ -256,3 +256,55 @@ fn ray_visibility_checks_hidden_corner_slivers_and_team_vision() {
     assert!(ray_visible(&map, &fog, &enemies, 1, start, start));
     assert!(!ray_visible(&map, &fog, &enemies, 1, start, (-1.0, 100.0)));
 }
+
+#[test]
+fn shooting_traps_does_not_disclose_a_concealed_shooter() {
+    let mut map = open_map(16);
+    map.concealment_tiles = vec![(3, 3)];
+    let mut entities = EntityStore::new();
+    let attacker = entities
+        .spawn_unit(1, EntityKind::MachineGunner, 100.0, 100.0)
+        .unwrap();
+    let trap = entities
+        .spawn_building(1, EntityKind::TankTrap, 180.0, 100.0, true)
+        .unwrap();
+    let hp = entities.get(trap).unwrap().hp;
+    let fog = Fog::from_checkpoint_grids(
+        16,
+        16,
+        BTreeMap::from([(1, vec![true; 256]), (2, vec![true; 256])]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let spatial = SpatialIndex::build(&entities, map.width, map.height);
+    let mut events = HashMap::from([(1, vec![]), (2, vec![])]);
+    let mut reveals = vec![];
+    fire(
+        &map,
+        &mut entities,
+        &TeamRelations::from_player_teams([(1, 1), (2, 2)]),
+        &spatial,
+        &LineOfSight::new(&map),
+        &fog,
+        &SmokeCloudStore::new(),
+        &mut SmallRng::seed_from_u64(1),
+        &mut events,
+        &mut reveals,
+        attacker,
+        trap,
+        rules::weapon_profile(rules::WeaponKind::MachineGunnerMg).unwrap(),
+        209.2,
+        1,
+    );
+    assert!(entities.get(trap).unwrap().hp < hp);
+    assert!(reveals.is_empty());
+    assert_eq!(events[&1].len(), 5, "owner still sees all five rays");
+    assert!(events[&1]
+        .iter()
+        .all(|event| matches!(event, Event::Attack { reveal: None, .. })));
+    assert!(
+        events[&2].is_empty(),
+        "visible ground must not expose a concealed shooter"
+    );
+}

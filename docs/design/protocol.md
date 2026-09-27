@@ -1889,4 +1889,6 @@ Prototype ray projection requires current team visibility in every tile intersec
 and omits impacts on victims hidden by fog, concealment, or smoke, including bodies whose edges
 cross into visible space. Rays crossing hidden space are also omitted
 rather than exposing hidden impact positions.
+Bursts that only hit traps or miss do not grant a shooter reveal; their rays are withheld
+from enemies when the shooter is concealed. Smoke-hidden shooters are also withheld.
 This can hide some firing feedback at fog edges; it never changes authoritative damage.

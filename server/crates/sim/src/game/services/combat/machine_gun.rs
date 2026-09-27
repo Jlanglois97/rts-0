@@ -202,6 +202,7 @@ pub(super) fn fire(
     }
     // Aggregate the burst per victim before integer armor/cover rounding. Bodies absorb every
     // intersecting bullet in this simultaneous burst, including lethal overkill.
+    let mut reveals_attacker = false;
     for (id, damage) in hits {
         let Some(victim) = entities.get(id) else {
             continue;
@@ -226,6 +227,7 @@ pub(super) fn fire(
             }
         });
         if projection::shot_reveals_attacker(kind) {
+            reveals_attacker = true;
             record_firing_reveals_for_victim_team(
                 firing_reveals,
                 events.keys().copied().collect::<Vec<_>>(),
@@ -253,7 +255,24 @@ pub(super) fn fire(
             );
         }
     }
+    let source = entities.get(attacker);
+    let reveal = reveals_attacker
+        .then(|| attack_reveal_for(source))
+        .flatten();
     for (viewer, output) in events.iter_mut() {
+        // Ground visibility alone does not expose a concealed shooter. Trap clearing and
+        // missed bursts must not create a transient reveal when no hit grants one.
+        if !teams.same_team_or_same_owner(*viewer, owner)
+            && (smokes.point_inside(start.0, start.1)
+                || (!reveals_attacker
+                    && source.is_some_and(|source| {
+                        projection::entity_hidden_by_concealment_from_team(
+                            *viewer, source, map, fog, teams,
+                        )
+                    })))
+        {
+            continue;
+        }
         for &(victim, end) in &rays {
             // Do not expose an incidental hidden victim or its impact position. Require the
             // entire ray to be currently visible, preventing trajectories across hidden gaps.
@@ -276,7 +295,7 @@ pub(super) fn fire(
             output.push(Event::Attack {
                 from: attacker,
                 to: victim,
-                reveal: attack_reveal_for(entities.get(attacker)),
+                reveal: reveal.clone(),
                 to_pos: Some([end.0, end.1]),
                 weapon_kind: Some(profile.id.stable_id().to_string()),
                 shot_origin: Some([start.0, start.1]),
