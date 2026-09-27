@@ -570,28 +570,50 @@ fn rocket_truck_training_requires_research_and_existing_completed_owned_vehicle_
             player.upgrades.insert(upgrade::UpgradeKind::Rockets);
         }
         let (x, y) = game.state.map.tile_center(8, 8);
-        game.state.entities.spawn_building(1, EntityKind::Depot, x, y, true).unwrap();
+        game.state
+            .entities
+            .spawn_building(1, EntityKind::Depot, x, y, true)
+            .unwrap();
         let (x, y) = game.state.map.tile_center(16, 8);
-        let gun_works = game.state.entities
-            .spawn_building(1, EntityKind::Steelworks, x, y, true).unwrap();
+        let gun_works = game
+            .state
+            .entities
+            .spawn_building(1, EntityKind::Steelworks, x, y, true)
+            .unwrap();
         if factory_state != "missing" {
             let (x, y) = game.state.map.tile_center(24, 8);
-            let factory = game.state.entities.spawn_building(
-                if factory_state == "enemy" { 2 } else { 1 },
-                EntityKind::Factory, x, y, factory_state != "unfinished",
-            ).unwrap();
+            let factory = game
+                .state
+                .entities
+                .spawn_building(
+                    if factory_state == "enemy" { 2 } else { 1 },
+                    EntityKind::Factory,
+                    x,
+                    y,
+                    factory_state != "unfinished",
+                )
+                .unwrap();
             if factory_state == "destroyed" {
                 game.state.entities.remove(factory);
             }
         }
         systems::recompute_supply(&mut game.state.players, &game.state.entities);
-        game.enqueue(1, Command::Train {
-            building: gun_works,
-            unit: EntityKind::RocketLauncher,
-        });
+        game.enqueue(
+            1,
+            Command::Train {
+                building: gun_works,
+                unit: EntityKind::RocketLauncher,
+            },
+        );
         game.tick();
         assert_eq!(
-            !game.state.entities.get(gun_works).unwrap().prod_queue().is_empty(),
+            !game
+                .state
+                .entities
+                .get(gun_works)
+                .unwrap()
+                .prod_queue()
+                .is_empty(),
             allowed,
             "researched={researched}, vehicle works={factory_state}",
         );
