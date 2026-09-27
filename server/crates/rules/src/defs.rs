@@ -294,7 +294,7 @@ pub const UNITS: &[UnitDef] = &[
         armor_class: ArmorClass::Small,
         weapon: WeaponClass::None,
         trained_at: Some(EntityKind::Steelworks),
-        train_requirement: TechRequirement::All(STEELWORKS_REQUIRED),
+        train_requirement: TechRequirement::All(&[EntityKind::Steelworks, EntityKind::Factory]),
     },
     UnitDef {
         kind: EntityKind::Tank,
