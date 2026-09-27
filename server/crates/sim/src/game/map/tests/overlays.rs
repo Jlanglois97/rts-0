@@ -123,7 +123,7 @@ fn authored_overlays_reject_duplicates_and_out_of_bounds_tiles() {
 }
 
 #[test]
-fn compact_forest_spans_materialize_into_the_five_composite_layers() {
+fn compact_forest_spans_materialize_into_four_composite_layers() {
     let mut authored: serde_json::Value = serde_json::from_str(&authored_map_with_overlays(
         serde_json::json!([{"x": 20, "y": 21}]),
         serde_json::json!([]),
@@ -141,7 +141,7 @@ fn compact_forest_spans_materialize_into_the_five_composite_layers() {
         "Forest must not acquire the independent no-entrenchment effect",
     );
     assert_eq!(materialized.damage_reduction_tiles, forest);
-    assert_eq!(materialized.slow_movement_tiles, forest);
+    assert!(materialized.slow_movement_tiles.is_empty());
     assert_eq!(
         materialized.concealment_tiles,
         vec![(18, 22), (19, 22), (19, 23), (20, 21), (20, 22)]

@@ -174,8 +174,8 @@ pub(super) fn materialize(player_count: usize, json: &str) -> Result<AuthoredMap
             .ok_or_else(|| "map noBuildingTiles must be an array".to_string())?,
         "noBuildingTiles",
     )?;
-    // Forest remains the established five-effect composite. No-entrenchment is independent and
-    // is authored explicitly (including the automatic records generated beneath road terrain).
+    // Forest has four gameplay effects. Slow movement and no-entrenchment are independent;
+    // no-entrenchment is authored explicitly, including automatic records beneath roads.
     let no_entrenchment_tiles = parse_overlay_locations(
         width,
         height,
@@ -188,7 +188,7 @@ pub(super) fn materialize(player_count: usize, json: &str) -> Result<AuthoredMap
     let damage_reduction_tiles =
         materialize_overlay(&authored.damage_reduction_tiles, "damageReductionTiles")?;
     let slow_movement_tiles =
-        materialize_overlay(&authored.slow_movement_tiles, "slowMovementTiles")?;
+        parse_overlay_locations(width, height, &authored.slow_movement_tiles, "slowMovementTiles")?;
     Ok(AuthoredMapData {
         name: authored.name,
         width,

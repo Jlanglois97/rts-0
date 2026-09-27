@@ -21,6 +21,8 @@ assert.equal(session.commitOverlayStroke(), true);
 session.beginOverlayStroke("Painted forest");
 session.paintForestTiles([tile], true);
 assert.equal(session.commitOverlayStroke(), true);
+assert.deepEqual(session.materialized().slowMovementTiles, [tile],
+  "an independently painted slow tile remains slow inside a forest");
 session.beginOverlayStroke("Erased forest");
 session.paintForestTiles([tile], false);
 assert.equal(session.commitOverlayStroke(), true);
@@ -36,6 +38,8 @@ collisionSession.initializeBlank({ size: 16, playerCount: 2 });
 collisionSession.beginOverlayStroke("Painted forest");
 collisionSession.paintForestTiles(forest, true);
 collisionSession.commitOverlayStroke();
+assert.deepEqual(collisionSession.materialized().slowMovementTiles, [],
+  "forest alone does not slow movement");
 const generatedBeforeNoop = collisionSession.exportMap().doodads;
 collisionSession.beginOverlayStroke("Repainted forest");
 assert.deepEqual(collisionSession.paintForestTiles(forest, true), []);

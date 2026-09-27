@@ -730,7 +730,7 @@ export class MapEditorPanel {
         this.selectOperation("brush");
       }, { active: this.terrainContent === "forest" }),
       field("Brush width (tiles)", width),
-      readout(`${tileCount} forest tile${tileCount === 1 ? "" : "s"}. Painting a forest adds its trees and all five gameplay effects together.`),
+      readout(`${tileCount} forest tile${tileCount === 1 ? "" : "s"}. Painting a forest adds its trees and four gameplay effects together.`),
     );
     return section;
   }
