@@ -560,7 +560,9 @@ where
                 map_analysis,
             )
         });
-    if profile.home_anti_tank.is_some()
+    if profile
+        .home_anti_tank
+        .is_some_and(|policy| policy.target_guns > 0)
         && home_defensive_tank_ready
         && facts.building_count(EntityKind::Steelworks)
             + planned_in_intents(&intents, EntityKind::Steelworks)
@@ -667,7 +669,9 @@ where
             effective_unit_priorities.push(policy.unit);
         }
     }
-    if profile.home_anti_tank.is_some()
+    if profile
+        .home_anti_tank
+        .is_some_and(|policy| policy.target_guns > 0)
         && memory.containment_wave_launched
         && !effective_unit_priorities.contains(&EntityKind::AntiTankGun)
     {

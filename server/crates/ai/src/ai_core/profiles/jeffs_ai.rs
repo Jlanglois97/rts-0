@@ -29,6 +29,18 @@ const ARMORED_TECH_PATH: [EntityKind; 4] = [
 const UPGRADES: [UpgradeKind; 2] = [UpgradeKind::TankUnlock, UpgradeKind::Entrenchment];
 const OPTIONAL_UPGRADES: [UpgradeKind; 1] = [UpgradeKind::Methamphetamines];
 
+const TEMPLATE_HOME_ANTI_TANK: HomeAntiTankPolicy = HomeAntiTankPolicy {
+    defensive_tanks: 1,
+    target_guns: 2,
+    // Keep the guns three tiles behind the six-tile home Tank line while
+    // remaining forward of the production-building belt.
+    anti_tank_position_tiles: 3.0,
+    // Keep the valuable MGs behind the Rifle screen, but one tile ahead
+    // of the home Tank so all three layers acquire the same raid.
+    machine_gunner_screen_tiles: 1.0,
+    lateral_spacing_tiles: 4.5,
+};
+
 /// Server-authoritative port of the champion V3 policy developed in the standalone
 /// `Jeff's AI` workspace. The live controller still emits ordinary fog-constrained
 /// commands through the shared AI action layer.
@@ -131,17 +143,7 @@ const JEFFS_AI_TEMPLATE: AiProfile = AiProfile {
         additional_tanks_per_repush: 1,
         repush_regroup_radius_tiles: 3.0,
     }),
-    home_anti_tank: Some(HomeAntiTankPolicy {
-        defensive_tanks: 1,
-        target_guns: 2,
-        // Keep the guns three tiles behind the six-tile home Tank line while
-        // remaining forward of the production-building belt.
-        anti_tank_position_tiles: 3.0,
-        // Keep the valuable MGs behind the Rifle screen, but one tile ahead
-        // of the home Tank so all three layers acquire the same raid.
-        machine_gunner_screen_tiles: 1.0,
-        lateral_spacing_tiles: 4.5,
-    }),
+    home_anti_tank: Some(TEMPLATE_HOME_ANTI_TANK),
     tech_transition: Some(TechTransitionPolicy {
         resource_float: ResourceFloatThreshold { steel: 0, oil: 0 },
         required_tech_path: &ARMORED_TECH_PATH,
@@ -172,7 +174,16 @@ const JEFFS_AI_TEMPLATE: AiProfile = AiProfile {
     }),
 };
 
-pub(crate) static JEFFS_AI: AiProfile = JEFFS_AI_TEMPLATE;
+/// The live Jeff drops the Steelworks and Anti-Tank Gun path: the home Tank reservation and
+/// layered defense stay, and the Steelworks steel and oil go to a second Factory instead.
+/// Frozen comparison profiles keep the template's two guns.
+pub(crate) static JEFFS_AI: AiProfile = AiProfile {
+    home_anti_tank: Some(HomeAntiTankPolicy {
+        target_guns: 0,
+        ..TEMPLATE_HOME_ANTI_TANK
+    }),
+    ..JEFFS_AI_TEMPLATE
+};
 
 /// Comparison-only snapshot of the Jeff profile deployed on beta at build 967078d8ce95.
 /// Decision code routes this identity through the matching pre-formation frontal controller.
@@ -239,7 +250,15 @@ mod tests {
         assert_eq!(containment.contact_stop_tiles, 18.0);
         let home_anti_tank = JEFFS_AI.home_anti_tank.unwrap();
         assert_eq!(home_anti_tank.defensive_tanks, 1);
-        assert_eq!(home_anti_tank.target_guns, 2);
+        // The live Jeff skips the Steelworks path; frozen comparison profiles keep two guns.
+        assert_eq!(home_anti_tank.target_guns, 0);
+        assert_eq!(
+            JEFFS_AI_PRE_TANK_CATCHUP
+                .home_anti_tank
+                .unwrap()
+                .target_guns,
+            2
+        );
         assert_eq!(home_anti_tank.anti_tank_position_tiles, 3.0);
         assert_eq!(home_anti_tank.machine_gunner_screen_tiles, 1.0);
         assert_eq!(
