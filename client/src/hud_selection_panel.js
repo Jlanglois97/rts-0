@@ -416,8 +416,7 @@ export class HudSelectionPanel {
       : "";
 
     node.innerHTML =
-      `<div class="sel-name"><span class="sel-icon">${st.icon || ""}</span>` +
-      `${st.label || e.kind}</div>` +
+      `<div class="sel-name">${st.label || e.kind}</div>` +
       hpHtml +
       (unitsKilledHtml || (entityIdHtml ? `<div class="sel-stat">${entityIdHtml}</div>` : "")) +
       resourceRemainingHtml +
