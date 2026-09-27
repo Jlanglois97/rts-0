@@ -7,6 +7,10 @@ const SECURE_TICKS: u32 = config::TICK_HZ * 3;
 const MIN_PARTY_SEPARATION_TILES: f32 = 2.75;
 const TANK_FRONT_OFFSET_TILES: f32 = 2.75;
 const BUILD_START_TIMEOUT_TICKS: u32 = config::TICK_HZ * 3;
+/// A healthy natural is ordered roughly 35 seconds after the reserve begins. Past this bound the
+/// expansion has failed for some other reason, and holding Depot money any longer starves the
+/// whole tech and production plan for the rest of the match.
+const EXPANSION_RESERVE_LIMIT_TICKS: u32 = config::TICK_HZ * 60;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct ExpansionSecurity {
@@ -18,6 +22,7 @@ pub(super) struct ExpansionSecurity {
     build_attempt_worker: Option<u32>,
     retry_builder: Option<u32>,
     rejected_sites: BTreeSet<(u32, u32)>,
+    reserve_since: Option<u32>,
 }
 
 impl ExpansionSecurity {
@@ -39,7 +44,7 @@ pub(super) fn expansion_is_next(
     facts: &AiFacts,
     profile: &AiProfile,
 ) -> bool {
-    profile.id == JEFFS_AI_ID
+    uses_current_jeffs_ai_policy(profile.id)
         && observation
             .owned
             .iter()
@@ -55,6 +60,28 @@ pub(super) fn expansion_is_next(
             }))
 }
 
+/// Whether Jeff should still bank Depot resources and defer tech for the natural. The reserve is
+/// bounded per expansion cycle; it restarts only after a second Depot exists and is later lost.
+pub(super) fn reserve_expansion(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    profile: &AiProfile,
+    memory: &mut AiDecisionMemory,
+) -> bool {
+    if !expansion_is_next(observation, facts, profile) {
+        memory.expansion_security.reserve_since = None;
+        return false;
+    }
+    if memory.expansion_security.site.is_none() {
+        return false;
+    }
+    let since = *memory
+        .expansion_security
+        .reserve_since
+        .get_or_insert(observation.tick);
+    observation.tick.saturating_sub(since) < EXPANSION_RESERVE_LIMIT_TICKS
+}
+
 pub(super) fn predicts_natural_from_opening(observation: &AiObservation) -> bool {
     observation.map.width == 166
         && observation.map.height == 166
@@ -68,7 +95,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
     memory: &mut AiDecisionMemory,
     placeable: &mut F,
 ) {
-    if profile.id != JEFFS_AI_ID {
+    if !uses_current_jeffs_ai_policy(profile.id) {
         return;
     }
     let active_depot_count = observation
@@ -84,12 +111,18 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         memory.expansion_security.build_attempt_worker = None;
         memory.expansion_security.retry_builder = None;
     }
+    // A builder still walking to a distant site keeps its pending intent; only an order the
+    // simulation dropped (rejected footprint, stuck or killed builder) abandons the site.
     let timed_out_site = memory
         .expansion_security
         .build_attempt_tick
         .is_some_and(|tick| {
             active_depot_count < 2
                 && observation.tick.saturating_sub(tick) >= BUILD_START_TIMEOUT_TICKS
+                && !memory
+                    .expansion_security
+                    .site
+                    .is_some_and(|site| depot_order_pending(observation, site))
         });
     if timed_out_site {
         if let Some(site) = memory.expansion_security.site {
@@ -117,11 +150,13 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         let rejected_sites = std::mem::take(&mut memory.expansion_security.rejected_sites);
         memory.expansion_security = ExpansionSecurity {
             rejected_sites,
+            reserve_since: memory.expansion_security.reserve_since,
             ..ExpansionSecurity::default()
         };
     }
     if memory.expansion_security.site.is_none()
-        && ((profile.id == JEFFS_AI_ID && predicts_natural_from_opening(observation))
+        && ((uses_current_jeffs_ai_policy(profile.id)
+            && predicts_natural_from_opening(observation))
             || expansion_is_next(observation, facts, profile))
         && facts.building_count(EntityKind::ResourceDepot) < 2
     {
@@ -270,6 +305,12 @@ pub(super) fn clear_reserved_footprint(
         );
     }
     blockers
+}
+
+fn depot_order_pending(observation: &AiObservation, site: (u32, u32)) -> bool {
+    observation.pending_builds.iter().any(|intent| {
+        intent.kind == EntityKind::ResourceDepot && (intent.tile_x, intent.tile_y) == site
+    })
 }
 
 fn site_blocked_by_owned_building(observation: &AiObservation, site: (u32, u32)) -> bool {

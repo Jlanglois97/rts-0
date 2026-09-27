@@ -11,10 +11,10 @@ use crate::ai_core::observation::{
     AiEntityState, AiEntitySummary, AiMapSummary, AiObservation, AiResourceSummary,
 };
 use crate::ai_core::profiles::{
-    is_jeffs_ai_profile, AiProfile, AttackPolicy, BarracksCurve, ExpansionContainmentPolicy,
-    ExpansionPolicy, ProductionPolicy, ResourcePolicy, TechTransitionPolicy, WorkerPolicy,
-    JEFFS_AI_BETA_ID, JEFFS_AI_ID, JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID,
-    JEFFS_AI_PRE_RIFLE_COVERAGE_ID,
+    is_jeffs_ai_profile, uses_current_jeffs_ai_policy, AiProfile, AttackPolicy, BarracksCurve,
+    ExpansionContainmentPolicy, ExpansionPolicy, ProductionPolicy, ResourcePolicy,
+    TechTransitionPolicy, WorkerPolicy, JEFFS_AI_BETA_ID, JEFFS_AI_ID,
+    JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID, JEFFS_AI_PRE_RIFLE_COVERAGE_ID, JEFFS_AI_PRE_TANK_CATCHUP_ID,
 };
 use crate::ai_shared;
 use crate::config;
@@ -266,8 +266,22 @@ where
         .unwrap_or(false);
     let defer_economy_for_panic = defensive_panic.active && !preserve_fast_tank_economy;
     let mut expansion_plan = plan_expansion(observation, &facts, profile, defer_economy_for_panic);
-    expansion_security::prepare(observation, &facts, profile, memory, &mut placeable);
-    let expansion_footprint_blockers = if profile.id == JEFFS_AI_ID
+    // Jeff's natural Depot must also clear resource node bodies, which the shared placement query
+    // does not check. Other profiles keep the shared answer unchanged.
+    let jeff_resource_bodies = uses_current_jeffs_ai_policy(profile.id);
+    let mut expansion_placeable = |building: EntityKind, tile_x: u32, tile_y: u32| {
+        placeable(building, tile_x, tile_y)
+            && !(jeff_resource_bodies
+                && jeff::resource_body_blocks_site(observation, building, tile_x, tile_y))
+    };
+    expansion_security::prepare(
+        observation,
+        &facts,
+        profile,
+        memory,
+        &mut expansion_placeable,
+    );
+    let expansion_footprint_blockers = if uses_current_jeffs_ai_policy(profile.id)
         && expansion_security::predicts_natural_from_opening(observation)
     {
         expansion_security::clear_reserved_footprint(observation, memory, &mut actions)
@@ -276,8 +290,8 @@ where
     };
     let expansion_secured =
         expansion_security::update_and_stage(observation, map_analysis, memory, &mut actions);
-    let reserve_expansion = expansion_security::expansion_is_next(observation, &facts, profile)
-        && memory.expansion_security.site.is_some();
+    let reserve_expansion =
+        expansion_security::reserve_expansion(observation, &facts, profile, memory);
     let expansion_blocks_tech_path = expansion_plan.blocks_tech_path;
     let save_for_expansion = expansion_plan.should_save;
     if reserve_expansion && !expansion_secured {
@@ -309,7 +323,7 @@ where
 
     if (should_build_expansion_from_economy_manager(&economy_manager_output)
         || !retry_builder.is_empty())
-        && (profile.id != JEFFS_AI_ID || expansion_secured)
+        && (!uses_current_jeffs_ai_policy(profile.id) || expansion_secured)
     {
         if let Some(build_action) = try_build_expansion_resource_depot(
             observation,
@@ -319,11 +333,11 @@ where
             profile,
             memory.expansion_security.site,
             !retry_builder.is_empty(),
-            &mut placeable,
+            &mut expansion_placeable,
         ) {
-            if profile.id == JEFFS_AI_ID
-                && expansion_security::predicts_natural_from_opening(observation)
-            {
+            // Track every secured-site order, not only the predicted-natural maps: without an
+            // attempt record a rejected order is never retried and the reserve holds forever.
+            if uses_current_jeffs_ai_policy(profile.id) {
                 memory
                     .expansion_security
                     .note_build_attempt(observation.tick, build_action.worker);
@@ -546,7 +560,9 @@ where
                 map_analysis,
             )
         });
-    if profile.home_anti_tank.is_some()
+    if profile
+        .home_anti_tank
+        .is_some_and(|policy| policy.target_guns > 0)
         && home_defensive_tank_ready
         && facts.building_count(EntityKind::Steelworks)
             + planned_in_intents(&intents, EntityKind::Steelworks)
@@ -639,7 +655,7 @@ where
         &effective_unit_priorities,
     );
     let mut effective_unit_priorities = effective_unit_priorities;
-    if profile.id == JEFFS_AI_ID
+    if uses_current_jeffs_ai_policy(profile.id)
         && memory.expansion_security.site.is_some()
         && facts.unit_count(EntityKind::Rifleman) < 6
     {
@@ -653,7 +669,9 @@ where
             effective_unit_priorities.push(policy.unit);
         }
     }
-    if profile.home_anti_tank.is_some()
+    if profile
+        .home_anti_tank
+        .is_some_and(|policy| policy.target_guns > 0)
         && memory.containment_wave_launched
         && !effective_unit_priorities.contains(&EntityKind::AntiTankGun)
     {
@@ -678,7 +696,7 @@ where
         let key_tech_unit = production_policy
             .save_for_first_tech_unit
             .unwrap_or(EntityKind::Worker);
-        let security_recruits = profile.id == JEFFS_AI_ID
+        let security_recruits = uses_current_jeffs_ai_policy(profile.id)
             && memory.expansion_security.site.is_some()
             && facts.unit_count(EntityKind::Rifleman) < 6
             && building_kind == EntityKind::Barracks;
@@ -756,7 +774,7 @@ where
         frontal_exclusions.insert(tank_id);
     }
     sync_containment_recovery(observation, profile, memory);
-    let forward_tank_position = (profile.id == JEFFS_AI_ID)
+    let forward_tank_position = uses_current_jeffs_ai_policy(profile.id)
         .then(|| expansion_security::tank_staging_center(observation, map_analysis))
         .flatten();
     let forward_defensive_tank = forward_tank_position
@@ -843,6 +861,8 @@ where
                 observation,
                 memory,
                 &local_defenders,
+                map_analysis,
+                uses_current_jeffs_ai_policy(profile.id),
             ) {
                 local_defense_assigned.extend(units.iter().copied());
                 intents.push(AiIntent::Attack { units });

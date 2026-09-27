@@ -211,7 +211,7 @@ where
     {
         return None;
     }
-    let (tile_x, tile_y) = if profile.id == JEFFS_AI_ID {
+    let (tile_x, tile_y) = if uses_current_jeffs_ai_policy(profile.id) {
         let site = secured_site?;
         if !expansion_site_is_separate(observation, site) || !placeable(kind, site.0, site.1) {
             return None;
@@ -220,7 +220,7 @@ where
     } else {
         expansion_resource_depot_site(observation, expansion, kind, profile.id, placeable)?
     };
-    if profile.id == JEFFS_AI_ID
+    if uses_current_jeffs_ai_policy(profile.id)
         && observation.own_start_tile == (9, 9)
         && uses_jeff_river_layout(observation)
     {
@@ -252,7 +252,7 @@ where
     if resources.is_empty() {
         return None;
     }
-    if profile_id == JEFFS_AI_ID {
+    if uses_current_jeffs_ai_policy(profile_id) {
         if let Some(instruction) = instructed_river_expansion_site(observation, kind, &resources) {
             // The River's natural has one known good footprint per side. Do not
             // fall back to the surrounding search when that exact footprint is
@@ -263,7 +263,7 @@ where
             .then_some(tile);
         }
     }
-    if profile_id == JEFFS_AI_ID {
+    if uses_current_jeffs_ai_policy(profile_id) {
         if let Some(tile) = instructed_schone_tage_expansion_site(observation, kind, &resources) {
             return placeable(kind, tile.0, tile.1).then_some(tile);
         }

@@ -82,7 +82,7 @@ where
     let build_search = build_search_for_kind(build_search, profile, kind);
     let empty = BTreeSet::new();
     if uses_jeff_opposite_spawn_layout(observation, profile) {
-        let (tile_x, tile_y) = ai_shared::find_build_spot_mirrored_from_opposite_spawn_with(
+        let mirrored = ai_shared::find_build_spot_mirrored_from_opposite_spawn_with(
             observation.map.width,
             observation.map.height,
             observation.own_start_tile,
@@ -90,8 +90,16 @@ where
             build_search,
             &empty,
             |tx, ty| placeable(kind, tx, ty),
-        )?;
-        return actions::try_build_at(actions, builder_pools, kind, tile_x, tile_y);
+        );
+        // The mirrored layout can run out of sites in the cramped upper-left corner (Classic
+        // player 1 never placed its second Factory). The current Jeff falls back to the ordinary
+        // search instead of silently skipping the building.
+        if let Some((tile_x, tile_y)) = mirrored {
+            return actions::try_build_at(actions, builder_pools, kind, tile_x, tile_y);
+        }
+        if !uses_current_jeffs_ai_policy(profile.id) {
+            return None;
+        }
     }
     actions::try_build(
         actions,
@@ -193,8 +201,10 @@ where
 }
 
 fn uses_jeff_opposite_spawn_layout(observation: &AiObservation, profile: &AiProfile) -> bool {
-    matches!(profile.id, JEFFS_AI_ID | JEFFS_AI_BETA_ID)
-        && is_upper_left_diagonal_start(observation.map, observation.own_start_tile)
+    matches!(
+        profile.id,
+        JEFFS_AI_ID | JEFFS_AI_BETA_ID | JEFFS_AI_PRE_TANK_CATCHUP_ID
+    ) && is_upper_left_diagonal_start(observation.map, observation.own_start_tile)
 }
 
 fn is_upper_left_diagonal_start(map: AiMapSummary, start: (u32, u32)) -> bool {

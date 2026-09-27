@@ -7,6 +7,7 @@ use super::profiles::required_profiles;
 use super::profiles::{
     profile_by_id, AiProfile, AI_2_1_ID, AI_2_1_PRE_THIRD_BASE_ID, AI_TURTLE_ID, JEFFS_AI_BETA_ID,
     JEFFS_AI_ID, JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID, JEFFS_AI_PRE_RIFLE_COVERAGE_ID,
+    JEFFS_AI_PRE_TANK_CATCHUP_ID,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -130,7 +131,8 @@ fn baseline_metadata(profile_id: &str) -> (&'static str, &'static str, Vec<&'sta
         JEFFS_AI_ID
         | JEFFS_AI_BETA_ID
         | JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID
-        | JEFFS_AI_PRE_RIFLE_COVERAGE_ID => (
+        | JEFFS_AI_PRE_RIFLE_COVERAGE_ID
+        | JEFFS_AI_PRE_TANK_CATCHUP_ID => (
             "Jeff's AI",
             "Fast-Tank containment profile with a two-Tank opening wave, a reserved home Tank and spread Machine Gunner screen, deployed Anti-Tank Guns, and a post-natural advance on the enemy main.",
             vec![
@@ -244,6 +246,6 @@ mod tests {
     fn jeff_profile_fingerprint_uses_stable_canonical_data() {
         let identity = profile_identity_by_id(JEFFS_AI_ID).expect("Jeff profile identity");
 
-        assert_eq!(identity.fingerprint, "fnv1a64:7fa837d571121dd4");
+        assert_eq!(identity.fingerprint, "fnv1a64:9f40989871ac1d76");
     }
 }

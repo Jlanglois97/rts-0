@@ -1,16 +1,19 @@
 use super::geometry::{clamp_to_map, dist2, normalized_direction, tile_center};
 use super::*;
 
+mod catch_up;
 mod formation;
 #[cfg(test)]
 mod formation_tests;
 mod legacy_beta;
 pub(super) mod smoke;
 
+use self::catch_up::*;
 use self::formation::*;
 #[cfg(test)]
 use self::legacy_beta::{compact_group_near, containment_regroup_radius_tiles};
 use self::smoke::*;
+use crate::ai_core::profiles::JEFFS_AI_PRE_TANK_CATCHUP_ID;
 use rts_rules::faction::AbilityKind;
 
 const ENDGAME_SEARCH_OFFSETS: [(f32, f32); 17] = [
@@ -218,6 +221,7 @@ pub(super) fn issue_frontal_wave(
                 enemy_base,
                 containment,
                 is_jeffs_ai_profile(profile.id),
+                profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
                 map_analysis,
                 memory,
             ) {
@@ -335,6 +339,7 @@ fn issue_expansion_containment_wave(
     enemy_base: EnemyBaseFact,
     policy: ExpansionContainmentPolicy,
     tight_formation: bool,
+    lead_anchor_tank_catchup: bool,
     map_analysis: Option<&AiMapAnalysis>,
     memory: &mut AiDecisionMemory,
 ) -> Option<AiIntent> {
@@ -778,6 +783,40 @@ fn issue_expansion_containment_wave(
 
         if waypoint.is_none() {
             let tanks_are_cohesive = tank_group_is_cohesive(observation, &tanks, toward_objective);
+            if !tanks_are_cohesive && lead_anchor_tank_catchup {
+                let lead_tank = frontmost_unit_id(observation, &tanks, toward_objective)?;
+                let rear_tank = rearmost_unit_id(observation, &tanks, toward_objective)?;
+                let lead_position = unit_position(observation, lead_tank)?;
+                let rear_position = unit_position(observation, rear_tank)?;
+                let direct_catch_up_point =
+                    tank_catch_up_point(lead_position, own_base, objective, observation.map)?;
+                let route_catch_up_point =
+                    defense::crossroads_wall_aware_approach_direction(observation).and_then(|_| {
+                        map_analysis.and_then(|analysis| {
+                            tank_catch_up_point_on_route(analysis, rear_position, lead_position)
+                        })
+                    });
+                let catch_up_point = route_catch_up_point.unwrap_or(direct_catch_up_point);
+
+                // Freeze the forward Tank at its current progress and give only the rear Tank a
+                // fresh point behind it. Centering a whole formation on the rear Tank's current
+                // position gives that Tank no forward destination and can make the pair wait
+                // forever when pathing is obstructed.
+                // On Crossroads, a direct recovery point can cut through a water wall. Use the
+                // compact-group route when it is available and preserve the lead Tank's existing
+                // attack-move so it does not stall inside the narrow approach corridor.
+                if route_catch_up_point.is_none() {
+                    actions::hold_position_units(actions, [lead_tank]);
+                }
+                actions::attack_move_units(
+                    actions,
+                    [rear_tank],
+                    catch_up_point.0,
+                    catch_up_point.1,
+                );
+                note_formation_command(memory, observation.tick);
+                return Some(AiIntent::Attack { units: tanks });
+            }
             let current_center = if tanks_are_cohesive {
                 group_center(observation, &tanks)?
             } else {

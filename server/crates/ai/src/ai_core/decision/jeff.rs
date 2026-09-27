@@ -3,12 +3,47 @@ use super::*;
 pub(super) fn uses_home_rifle_coverage(profile_id: &str) -> bool {
     matches!(
         profile_id,
-        JEFFS_AI_ID | JEFFS_AI_BETA_ID | JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID
+        JEFFS_AI_ID
+            | JEFFS_AI_BETA_ID
+            | JEFFS_AI_PRE_DEFENSE_ENVELOPE_ID
+            | JEFFS_AI_PRE_TANK_CATCHUP_ID
     )
 }
 
 pub(super) fn uses_current_jeff_defense(profile_id: &str) -> bool {
-    matches!(profile_id, JEFFS_AI_ID | JEFFS_AI_BETA_ID)
+    matches!(
+        profile_id,
+        JEFFS_AI_ID | JEFFS_AI_BETA_ID | JEFFS_AI_PRE_TANK_CATCHUP_ID
+    )
+}
+
+/// Jeff-only mirror of the server's build-site rule for resource nodes: a node body is a half-tile
+/// circle and any footprint it touches is rejected. The shared placement query checks only the
+/// node's center tile, so on Classic Jeff kept choosing a natural the server refused because two
+/// Steel centers sat just outside the footprint edge. Pump Jacks and Steel Mines are exempt, as
+/// in the simulation. Kept out of the shared query so other profiles are unaffected.
+pub(super) fn resource_body_blocks_site(
+    observation: &AiObservation,
+    building: EntityKind,
+    tile_x: u32,
+    tile_y: u32,
+) -> bool {
+    if matches!(building, EntityKind::PumpJack | EntityKind::SteelMine) {
+        return false;
+    }
+    let Some(stats) = config::building_stats(building) else {
+        return false;
+    };
+    let ts = observation.map.tile_size as f32;
+    let footprint = (
+        tile_x as f32 * ts,
+        tile_y as f32 * ts,
+        tile_x.saturating_add(stats.foot_w) as f32 * ts,
+        tile_y.saturating_add(stats.foot_h) as f32 * ts,
+    );
+    observation.resources.iter().any(|resource| {
+        crate::sdk::unit_circle_touches_rect((resource.x, resource.y), ts * 0.5, footprint)
+    })
 }
 
 /// Jeff's producers send fresh combat units to a safe forward staging point immediately.

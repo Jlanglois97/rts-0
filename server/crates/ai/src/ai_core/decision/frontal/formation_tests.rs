@@ -90,6 +90,7 @@ fn issue_test_containment(
         test_enemy_base(observation),
         JEFFS_AI.expansion_containment.unwrap(),
         true,
+        true,
         None,
         memory,
     );
@@ -471,4 +472,66 @@ fn containment_detects_a_tank_that_has_run_ahead() {
     );
 
     assert!(!tank_group_is_cohesive(&observation, &[1, 2], (1.0, 0.0)));
+}
+
+#[test]
+fn containment_orders_only_the_rear_tank_forward_to_catch_up() {
+    let mut observation = test_observation(test_force(), 100);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let (_, assembly_commands) = issue_test_containment(&observation, &mut memory);
+    apply_command_destinations(&mut observation, &assembly_commands, |_| true);
+    observation.tick += CONTAINMENT_FORMATION_REISSUE_TICKS;
+    let _ = issue_test_containment(&observation, &mut memory);
+
+    let own_base = tile_center(observation.own_start_tile, observation.map.tile_size);
+    let objective = (
+        test_enemy_base(&observation).x,
+        test_enemy_base(&observation).y,
+    );
+    let direction = normalized_direction(own_base, objective).unwrap();
+    let tile_size = observation.map.tile_size as f32;
+    let rear_position = (
+        own_base.0 + direction.0 * 6.0 * tile_size,
+        own_base.1 + direction.1 * 6.0 * tile_size,
+    );
+    let lead_position = (
+        own_base.0 + direction.0 * 12.0 * tile_size,
+        own_base.1 + direction.1 * 12.0 * tile_size,
+    );
+    for (id, position) in [(1, rear_position), (2, lead_position)] {
+        let unit = observation
+            .owned
+            .iter_mut()
+            .find(|unit| unit.id == id)
+            .unwrap();
+        unit.x = position.0;
+        unit.y = position.1;
+    }
+    memory.containment_march_waypoint = None;
+    memory.containment_last_formation_command_tick = None;
+    observation.tick += CONTAINMENT_FORMATION_REISSUE_TICKS;
+
+    let (_, commands) = issue_test_containment(&observation, &mut memory);
+
+    assert!(commands.iter().any(|command| {
+        matches!(command, Command::HoldPosition { units, .. } if units == &[2])
+    }));
+    let catch_up = commands
+        .iter()
+        .find_map(|command| match command {
+            Command::AttackMove { units, x, y, .. } if units == &[1] => Some((*x, *y)),
+            _ => None,
+        })
+        .expect("rear Tank should receive a forward catch-up order");
+    assert!(
+        catch_up.0 * direction.0 + catch_up.1 * direction.1
+            > rear_position.0 * direction.0 + rear_position.1 * direction.1
+    );
+    assert!(
+        catch_up.0 * direction.0 + catch_up.1 * direction.1
+            < lead_position.0 * direction.0 + lead_position.1 * direction.1
+    );
+    assert!(!commands
+        .iter()
+        .any(|command| { matches!(command, Command::AttackMove { units, .. } if units == &[2]) }));
 }
