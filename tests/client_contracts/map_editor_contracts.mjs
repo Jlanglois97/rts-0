@@ -343,10 +343,12 @@ assert(
   assert.equal(authored.concealmentTiles.length + authored.noVehicleTiles.length
     + authored.noBuildingTiles.length + authored.noEntrenchmentTiles.length
     + authored.damageReductionTiles.length + authored.slowMovementTiles.length, 0,
-  "forest mechanics do not duplicate coordinates into five authored arrays");
-  for (const field of ["concealmentTiles", "noVehicleTiles", "noBuildingTiles", "damageReductionTiles", "slowMovementTiles"]) {
+  "forest mechanics do not duplicate coordinates into authored overlay arrays");
+  for (const field of ["concealmentTiles", "noVehicleTiles", "noBuildingTiles", "damageReductionTiles"]) {
     assert.equal(session.materialized()[field].length, 100, `forest materialization populates ${field}`);
   }
+  assert.equal(session.materialized().slowMovementTiles.length, 0,
+    "forest materialization does not add slow movement");
   const generated = authored.doodads.filter((doodad) => doodad.id > FOREST_DOODAD_ID_BASE);
   assert(generated.length > 0 && generated.every((doodad) => doodad.typeId.startsWith("tree.")),
     "forest paint deterministically owns generated tree doodads in the reserved id range");
