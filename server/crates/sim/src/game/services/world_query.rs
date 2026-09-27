@@ -284,7 +284,8 @@ pub(crate) fn unit_explicit_attack_target_valid(
     };
     let target_team_visible =
         projection::team_visible_world(attacker_owner, target.pos_x, target.pos_y, fog, teams);
-    explicit_attack_target_inside_fixed_arc(attacker, target)
+    crate::rules::target::default_weapon_can_target(attacker.kind, target.kind)
+        && explicit_attack_target_inside_fixed_arc(attacker, target)
         && is_explicit_attack_targetable(target, teams, attacker_owner, attacker_id)
         && !projection::entity_hidden_by_concealment_from_team(
             attacker_owner,

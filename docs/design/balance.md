@@ -424,7 +424,9 @@ profiles and explicit activation/autocast policy instead of being folded into de
   remains unrestricted even when the selected impact point would hit same-team units or buildings.
 - anti-tank guns fire only while deployed, with `ANTI_TANK_GUN_DEPLOYED_RANGE_TILES = 20` and
   `ANTI_TANK_GUN_FIELD_OF_FIRE_RAD = 30 degrees total`; packed, setting-up, and tearing-down guns
-  cannot fire. A deployed gun's setup cone remains fixed while its body and barrel turn together at
+  cannot fire. AT guns cannot target infantry-sized units (Workers, Golems, Warriors, Riflemen,
+  Panzerfausts, or Machine Gunners), either automatically or through direct Attack orders.
+  Crewed support weapons, vehicles, Ekat, and buildings remain legal targets. A deployed gun's setup cone remains fixed while its body and barrel turn together at
   `ANTI_TANK_GUN_TURN_RATE_RAD_PER_TICK = 0.035` to track targets inside that cone;
   targets outside the cone are ignored until teardown and redeployment. While packed and mobile, an
   Anti-Tank Gun moves at 1.672 px/tick and turns its body at
@@ -516,8 +518,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
   normal weapon/armor/facing calculations,
   reduces incoming area damage by 25% after existing falloff/armor rules. Entrenchment does not add a direct-shot
   miss chance. Tank cannon direct shots have no intrinsic infantry dodge chance. Anti-Tank Guns
-  can deliberately target infantry-sized units, dealing 30 damage from their 100-damage shell with
-  no intrinsic miss roll. Direct shots damage only their resolved victim.
+  cannot target infantry-sized units. Direct shots damage only their resolved victim.
   The trench radius is 0.375 tile.
   The client
   renders neutral trench terrain as brown ground and marks occupied eligible infantry with a small
@@ -668,7 +669,7 @@ Unit stats (hp, dmg, range[tiles], cooldown[ticks], speed[px/tick], sight[tiles]
 | panzerfaust     | 45  | 5 rifle / 100 launcher | 5 | 32 rifle / one lifetime launcher | 1.6 | 11 | 55 | 10 | 1 | 300 (~10s); requires completed Panzerfausts research |
 | machine_gunner  | 55  | 4   | 6.1   | 12  | 1.28  | 11    | 75  | 10  | 2   | 400 (~13s) |
 | mortar_team     | 75  | 40 outer / 100 inner AOE | 5-17 | 120 | 1.6 | 10 | 100 | 40 | 3 | 460 (~15s); trained at Gun Works (`steelworks` kind) |
-| anti_tank_gun         | 45  | 100 deployed; 30 vs infantry-sized targets | 20 deployed | 144 | 1.672 | 9    | 150 | 40  | 6   | 440 (~15s); cannot fire while packed or transitioning; available immediately from a completed Gun Works (`steelworks` kind) |
+| anti_tank_gun         | 45  | 100 deployed; cannot target infantry | 20 deployed | 144 | 1.672 | 9    | 150 | 40  | 6   | 440 (~15s); cannot fire while packed or transitioning; available immediately from a completed Gun Works (`steelworks` kind) |
 | artillery       | 200 | 75 AP inner / 75-20 outer AOE | 10-35 artillery fire | 180 | 1.6 | 7 | 150 | 50 | 4 | 600 (~20s); requires Gun Works (`steelworks` kind) and Artillery (`artillery_unlock`) researched in Engineering Complex; rendered at 75% of its prior size with a matching 75%-of-Tank gameplay footprint; 2/3-tile inner and 2-tile outer blast radii; soft target with no armor damage reduction |
 | rocket_launcher (Rocket Truck) | 150 | 16 rockets, each 21 outer / 53 inner AOE; a rocket whose impact point intersects a target deals 70 armor-piercing damage instead; all resulting damage is reduced to 25% against buildings | 10-44 Barrage | 1800-tick (~60s) cooldown from activation | 2.0 | 8 | 225 | 100 | 6 | 600 (~20s); requires Gun Works (`steelworks` kind) and Rockets (`rockets`) researched in Engineering Complex; vehicle movement; must stop to launch; one manual command unloads exactly 16 rockets over 120 ticks (~4s) into a 6-tile scatter radius and then stops; its team-tinted rack carries 16 rounds, empties one slot per launch, and refills at cooldown completion; the PNG and collision footprint are enlarged by 20% (48×26.4 px body, 1.2 px clearance, 21.6 px selection radius); Barrage accepts in-range world points without requiring current vision; first barrage is free and later barrages cost 150 oil |
 | scout_car       | 100 | 6   | 7     | 12  | 2.35  | 15    | 125 | 60  | 3   | 480 (~16s) |
