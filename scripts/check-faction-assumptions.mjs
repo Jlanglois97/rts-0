@@ -313,6 +313,10 @@ const approvedCurrentFactionFiles = new Set([
   // carrier admission still routes through the selected player's faction ability catalog.
   "server/crates/sim/src/game/services/artillery_fire.rs",
   "server/crates/sim/src/game/services/combat/acquisition.rs",
+  // Tank attack-move targeting cadence is a weapon-specific runtime rule; faction admission
+  // remains owned by the catalog.
+  "server/crates/sim/src/game/services/combat/acquisition_pass.rs",
+  "server/crates/sim/src/game/services/combat/pre_movement.rs",
   // Combat target legality centralizes the existing Mortar Team indirect-fire exception moved
   // out of acquisition.rs; it does not expand faction admission or target policy.
   "server/crates/sim/src/game/services/combat/target_legality.rs",
