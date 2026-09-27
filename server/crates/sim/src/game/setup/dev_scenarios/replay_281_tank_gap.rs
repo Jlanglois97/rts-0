@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn tick_perfect_case_matches_every_recorded_replay_tick() {
+    fn recorded_replay_matches_until_tank_reacquisition_changes_the_outcome() {
         let mut setup = scenario(CASE_TICK_PERFECT);
         assert_eq!(setup.game.tick_count(), REPLAY_PRE_COMMAND_TICK);
         assert_eq!(setup.issue_after_ticks, REPLAY_PRE_COMMAND_TICK);
@@ -202,8 +202,9 @@ mod tests {
             vec![6, 8, 38]
         );
         setup.game.enqueue(setup.player_id, setup.command());
-        // Movement remains exact to the recorded replay; HP reflects three-ray MG cone
-        // bursts and tank HE splash. Positions, states, targets, and stuck ticks are unchanged.
+        // Match the historical replay up to the intentional attack-move behavior change.
+        // The former target dies at tick 13612; the lead Tank now picks a replacement
+        // instead of resuming its route at tick 13613.
         let golden: Vec<GoldenTick> =
             serde_json::from_str(include_str!("fixtures/replay_281_ticks_13537_13620.json"))
                 .expect("valid replay-281 golden trace");
@@ -230,6 +231,9 @@ mod tests {
                 "golden tick {} must cover every surviving replay actor",
                 expected_tick.tick
             );
+            if expected_tick.tick == 13_613 {
+                break;
+            }
             setup.game.tick();
             let snapshot = setup.game.snapshot_full_for_with_options(
                 SOUPMAN,
@@ -283,6 +287,25 @@ mod tests {
                 );
             }
         }
+        assert_eq!(setup.game.tick_count(), 13_612);
+        let lead_position = setup
+            .game
+            .state
+            .entities
+            .get(LEAD_TANK)
+            .map(|lead| (lead.pos_x, lead.pos_y))
+            .expect("lead Tank at replay divergence");
+        setup.game.tick();
+        let lead = setup
+            .game
+            .state
+            .entities
+            .get(LEAD_TANK)
+            .expect("lead Tank after replay divergence");
+        assert_eq!(setup.game.tick_count(), 13_613);
+        assert_eq!((lead.pos_x, lead.pos_y), lead_position);
+        assert_eq!(lead.target_id(), Some(177));
+        assert!(lead.path_is_empty());
     }
 
     #[test]
