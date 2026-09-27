@@ -804,3 +804,77 @@ fn defending_tank_does_not_park_behind_a_building() {
         "park point ({x}, {y}) is still on the blocked line"
     );
 }
+
+fn raid_observation(raiders: u32) -> AiObservation {
+    let mut observation = stationary_defense_observation();
+    let ts = observation.map.tile_size as f32;
+    observation
+        .owned
+        .retain(|unit| unit.kind != EntityKind::Tank);
+    observation
+        .owned
+        .push(combat_unit(41, EntityKind::Rifleman, 10.5 * ts, 5.5 * ts));
+    observation
+        .owned
+        .push(combat_unit(42, EntityKind::Rifleman, 10.5 * ts, 7.5 * ts));
+    let raider = observation.visible_enemies[0].clone();
+    observation.visible_enemies = (0..raiders)
+        .map(|index| AiEntitySummary {
+            id: 30 + index,
+            y: (5.5 + index as f32 * 0.5) * ts,
+            ..raider.clone()
+        })
+        .collect();
+    observation
+}
+
+fn attackers(commands: &[Command]) -> Vec<u32> {
+    let mut units: Vec<u32> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Attack { units, .. } => Some(units.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    units.sort_unstable();
+    units
+}
+
+#[test]
+fn a_raid_on_buildings_is_answered_even_below_two_to_one() {
+    let mut observation = raid_observation(6);
+    let mut memory = AiDecisionMemory::default();
+    // Two Riflemen cannot reach twice the value of six, so a probe is left alone.
+    let quiet = stationary_defense_commands(&observation, &mut memory, &[41, 42]);
+    assert!(attackers(&quiet).is_empty(), "{quiet:?}");
+
+    // Once the raiders start killing buildings, everyone answers.
+    observation.tick += 9;
+    observation.owned[0].hp -= 20;
+    let raid = stationary_defense_commands(&observation, &mut memory, &[41, 42]);
+    assert_eq!(attackers(&raid), vec![41, 42], "{raid:?}");
+}
+
+#[test]
+fn machine_gunners_are_never_sent_out_as_spotters() {
+    let mut observation = stationary_defense_observation();
+    let ts = observation.map.tile_size as f32;
+    observation.owned.push(combat_unit(
+        45,
+        EntityKind::MachineGunner,
+        8.5 * ts,
+        7.5 * ts,
+    ));
+    let mut memory = AiDecisionMemory::default();
+    for _ in 0..3 {
+        let commands = stationary_defense_commands(&observation, &mut memory, &[40, 45]);
+        assert!(
+            !commands.iter().any(
+                |command| matches!(command, Command::Move { units, .. } if units.contains(&45))
+            ),
+            "{commands:?}"
+        );
+        observation.tick += 9;
+    }
+}

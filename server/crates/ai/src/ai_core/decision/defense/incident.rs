@@ -14,6 +14,8 @@ const SPOTTER_STANDOFF_TILES: f32 = 8.0;
 const MAX_SPOTTERS: usize = 2;
 /// With nobody spotting, a Tank parks inside its own 10-tile sight so it can see what it shoots.
 const UNSPOTTED_TANK_PARK_TILES: f32 = 9.0;
+/// A completed building that lost HP this recently means the base is being raided.
+const BUILDINGS_UNDER_FIRE_TICKS: u32 = config::TICK_HZ * 4;
 
 /// `stationary_tanks` keeps defending Tanks parked for their stationary range bonus and sends
 /// infantry forward to provide the vision for those long shots, instead of ordering the Tanks to
@@ -29,6 +31,13 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
     let damaged_building = stationary_tanks
         .then(|| note_building_damage(observation, memory))
         .flatten();
+    if damaged_building.is_some() {
+        memory.local_defense_building_hit_tick = Some(observation.tick);
+    }
+    let buildings_under_fire = stationary_tanks
+        && memory
+            .local_defense_building_hit_tick
+            .is_some_and(|hit| observation.tick.saturating_sub(hit) <= BUILDINGS_UNDER_FIRE_TICKS);
     if let Some(contact) = local_defense_contact(observation) {
         memory.note_defensive_contact(
             observation.tick,
@@ -36,14 +45,19 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
             contact.threat_value,
             contact.armored_threat,
         );
-        let mut interceptors = select_defensive_interceptors(
-            observation,
-            memory,
-            eligible_local_defenders(observation, local_defenders),
-            contact.intercept,
-            contact.threat_value,
-            contact.armored_threat,
-        );
+        let eligible = eligible_local_defenders(observation, local_defenders);
+        let mut interceptors = if buildings_under_fire && !contact.armored_threat {
+            raid_responders(observation, eligible, contact.intercept)
+        } else {
+            select_defensive_interceptors(
+                observation,
+                memory,
+                eligible,
+                contact.intercept,
+                contact.threat_value,
+                contact.armored_threat,
+            )
+        };
         let smoke = crate::ai_core::decision::frontal::smoke::maybe_issue_local_defense_smoke(
             actions,
             observation,
@@ -108,14 +122,18 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         memory.local_defense_held_tanks.clear();
         return None;
     }
-    let interceptors = select_defensive_interceptors(
-        observation,
-        memory,
-        candidates,
-        incident.position,
-        incident.threat_value,
-        incident.armored_threat,
-    );
+    let interceptors = if buildings_under_fire && !incident.armored_threat {
+        raid_responders(observation, candidates, incident.position)
+    } else {
+        select_defensive_interceptors(
+            observation,
+            memory,
+            candidates,
+            incident.position,
+            incident.threat_value,
+            incident.armored_threat,
+        )
+    };
     // Contact is lost: a parked Tank can no longer see anything to shoot, so it joins the search
     // and is parked again once the threat is back in sight.
     memory.local_defense_held_tanks.clear();
@@ -125,6 +143,33 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         incident.position.0,
         incident.position.1,
     )
+}
+
+/// Every local defender, nearest the contact first, dug-in Riflemen included. The usual two-to-one
+/// response keeps edge guards in their trenches against a probe and sends nobody when it cannot
+/// reach that value. Against infantry that is already killing buildings, both are wrong: the
+/// trench guards are there for exactly this, and a smaller response still saves Mines.
+fn raid_responders(
+    observation: &AiObservation,
+    mut candidates: Vec<u32>,
+    contact: (f32, f32),
+) -> Vec<u32> {
+    let distance = |id: &u32| {
+        observation
+            .owned
+            .iter()
+            .find(|unit| unit.id == *id)
+            .map_or(f32::INFINITY, |unit| {
+                dist2(unit.x, unit.y, contact.0, contact.1)
+            })
+    };
+    candidates.sort_by(|left, right| {
+        distance(left)
+            .total_cmp(&distance(right))
+            .then_with(|| left.cmp(right))
+    });
+    candidates.dedup();
+    candidates
 }
 
 /// Records completed building HP and returns the position of the building that lost the most
@@ -245,16 +290,16 @@ fn stationary_tank_defense(
         .retain(|id| tanks.contains(id));
 
     // Parked Tanks outrange their own 10-tile sight: without infantry ahead of them, the long
-    // shots have no vision. Add spotters when the response selected only armor.
+    // shots have no vision. Add spotters when the response selected only armor. Machine Gunners
+    // never spot: they must stop and set up to fire, and one moved out as a spotter on one
+    // decision and ordered to attack on the next never gets to shoot.
     let mut spotters = Vec::new();
     if infantry.is_empty() && !tanks.is_empty() {
         let mut candidates: Vec<&AiEntitySummary> =
             eligible_local_defenders(observation, local_defenders)
                 .into_iter()
                 .filter_map(owned)
-                .filter(|unit| {
-                    matches!(unit.kind, EntityKind::Rifleman | EntityKind::MachineGunner)
-                })
+                .filter(|unit| unit.kind == EntityKind::Rifleman)
                 .filter(|unit| {
                     memory.estimated_entrenchment_ticks(observation, unit.id)
                         < rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS

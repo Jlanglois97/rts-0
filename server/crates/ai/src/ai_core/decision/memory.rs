@@ -62,6 +62,8 @@ pub(crate) struct AiDecisionMemory {
     pub(super) local_defense_held_tanks: BTreeSet<u32>,
     /// Completed building HP at the previous local-defense decision, to spot damage from fog.
     pub(super) local_defense_building_hp: BTreeMap<u32, u32>,
+    /// Last decision tick on which a completed building lost HP.
+    pub(super) local_defense_building_hit_tick: Option<u32>,
     defender_posture: BTreeMap<u32, DefenderPostureMemory>,
     entrenchment_available_since: Option<u32>,
     pub(super) pending_upgrades: BTreeSet<UpgradeKind>,
@@ -117,6 +119,7 @@ impl AiDecisionMemory {
             defensive_incident: None,
             local_defense_held_tanks: BTreeSet::new(),
             local_defense_building_hp: BTreeMap::new(),
+            local_defense_building_hit_tick: None,
             defender_posture: BTreeMap::new(),
             entrenchment_available_since: None,
             pending_upgrades: BTreeSet::new(),

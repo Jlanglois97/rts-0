@@ -232,6 +232,7 @@ mod tests {
             chokes: Vec::new(),
             starts: Vec::new(),
             resource_clusters: Vec::new(),
+            route_entries: Vec::new(),
         };
 
         let route = analysis.compact_group_route((48.0, 48.0), (240.0, 48.0), 1);
