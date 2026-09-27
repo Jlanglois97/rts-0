@@ -58,6 +58,8 @@ pub(crate) struct AiDecisionMemory {
     /// Tanks local defense has parked for the stationary range bonus. Holding clears the Tank's
     /// target, so the order is only re-sent when a held Tank is seen moving again.
     pub(super) local_defense_held_tanks: BTreeSet<u32>,
+    /// Completed building HP at the previous local-defense decision, to spot damage from fog.
+    pub(super) local_defense_building_hp: BTreeMap<u32, u32>,
     defender_posture: BTreeMap<u32, DefenderPostureMemory>,
     entrenchment_available_since: Option<u32>,
     pub(super) pending_upgrades: BTreeSet<UpgradeKind>,
@@ -108,6 +110,7 @@ impl AiDecisionMemory {
             defensive_panic_response: DefensivePanicResponse::Riflemen,
             defensive_incident: None,
             local_defense_held_tanks: BTreeSet::new(),
+            local_defense_building_hp: BTreeMap::new(),
             defender_posture: BTreeMap::new(),
             entrenchment_available_since: None,
             pending_upgrades: BTreeSet::new(),

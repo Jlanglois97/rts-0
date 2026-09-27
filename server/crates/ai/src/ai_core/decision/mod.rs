@@ -857,6 +857,7 @@ where
                 observation,
                 memory,
                 &local_defenders,
+                map_analysis,
                 uses_current_jeffs_ai_policy(profile.id),
             ) {
                 local_defense_assigned.extend(units.iter().copied());

@@ -669,3 +669,138 @@ fn strongest_local_sector_wins_over_a_lone_flanker() {
     );
     assert!((contact.intercept.1 - contact.centroid.1).abs() < f32::EPSILON);
 }
+
+fn stationary_defense_observation() -> AiObservation {
+    let mut observation = los_test_observation(EntityKind::Factory);
+    let ts = observation.map.tile_size as f32;
+    // The Factory sits off the firing line so the enemy is inside the defended envelope.
+    observation.owned[0].x = 16.5 * ts;
+    observation.owned[0].y = 9.5 * ts;
+    observation
+        .owned
+        .push(combat_unit(40, EntityKind::Tank, 7.5 * ts, 5.5 * ts));
+    observation.visible_enemies.push(AiEntitySummary {
+        owner: 2,
+        state: AiEntityState::Attack,
+        target_id: Some(10),
+        ..combat_unit(30, EntityKind::Rifleman, 20.5 * ts, 5.5 * ts)
+    });
+    observation
+}
+
+fn combat_unit(id: u32, kind: EntityKind, x: f32, y: f32) -> AiEntitySummary {
+    AiEntitySummary {
+        id,
+        owner: 1,
+        kind,
+        x,
+        y,
+        hp: config::unit_stats(kind).expect("unit stats").hp,
+        state: AiEntityState::Idle,
+        is_complete: true,
+        production_queue_len: None,
+        production_kind: None,
+        latched_node: None,
+        target_id: None,
+        free_for_combat: true,
+    }
+}
+
+fn stationary_defense_commands(
+    observation: &AiObservation,
+    memory: &mut AiDecisionMemory,
+    defenders: &[u32],
+) -> Vec<Command> {
+    let facts = AiFacts::from_observation(observation);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(1000, 1000, 20, 80));
+    respond_to_local_incident(&mut actions, observation, memory, defenders, None, true);
+    actions.into_commands()
+}
+
+#[test]
+fn spotted_defending_tank_holds_at_stationary_range() {
+    let mut observation = stationary_defense_observation();
+    let ts = observation.map.tile_size as f32;
+    observation
+        .owned
+        .push(combat_unit(41, EntityKind::Rifleman, 6.5 * ts, 5.5 * ts));
+    let mut memory = AiDecisionMemory::default();
+    let commands = stationary_defense_commands(&observation, &mut memory, &[40, 41]);
+    assert!(
+        commands.iter().any(
+            |command| matches!(command, Command::HoldPosition { units, .. } if units == &[40])
+        ),
+        "{commands:?}"
+    );
+    assert!(!commands
+        .iter()
+        .any(|command| matches!(command, Command::Attack { units, .. } if units.contains(&40))));
+}
+
+#[test]
+fn unspotted_defending_tank_closes_to_its_own_sight_before_holding() {
+    let observation = stationary_defense_observation();
+    let ts = observation.map.tile_size as f32;
+    let mut memory = AiDecisionMemory::default();
+    let commands = stationary_defense_commands(&observation, &mut memory, &[40]);
+    let park = commands.iter().find_map(|command| match command {
+        Command::Move { units, x, y, .. } if units == &[40] => Some((*x, *y)),
+        _ => None,
+    });
+    let (x, y) = park.unwrap_or_else(|| panic!("tank should close in: {commands:?}"));
+    let distance = dist2(x, y, 20.5 * ts, 5.5 * ts).sqrt() / ts;
+    assert!((distance - 9.0).abs() < 0.01, "parked {distance} tiles out");
+}
+
+#[test]
+fn building_losing_hp_in_fog_sends_defenders_to_search() {
+    let mut observation = stationary_defense_observation();
+    observation.visible_enemies.clear();
+    let mut memory = AiDecisionMemory::default();
+    assert!(stationary_defense_commands(&observation, &mut memory, &[40]).is_empty());
+
+    observation.tick += 9;
+    observation.owned[0].hp -= 20;
+    let commands = stationary_defense_commands(&observation, &mut memory, &[40]);
+    let factory = (observation.owned[0].x, observation.owned[0].y);
+    assert!(
+        commands.iter().any(|command| matches!(
+            command,
+            Command::AttackMove { units, x, y, .. } if units == &[40] && (*x, *y) == factory
+        )),
+        "{commands:?}"
+    );
+}
+
+#[test]
+fn defending_tank_does_not_park_behind_a_building() {
+    let mut observation = stationary_defense_observation();
+    let ts = observation.map.tile_size as f32;
+    // A Barracks between the Tank and the raider blocks the shot, so the Tank must move to a
+    // point with a clear line of fire instead of holding.
+    observation.owned.push(AiEntitySummary {
+        id: 11,
+        kind: EntityKind::Barracks,
+        x: 14.5 * ts,
+        y: 5.5 * ts,
+        free_for_combat: false,
+        ..combat_unit(11, EntityKind::Rifleman, 0.0, 0.0)
+    });
+    observation
+        .owned
+        .push(combat_unit(41, EntityKind::Rifleman, 6.5 * ts, 5.5 * ts));
+    let mut memory = AiDecisionMemory::default();
+    let commands = stationary_defense_commands(&observation, &mut memory, &[40, 41]);
+    assert!(!commands
+        .iter()
+        .any(|command| matches!(command, Command::HoldPosition { units, .. } if units == &[40])));
+    let park = commands.iter().find_map(|command| match command {
+        Command::Move { units, x, y, .. } if units == &[40] => Some((*x, *y)),
+        _ => None,
+    });
+    let (x, y) = park.unwrap_or_else(|| panic!("tank should reposition: {commands:?}"));
+    assert!(
+        (y - 5.5 * ts).abs() > ts,
+        "park point ({x}, {y}) is still on the blocked line"
+    );
+}

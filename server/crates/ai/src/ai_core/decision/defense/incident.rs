@@ -12,6 +12,8 @@ const STATIONARY_TANK_CLOSE_TO_TILES: f32 = 12.0;
 /// Rifleman and Machine Gunner reach.
 const SPOTTER_STANDOFF_TILES: f32 = 8.0;
 const MAX_SPOTTERS: usize = 2;
+/// With nobody spotting, a Tank parks inside its own 10-tile sight so it can see what it shoots.
+const UNSPOTTED_TANK_PARK_TILES: f32 = 9.0;
 
 /// `stationary_tanks` keeps defending Tanks parked for their stationary range bonus and sends
 /// infantry forward to provide the vision for those long shots, instead of ordering the Tanks to
@@ -21,8 +23,12 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
     observation: &AiObservation,
     memory: &mut AiDecisionMemory,
     local_defenders: &[u32],
+    map_analysis: Option<&AiMapAnalysis>,
     stationary_tanks: bool,
 ) -> Option<Vec<u32>> {
+    let damaged_building = stationary_tanks
+        .then(|| note_building_damage(observation, memory))
+        .flatten();
     if let Some(contact) = local_defense_contact(observation) {
         memory.note_defensive_contact(
             observation.tick,
@@ -70,6 +76,7 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
                     memory,
                     interceptors,
                     local_defenders,
+                    map_analysis,
                     &attack_targets,
                     target,
                 );
@@ -82,6 +89,11 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         };
     }
 
+    // A Resource Depot sees one tile, so attackers shooting a building from range are often in
+    // fog. Treat the building losing HP as the contact so defenders go and find them.
+    if let Some(position) = damaged_building {
+        memory.note_defensive_contact(observation.tick, position, 1, false);
+    }
     let incident = memory.defensive_incident(observation.tick, SEARCH_TICKS)?;
     let candidates = local_defense_units_with_plans(observation, local_defenders);
     let reacquire2 = squared(REACQUIRE_TILES * observation.map.tile_size as f32);
@@ -96,7 +108,7 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         memory.local_defense_held_tanks.clear();
         return None;
     }
-    let mut interceptors = select_defensive_interceptors(
+    let interceptors = select_defensive_interceptors(
         observation,
         memory,
         candidates,
@@ -104,17 +116,9 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         incident.threat_value,
         incident.armored_threat,
     );
-    // Parked Tanks keep their range while infantry search; if nobody else can search, the Tanks
-    // must go themselves.
-    if stationary_tanks
-        && interceptors
-            .iter()
-            .any(|id| !memory.local_defense_held_tanks.contains(id))
-    {
-        interceptors.retain(|id| !memory.local_defense_held_tanks.contains(id));
-    } else {
-        memory.local_defense_held_tanks.clear();
-    }
+    // Contact is lost: a parked Tank can no longer see anything to shoot, so it joins the search
+    // and is parked again once the threat is back in sight.
+    memory.local_defense_held_tanks.clear();
     actions::attack_move_units(
         actions,
         interceptors,
@@ -123,12 +127,100 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
     )
 }
 
+/// Records completed building HP and returns the position of the building that lost the most
+/// since the previous decision. Incomplete buildings are skipped because they gain HP while built.
+fn note_building_damage(
+    observation: &AiObservation,
+    memory: &mut AiDecisionMemory,
+) -> Option<(f32, f32)> {
+    let previous = std::mem::take(&mut memory.local_defense_building_hp);
+    let mut damaged = None;
+    let mut largest_loss = 0;
+    for building in observation
+        .owned
+        .iter()
+        .filter(|entity| entity.kind.is_building() && entity.is_complete && entity.hp > 0)
+    {
+        memory
+            .local_defense_building_hp
+            .insert(building.id, building.hp);
+        let loss = previous
+            .get(&building.id)
+            .map_or(0, |hp| hp.saturating_sub(building.hp));
+        if loss > largest_loss {
+            largest_loss = loss;
+            damaged = Some((building.x, building.y));
+        }
+    }
+    damaged
+}
+
+fn clear_line_of_fire(
+    observation: &AiObservation,
+    map_analysis: Option<&AiMapAnalysis>,
+    from: (f32, f32),
+    to: (f32, f32),
+) -> bool {
+    let Some(direction) = normalized_direction(from, to) else {
+        return true;
+    };
+    let tiles = dist2(from.0, from.1, to.0, to.1).sqrt() / observation.map.tile_size as f32;
+    defensive_firing_lane_is_clear(observation, map_analysis, from, direction, tiles)
+}
+
+/// Where a Tank should park `park_tiles` from its target: the direct approach when that line of
+/// fire is clear, otherwise the nearest open point around the target that has one.
+fn tank_park_point(
+    observation: &AiObservation,
+    map_analysis: Option<&AiMapAnalysis>,
+    tank: (f32, f32),
+    target: (f32, f32),
+    park_tiles: f32,
+) -> (f32, f32) {
+    let ts = observation.map.tile_size as f32;
+    let point_at = |angle: f32| {
+        clamp_to_map(
+            (
+                target.0 + angle.cos() * park_tiles * ts,
+                target.1 + angle.sin() * park_tiles * ts,
+            ),
+            observation.map,
+        )
+    };
+    let direct = normalized_direction(target, tank).unwrap_or((0.0, 1.0));
+    let base = direct.1.atan2(direct.0);
+    // Fan out from the direct approach, alternating sides, in 22.5 degree steps.
+    let mut best = None;
+    for step in 0..=8 {
+        for side in [1.0, -1.0] {
+            if step == 0 && side < 0.0 {
+                continue;
+            }
+            let point = point_at(base + side * step as f32 * std::f32::consts::PI / 8.0);
+            if defensive_position_is_open(observation, map_analysis, point.0, point.1)
+                && clear_line_of_fire(observation, map_analysis, point, target)
+            {
+                let distance = dist2(point.0, point.1, tank.0, tank.1);
+                if best.is_none_or(|(_, best_distance)| distance < best_distance) {
+                    best = Some((point, distance));
+                }
+            }
+        }
+        if best.is_some() {
+            break;
+        }
+    }
+    best.map_or_else(|| point_at(base), |(point, _)| point)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn stationary_tank_defense(
     actions: &mut AiActionContext<'_>,
     observation: &AiObservation,
     memory: &mut AiDecisionMemory,
     interceptors: Vec<u32>,
     local_defenders: &[u32],
+    map_analysis: Option<&AiMapAnalysis>,
     attack_targets: &[u32],
     target: u32,
 ) -> Option<Vec<u32>> {
@@ -151,45 +243,6 @@ fn stationary_tank_defense(
     memory
         .local_defense_held_tanks
         .retain(|id| tanks.contains(id));
-
-    let mut assigned = Vec::new();
-    let mut hold = Vec::new();
-    for tank_id in &tanks {
-        let Some(tank) = owned(*tank_id) else {
-            continue;
-        };
-        let in_range = threats.iter().any(|threat| {
-            dist2(tank.x, tank.y, threat.0, threat.1) <= squared(STATIONARY_TANK_RANGE_TILES * ts)
-        });
-        if in_range {
-            // Holding clears the Tank's target, so re-issue it only when something moved it.
-            if !memory.local_defense_held_tanks.contains(tank_id)
-                || tank.state == AiEntityState::Move
-            {
-                hold.push(*tank_id);
-                memory.local_defense_held_tanks.insert(*tank_id);
-            }
-        } else {
-            memory.local_defense_held_tanks.remove(tank_id);
-            let direction =
-                normalized_direction(target_position, (tank.x, tank.y)).unwrap_or((0.0, 1.0));
-            let park = clamp_to_map(
-                (
-                    target_position.0 + direction.0 * STATIONARY_TANK_CLOSE_TO_TILES * ts,
-                    target_position.1 + direction.1 * STATIONARY_TANK_CLOSE_TO_TILES * ts,
-                ),
-                observation.map,
-            );
-            if let Some(units) = actions::move_units(actions, [*tank_id], park.0, park.1) {
-                assigned.extend(units);
-            }
-        }
-    }
-    if let Some(units) = actions::hold_position_units(actions, hold) {
-        assigned.extend(units);
-    }
-    // Held Tanks keep their slot in the response even on ticks where no new order is needed.
-    assigned.extend(memory.local_defense_held_tanks.iter().copied());
 
     // Parked Tanks outrange their own 10-tile sight: without infantry ahead of them, the long
     // shots have no vision. Add spotters when the response selected only armor.
@@ -219,6 +272,55 @@ fn stationary_tank_defense(
         });
         spotters.extend(candidates.iter().take(MAX_SPOTTERS).map(|unit| unit.id));
     }
+    // With infantry lighting targets a Tank can sit at full stationary range. Alone it only sees
+    // 10 tiles (a Resource Depot sees 1), so it must park where it can see its own targets.
+    let vision_support = !infantry.is_empty() || !spotters.is_empty();
+    let (hold_tiles, park_tiles) = if vision_support {
+        (STATIONARY_TANK_RANGE_TILES, STATIONARY_TANK_CLOSE_TO_TILES)
+    } else {
+        (UNSPOTTED_TANK_PARK_TILES, UNSPOTTED_TANK_PARK_TILES)
+    };
+
+    let mut assigned = Vec::new();
+    let mut hold = Vec::new();
+    for tank_id in &tanks {
+        let Some(tank) = owned(*tank_id) else {
+            continue;
+        };
+        // Tank shells stop at buildings and sight-blocking terrain: parking only helps with a
+        // threat both in range and in a clear line of fire.
+        let can_fire = threats.iter().any(|threat| {
+            dist2(tank.x, tank.y, threat.0, threat.1) <= squared(hold_tiles * ts)
+                && clear_line_of_fire(observation, map_analysis, (tank.x, tank.y), *threat)
+        });
+        if can_fire {
+            // Holding clears the Tank's target, so re-issue it only when something moved it.
+            if !memory.local_defense_held_tanks.contains(tank_id)
+                || tank.state == AiEntityState::Move
+            {
+                hold.push(*tank_id);
+                memory.local_defense_held_tanks.insert(*tank_id);
+            }
+        } else {
+            memory.local_defense_held_tanks.remove(tank_id);
+            let park = tank_park_point(
+                observation,
+                map_analysis,
+                (tank.x, tank.y),
+                target_position,
+                park_tiles,
+            );
+            if let Some(units) = actions::move_units(actions, [*tank_id], park.0, park.1) {
+                assigned.extend(units);
+            }
+        }
+    }
+    if let Some(units) = actions::hold_position_units(actions, hold) {
+        assigned.extend(units);
+    }
+    // Held Tanks keep their slot in the response even on ticks where no new order is needed.
+    assigned.extend(memory.local_defense_held_tanks.iter().copied());
+
     for spotter_id in &spotters {
         let Some(spotter) = owned(*spotter_id) else {
             continue;
