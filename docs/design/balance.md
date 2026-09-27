@@ -707,15 +707,16 @@ snapshot immediately while the remaining players keep playing; final match resol
 
 ---
 
-## Machine-gun cone proof of concept (unmerged playtest)
+## Machine-gun cone
 
 Machine Gunner, Scout Car MG, and Tank coax keep their existing 12-tick firing cycle
-and acquisition ranges. Each cycle emits five simultaneous server rays, uniformly
-random over a 15-degree full cone centered on the selected target. Each bullet
+and acquisition ranges. Each cycle emits three simultaneous server rays. The first
+is aimed at the selected target; the other two are uniformly random over a
+20-degree full cone centered on that target. Each bullet
 contributes half the old shot damage (2 MG/coax, 3 Scout Car). The maximum emitted
-DPS is 25/25/37.5 respectively. A centered radius-9 Rifleman at 214 world pixels
-catches approximately 32% of rays: about 8 DPS from MG/coax; closer targets catch
-more. These are geometric expectations, not guarantees for every formation.
+DPS is 15/15/22.5 respectively. A clear center ray hits the selected target;
+terrain, smoke, or another body can still intercept it. Spread rays may hit that
+target, another target, or nothing.
 
 The nearest targetable enemy body or building absorbs each bullet. Friendly infantry
 is transparent; friendly Tanks and sight-blocking buildings absorb without damage,
@@ -723,5 +724,5 @@ except an explicitly commanded self-attack. Neutral obstacles intercept when exp
 targeted. Rays stop at opaque terrain, smoke, or weapon range. Damage sums per victim
 within a simultaneous burst before existing integer armor, cover, and entrenchment
 reductions; lethal overkill stays on that victim. Existing non-MG damage is unchanged.
-The five cosmetic yellow tracers launch 20 ms apart, with 2,700 world pixels/second
+The three cosmetic yellow tracers launch 20 ms apart, with 2,700 world pixels/second
 travel, a 7.5-pixel tail, and a 1.1-pixel stroke. Server damage is immediate.
