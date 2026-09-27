@@ -1248,11 +1248,11 @@ export function _drawMuzzleFlashes(state) {
       const sx = f.shotOrigin[0], sy = f.shotOrigin[1];
       const dx = targetPos.x - sx, dy = targetPos.y - sy;
       const distance = Math.hypot(dx, dy);
-      const head = Math.min(distance, age * 1.8);
-      const tail = Math.max(12, head - 15);
-      if (distance > 0 && head > tail && age * 1.8 < distance + 15) {
+      const head = Math.min(distance, age * 2.7);
+      const tail = Math.max(12, head - 7.5);
+      if (distance > 0 && head > tail && age * 2.7 < distance + 7.5) {
         gfxStrokeLine(g, sx + dx * tail / distance, sy + dy * tail / distance,
-          sx + dx * head / distance, sy + dy * head / distance, 2.2, 0xffd84a, 0.98);
+          sx + dx * head / distance, sy + dy * head / distance, 1.1, 0xffd84a, 0.98);
       }
     } else if (targetPos) {
       gfxStrokeLine(g, mx, my, targetPos.x, targetPos.y,

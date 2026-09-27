@@ -712,5 +712,5 @@ except an explicitly commanded self-attack. Neutral obstacles intercept when exp
 targeted. Rays stop at opaque terrain, smoke, or weapon range. Damage sums per victim
 within a simultaneous burst before existing integer armor, cover, and entrenchment
 reductions; lethal overkill stays on that victim. Existing non-MG damage is unchanged.
-The five cosmetic yellow tracers launch 20 ms apart, with 1,800 world pixels/second
-travel and a 15-pixel tail. Server damage is immediate.
+The five cosmetic yellow tracers launch 20 ms apart, with 2,700 world pixels/second
+travel, a 7.5-pixel tail, and a 1.1-pixel stroke. Server damage is immediate.
