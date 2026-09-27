@@ -1224,6 +1224,11 @@ fn confirmed_late_replay_join_receives_current_ended_state_immediately() {
     assert_eq!(analysis.tick, end_tick);
     assert!(matches!(
         writer.reliable_rx.try_recv().unwrap(),
+        ServerMessage::ReplayResourceHistory { replace: true, samples }
+            if samples.first().is_some_and(|sample| sample.tick == 0)
+    ));
+    assert!(matches!(
+        writer.reliable_rx.try_recv().unwrap(),
         ServerMessage::GameOver {
             you,
             scores,
