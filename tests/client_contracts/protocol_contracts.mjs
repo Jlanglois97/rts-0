@@ -798,7 +798,7 @@ assert(
   assert(ANTI_TANK_GUN_DEPLOYED_RANGE_TILES === 20, "client mirrors deployed anti-tank gun range");
   assertApprox(
     ANTI_TANK_GUN_FIELD_OF_FIRE_RAD,
-    30 * Math.PI / 180,
+    40 * Math.PI / 180,
     0.000001,
     "client mirrors anti-tank gun field of fire",
   );
