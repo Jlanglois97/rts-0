@@ -544,3 +544,78 @@ fn command_car_passive_aura_uses_configured_speed_and_has_no_smoke_bonus() {
         "the permanent aura should use the configured multiplier"
     );
 }
+
+#[test]
+fn rocket_truck_training_requires_research_and_existing_completed_owned_vehicle_works() {
+    for (researched, factory_state, allowed) in [
+        (false, "complete", false),
+        (true, "missing", false),
+        (true, "unfinished", false),
+        (true, "enemy", false),
+        (true, "destroyed", false),
+        (true, "complete", true),
+    ] {
+        let players = [PlayerInit {
+            id: 1,
+            team_id: 1,
+            faction_id: "kriegsia".to_string(),
+            name: "Solo".into(),
+            color: "#fff".into(),
+            is_ai: false,
+        }];
+        let mut game = empty_flat_game(&players);
+        let player = game.state.players.iter_mut().find(|p| p.id == 1).unwrap();
+        player.set_resources(5_000, 5_000);
+        if researched {
+            player.upgrades.insert(upgrade::UpgradeKind::Rockets);
+        }
+        let (x, y) = game.state.map.tile_center(8, 8);
+        game.state
+            .entities
+            .spawn_building(1, EntityKind::Depot, x, y, true)
+            .unwrap();
+        let (x, y) = game.state.map.tile_center(16, 8);
+        let gun_works = game
+            .state
+            .entities
+            .spawn_building(1, EntityKind::Steelworks, x, y, true)
+            .unwrap();
+        if factory_state != "missing" {
+            let (x, y) = game.state.map.tile_center(24, 8);
+            let factory = game
+                .state
+                .entities
+                .spawn_building(
+                    if factory_state == "enemy" { 2 } else { 1 },
+                    EntityKind::Factory,
+                    x,
+                    y,
+                    factory_state != "unfinished",
+                )
+                .unwrap();
+            if factory_state == "destroyed" {
+                game.state.entities.remove(factory);
+            }
+        }
+        systems::recompute_supply(&mut game.state.players, &game.state.entities);
+        game.enqueue(
+            1,
+            Command::Train {
+                building: gun_works,
+                unit: EntityKind::RocketLauncher,
+            },
+        );
+        game.tick();
+        assert_eq!(
+            !game
+                .state
+                .entities
+                .get(gun_works)
+                .unwrap()
+                .prod_queue()
+                .is_empty(),
+            allowed,
+            "researched={researched}, vehicle works={factory_state}",
+        );
+    }
+}

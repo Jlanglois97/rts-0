@@ -762,3 +762,21 @@ for (const [kind, upgrade] of [
   assert.deepEqual(model.pages.flatMap((page) => page.blocks).map((block) => block.label),
     ["Nexus", "Resource Depot"]);
 }
+
+for (const researched of [false, true]) {
+  for (const hasVehicleWorks of [false, true]) {
+    const card = buildCommandCardDescriptors({
+      playerId: 1,
+      selection: [{ id: 71, owner: 1, kind: KIND.STEELWORKS }],
+      resources: { steel: 1000, oil: 1000, supplyUsed: 0, supplyCap: 100 },
+      upgrades: researched ? [UPGRADE.ROCKETS] : [],
+      playerHasCompleteKind: (kind) => kind === KIND.STEELWORKS ||
+        (kind === KIND.FACTORY && hasVehicleWorks),
+      groupCooldownClocks: () => [],
+    });
+    const rocketTruck = card.slots.find((slot) => slot?.id === `train:${KIND.ROCKET_LAUNCHER}`);
+    assert(rocketTruck, "Gun Works should show Rocket Truck training");
+    assert.equal(rocketTruck.enabled, researched && hasVehicleWorks,
+      "Rocket Truck training requires Rockets research and a completed Vehicle Works");
+  }
+}
