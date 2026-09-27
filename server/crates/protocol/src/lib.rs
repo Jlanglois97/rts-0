@@ -1497,5 +1497,3 @@ mod tests {
 }
 
 // EntityView::rocket_rack_count is re-exported from rts-contract; compact v56 uses slot 43.
-
-// MG prototype: Attack.shotOrigin (compact v57, slot 6) fixes the ray origin; toPos fixes its endpoint.
