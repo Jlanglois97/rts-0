@@ -5,7 +5,8 @@ fn direct_weapons_only_damage_the_resolved_victim() {
     for weapon in combat_rules::WEAPON_PROFILES.iter().filter(|weapon| {
         !matches!(
             weapon.id,
-            combat_rules::WeaponKind::MortarTeamMortar
+            combat_rules::WeaponKind::TankCannon
+                | combat_rules::WeaponKind::MortarTeamMortar
                 | combat_rules::WeaponKind::ArtilleryGun
                 | combat_rules::WeaponKind::PanzerfaustLoadedShot
         )

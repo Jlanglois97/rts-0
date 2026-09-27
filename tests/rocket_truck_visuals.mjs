@@ -32,6 +32,19 @@ effects.addMortarImpact({x:600,y:300,rocket:true},2000);
 assert.equal(effects.mortarShells.length, 0);
 console.log('Rocket rack slots, presentation field, detached tint identity, launch pose and impact cleanup passed');
 
+for (const rocket of [false, true]) {
+  const buffers = new VisualEffectBuffers();
+  buffers.addMortarLaunch({...event, rocket}, 1000);
+  buffers.addMortarImpact({x:600,y:300,radiusTiles:1.4}, 1200);
+  assert.equal(buffers.mortarShells.length, 1, 'tank HE preserves an incoming projectile');
+  assert.equal(buffers.mortarTargets.length, 1, 'tank HE preserves its target marker');
+  assert.equal(buffers.liveMortarImpacts(1699).length, 1);
+  assert.equal(buffers.liveMortarImpacts(1701).length, 0, 'HE impact expires after 500 ms');
+  buffers.addMortarImpact({x:600,y:300,rocket}, 2000);
+  assert.equal(buffers.mortarShells.length, 0, 'the projectile impact still retires its flight');
+  assert.equal(buffers.mortarTargets.length, 0);
+}
+
 for (const count of [0, 7, 16]) {
   const fields = [42, 1, 27, 100, 200, 150, 150, 1];
   while (fields.length < 44) fields.push(null);

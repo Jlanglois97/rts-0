@@ -1,4 +1,4 @@
-import { ARTILLERY_OUTER_RADIUS_TILES, MORTAR_OUTER_RADIUS_TILES } from "./config.js";
+import { ARTILLERY_OUTER_RADIUS_TILES, MORTAR_OUTER_RADIUS_TILES, MORTAR_IMPACT_DURATION_MS } from "./config.js";
 import { EVENT, KIND, STATE, WEAPON_KIND, isUnit } from "./protocol.js";
 import { sampleWeaponRecoilCycle } from "./weapon_recoil_cycle.js";
 
@@ -161,16 +161,19 @@ export class VisualEffectBuffers {
 
   addMortarImpact(ev, now = performance.now()) {
     if (!Number.isFinite(ev.x) || !Number.isFinite(ev.y)) return;
+    const radiusTiles = Number.isFinite(ev.radiusTiles) ? ev.radiusTiles : MORTAR_OUTER_RADIUS_TILES;
+    // Shared impact visuals also carry instant tank HE blasts. Only retire flights
+    // with a matching blast profile, so HE cannot erase an incoming mortar shell.
     this.mortarTargets = this.mortarTargets.filter(
-      (target) => Math.hypot(target.x - ev.x, target.y - ev.y) > 2,
+      (target) => target.radiusTiles !== radiusTiles || Math.hypot(target.x - ev.x, target.y - ev.y) > 2,
     );
     this.mortarShells = this.mortarShells.filter(
-      (shell) => Math.hypot(shell.toX - ev.x, shell.toY - ev.y) > 2,
+      (shell) => shell.radiusTiles !== radiusTiles || Math.hypot(shell.toX - ev.x, shell.toY - ev.y) > 2,
     );
     this.mortarImpacts.push({
       x: ev.x,
       y: ev.y,
-      radiusTiles: Number.isFinite(ev.radiusTiles) ? ev.radiusTiles : MORTAR_OUTER_RADIUS_TILES,
+      radiusTiles,
       seed: Math.floor(ev.x * 13 + ev.y * 7 + now) >>> 0,
       createdAt: now,
       rocket: ev.rocket === true,
@@ -305,7 +308,7 @@ export class VisualEffectBuffers {
   }
 
   liveMortarImpacts(now) {
-    const ttlMs = 1000;
+    const ttlMs = MORTAR_IMPACT_DURATION_MS;
     this.mortarImpacts = this.mortarImpacts.filter((f) => now - f.createdAt <= ttlMs);
     return this.mortarImpacts;
   }

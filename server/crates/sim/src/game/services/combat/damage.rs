@@ -55,6 +55,10 @@ pub(super) fn apply_damage(
     {
         return None;
     }
+    let infantry_shell = weapon_profile.id == combat_rules::WeaponKind::TankCannon
+        && entities.get(victim).is_some_and(|target| {
+            crate::rules::target::is_anti_tank_gun_infantry_target(target.kind)
+        });
     let shot_victim = resolve_shot_victim(
         map,
         entities,
@@ -135,6 +139,24 @@ pub(super) fn apply_damage(
     } else {
         false
     };
+    if !primary_missed
+        && infantry_shell
+        && victim_kind.is_some_and(crate::rules::target::is_anti_tank_gun_infantry_target)
+    {
+        apply_tank_he_splash(
+            map,
+            entities,
+            teams,
+            events,
+            fog,
+            attacker,
+            shot_victim,
+            attacker_owner,
+            (ax, ay),
+            shot_victim_pos,
+            tick,
+        );
+    }
     if damaged {
         if teams.is_enemy_owner(attacker_owner, victim_owner)
             && combat_rules::weapon_triggers_tank_armor_reaction(weapon_profile)
@@ -159,4 +181,85 @@ pub(super) fn apply_damage(
         victim_owner,
         reveals_attacker,
     })
+}
+
+/// Mortar-style center-distance splash, with direct-fire entrenchment protection.
+/// The resolved primary already received its normal cannon hit and is excluded here.
+#[allow(clippy::too_many_arguments)]
+fn apply_tank_he_splash(
+    map: &Map,
+    entities: &mut EntityStore,
+    teams: &TeamRelations,
+    events: &mut HashMap<u32, Vec<Event>>,
+    fog: &Fog,
+    attacker: u32,
+    primary: u32,
+    owner: u32,
+    source: (f32, f32),
+    impact: (f32, f32),
+    tick: u32,
+) {
+    let radius = crate::config::TANK_HE_RADIUS_TILES * crate::config::TILE_SIZE as f32;
+    let mut victims: Vec<_> = entities
+        .ids()
+        .into_iter()
+        .filter(|id| *id != primary)
+        .collect();
+    victims.sort_unstable();
+    for id in victims {
+        let Some(target) = entities.get(id) else {
+            continue;
+        };
+        let dx = target.pos_x - impact.0;
+        let dy = target.pos_y - impact.1;
+        if (target.owner == 0 && !target.is_neutral_obstacle())
+            || target.hp == 0
+            || !target.is_targetable()
+            || dx * dx + dy * dy > radius * radius
+        {
+            continue;
+        }
+        let damage = combat_rules::effective_damage(
+            crate::game::entity::EntityKind::MortarTeam,
+            target.kind,
+            crate::config::TANK_HE_SPLASH_DAMAGE,
+            Some(TerrainKind::Open),
+        );
+        let damage = entrenchment_combat::reduce_direct_damage(target, damage);
+        let damage = map.damage_after_reduction_tile(target.pos_x, target.pos_y, damage);
+        let victim_owner = target.owner;
+        let pos = (target.pos_x, target.pos_y);
+        let damaged = entities.get_mut(id).is_some_and(|target| {
+            if teams.is_enemy_owner(owner, target.owner) {
+                target.apply_damage_from_entity(damage, owner, attacker, source, tick)
+            } else {
+                target.apply_damage(damage, None)
+            }
+        });
+        if damaged {
+            push_under_attack_notices_for_visible_attack(
+                events,
+                fog,
+                teams,
+                victim_owner,
+                owner,
+                source.0,
+                source.1,
+                pos.0,
+                pos.1,
+            );
+        }
+    }
+    for (&pid, recipient_events) in events.iter_mut() {
+        if projection_rules::team_visible_world(pid, impact.0, impact.1, fog, teams) {
+            recipient_events.push(Event::MortarImpact {
+                from: None,
+                x: impact.0,
+                y: impact.1,
+                radius_tiles: crate::config::TANK_HE_RADIUS_TILES,
+                reveal: None,
+                rocket: false,
+            });
+        }
+    }
 }
