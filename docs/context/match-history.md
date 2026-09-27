@@ -10,8 +10,9 @@ scope, or the lobby front-page table.
 - `server/src/db.rs` — pool, migrations, `record_match`, `recent_matches`,
   `observation_by_run_id`, `replay_artifact_for_match`.
 - `server/src/main.rs` — env loading, `/api/matches`, `GET /api/observations/{matchRunId}`,
-  `POST /api/matches/{id}/replay`,
   replay compatibility checks, `RTS_RECORD_MATCHES` public/local scope.
+- `server/src/match_replay_http.rs` — `POST /api/matches/{id}/replay` launch and
+  `GET /api/matches/{id}/replay-artifact` download.
 - `server/src/lobby/mod.rs` — `Lobby::with_match_history()` injects pool/scope into rooms;
   replay launch creates spectator replay rooms.
 - `server/src/lobby/room_task.rs` — capture metadata at `start_match`, detached write at

@@ -106,6 +106,12 @@ Migrations are versioned SQL files run by `sqlx::migrate!` at server boot. Never
   playback. The public SPA route `/replay/{id}` stores the immutable match id, calls this launch
   endpoint, and joins the returned room. **Watch replay** replaces the browser URL with that route,
   so copying or reloading the address rejoins the current room when it exists or recreates it.
+- **Replay artifact download**: `GET /api/matches/{id}/replay-artifact` — read-only download of
+  the stored `ReplayArtifactV1` JSON for offline analysis tools (for example damage and
+  cost-efficiency reports that re-simulate the match). It uses the same visibility scope as replay
+  launch: local-only rows are served only to loopback callers. It skips build and map compatibility
+  checks because offline tools re-simulate on the artifact's recorded `serverBuildSha`. Missing
+  rows return 404 with the same JSON `{ "error": "..." }` shape as launch.
 - **AI observation lookup**: `GET /api/observations/{matchRunId}` — read-only recovery for an
   AI-only watched match that is intentionally hidden from Recent Matches. The run id is shown on
   the completed-match score screen and is the exact `match_run_id` in the structured server logs.
@@ -119,8 +125,9 @@ Migrations are versioned SQL files run by `sqlx::migrate!` at server boot. Never
 - `server/src/db.rs` — `Db` (pool + migrate), `record_match`, `recent_matches`,
   `observation_by_run_id`, `replay_artifact_for_match`, `MatchRecord`, `MatchSummary`.
 - `server/src/main.rs` — `.env` loading, pool construction, `/api/matches` handler, the
-  `POST /api/matches/{id}/replay` launch handler, replay compatibility checks, and the
-  `RTS_RECORD_MATCHES` gate.
+  replay compatibility checks, and the `RTS_RECORD_MATCHES` gate.
+- `server/src/match_replay_http.rs` — the `POST /api/matches/{id}/replay` launch handler and the
+  `GET /api/matches/{id}/replay-artifact` download handler, sharing one visibility-scoped loader.
 - `server/src/lobby/mod.rs` — `Lobby::with_match_history()` injects an `Option<Arc<Db>>` into
   spawned rooms and can create persisted replay rooms from launch-approved artifacts. The
   lobby/drain state also owns the bounded match-history write tracker, exposes the shutdown
