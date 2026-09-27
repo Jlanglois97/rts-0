@@ -1622,11 +1622,15 @@ General rules:
   blocker, or weapon-specific legality. Tanks also perform a full automatic rerank every five ticks,
   staggered by entity id; a scheduled rerank goes directly to candidate selection instead of first
   validating the retained target. Other cooldown, setup, and aiming ticks validate only the
-  committed target and do not rank alternatives. A targetless travelling movement order is the
-  narrow exception: Attack Move may scan during reload so a non-Mortar unit stops when an enemy
-  first enters weapon range, while an ordinary Move may scan only for a moving-fire unit and never
-  changes its commanded path in response. After committing that target, both follow the normal
-  no-rerank reload policy. Except for a Tank's scheduled five-tick rerank, if the prepared target
+  committed target and do not rank alternatives. A Tank on unfinished Attack Move may scan during
+  reload even while its path is empty after an engagement, so a lost target can be replaced before
+  the route resumes. Other attack-moving units scan during reload while travelling and targetless.
+  An ordinary Move may scan during reload only for a targetless moving-fire unit and never
+  changes its commanded path in response. Before a targetless attack-moving Tank spends built-up
+  stationary range by moving, it makes an in-range acquisition check at its current position;
+  ordinary travelling Tanks continue to use the normal post-movement combat pass. After committing
+  a target, both movement orders follow the normal no-rerank reload policy. Except for a Tank's
+  scheduled five-tick rerank, if the prepared target
   remains fireable when the weapon becomes ready, it receives the shot without a full rerank; the
   post-shot pass can then choose a newly higher-priority threat for the following cycle. Explicit
   Attack orders retain their

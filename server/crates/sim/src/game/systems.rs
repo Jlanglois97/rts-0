@@ -233,6 +233,9 @@ pub(crate) fn run_tick(
             tick,
         );
     });
+    crate::perf::timed(perf.as_deref_mut(), "charged_tank_attack_move", || {
+        services::combat::hold_charged_attack_move_tanks(map, entities, &teams, fog, smokes);
+    });
     crate::perf::timed(perf.as_deref_mut(), "movement", || {
         services::movement::movement_system_with_context(
             map,

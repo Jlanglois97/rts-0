@@ -1,4 +1,4 @@
-use crate::game::entity::{EntityStore, Order};
+use crate::game::entity::{EntityKind, EntityStore, MovePhase, Order};
 use crate::game::fog::Fog;
 use crate::game::map::Map;
 use crate::game::smoke::SmokeCloudStore;
@@ -79,13 +79,21 @@ pub(super) fn select(
     let ready = entities
         .get(id)
         .is_some_and(|entity| entity.weapon_cooldown(weapon) == 0);
-    let targetless_travelling_order = entities.get(id).is_some_and(|entity| {
-        entity.target_id().is_none()
-            && match entity.order() {
-                Order::AttackMove(_) => mode == CombatMode::Aggressive && !entity.path_is_empty(),
-                Order::Move(_) => mode == CombatMode::Opportunistic && can_move_fire,
-                _ => false,
+    let reload_scan_order = entities.get(id).is_some_and(|entity| {
+        match entity.order() {
+            // Keep the travelling-unit exception. A Tank's engagement pause has an empty
+            // path, so search before resuming when its committed target disappears.
+            Order::AttackMove(_) => {
+                mode == CombatMode::Aggressive
+                    && ((entity.target_id().is_none() && !entity.path_is_empty())
+                        || (entity.kind == EntityKind::Tank
+                            && entity.move_phase() != Some(MovePhase::Arrived)))
             }
+            Order::Move(_) => {
+                mode == CombatMode::Opportunistic && can_move_fire && entity.target_id().is_none()
+            }
+            _ => false,
+        }
     });
     if tank_periodic_reacquisition_due(entities, id, mode, tick) {
         return acquire(
@@ -161,7 +169,7 @@ pub(super) fn select(
             return defender;
         }
     }
-    if retained.is_some() || (!ready && !targetless_travelling_order) {
+    if retained.is_some() || (!ready && !reload_scan_order) {
         return retained;
     }
     acquire(

@@ -600,7 +600,7 @@ fn reloading_attack_move_acquires_once_then_keeps_its_committed_target() {
 }
 
 #[test]
-fn reloading_attack_move_resumes_instead_of_replacing_an_invalid_committed_target() {
+fn reloading_attack_move_replaces_an_invalid_committed_target_before_resuming() {
     let mut entities = EntityStore::new();
     let attacker = entities
         .spawn_unit(1, EntityKind::Tank, 100.0, 100.0)
@@ -608,7 +608,7 @@ fn reloading_attack_move_resumes_instead_of_replacing_an_invalid_committed_targe
     let stale = entities
         .spawn_unit(2, EntityKind::Worker, 180.0, 100.0)
         .expect("initial target should spawn");
-    entities
+    let replacement = entities
         .spawn_unit(2, EntityKind::AntiTankGun, 140.0, 100.0)
         .expect("replacement target should spawn");
     if let Some(tank) = entities.get_mut(attacker) {
@@ -624,11 +624,11 @@ fn reloading_attack_move_resumes_instead_of_replacing_an_invalid_committed_targe
     let attacker = entities.get(attacker).expect("tank should remain alive");
     assert_eq!(
         attacker.target_id(),
-        None,
-        "a stopped attack-move must not rerank during reload after losing its target"
+        Some(replacement),
+        "a stopped attack-move should replace a lost target during reload"
     );
     assert!(
-        !attacker.path_is_empty(),
-        "losing the committed target should resume the attack-move route"
+        attacker.path_is_empty(),
+        "finding another in-range target should hold the attack-move route"
     );
 }
