@@ -163,6 +163,7 @@ pub(in crate::game) fn try_fire_artillery(
                 to: unit,
                 reveal: Some(reveal.clone()),
                 to_pos: None,
+                shot_origin: None,
                 weapon_kind: Some(WeaponKind::ArtilleryGun.stable_id().to_string()),
             });
         }

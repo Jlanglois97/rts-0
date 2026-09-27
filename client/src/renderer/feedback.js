@@ -1218,9 +1218,10 @@ export function _drawMuzzleFlashes(state) {
     const attacker = state.entityById(f.from);
     if (!attacker) continue;
     const target = state.entityById(f.to);
-    const targetPos = target || f.targetPos;
+    const targetPos = f.shotOrigin ? f.targetPos : (target || f.targetPos);
 
     const age = now - f.createdAt;
+    if (age < 0) continue;
     const t = clamp01(age / 240);
     const fade = 1 - t;
 
@@ -1243,7 +1244,17 @@ export function _drawMuzzleFlashes(state) {
     const mx = origin.x;
     const my = origin.y;
 
-    if (targetPos) {
+    if (targetPos && f.shotOrigin) {
+      const sx = f.shotOrigin[0], sy = f.shotOrigin[1];
+      const dx = targetPos.x - sx, dy = targetPos.y - sy;
+      const distance = Math.hypot(dx, dy);
+      const head = Math.min(distance, age * 1.8);
+      const tail = Math.max(12, head - 15);
+      if (distance > 0 && head > tail && age * 1.8 < distance + 15) {
+        gfxStrokeLine(g, sx + dx * tail / distance, sy + dy * tail / distance,
+          sx + dx * head / distance, sy + dy * head / distance, 2.2, 0xffd84a, 0.98);
+      }
+    } else if (targetPos) {
       gfxStrokeLine(g, mx, my, targetPos.x, targetPos.y,
         style.tracerWidth, style.tracerColor, style.tracerAlpha * fade);
       if (style.tracerCoreWidth > 0) {

@@ -1072,8 +1072,11 @@ impl Serialize for CompactEvent<'_> {
                 reveal,
                 to_pos,
                 weapon_kind,
+                shot_origin,
             } => {
-                let len = if weapon_kind.is_some() {
+                let len = if shot_origin.is_some() {
+                    7
+                } else if weapon_kind.is_some() {
                     6
                 } else if to_pos.is_some() {
                     5
@@ -1094,6 +1097,9 @@ impl Serialize for CompactEvent<'_> {
                 }
                 if len > 5 {
                     seq.serialize_element(&weapon_kind.as_deref().map(weapon_kind_code))?;
+                }
+                if len > 6 {
+                    seq.serialize_element(shot_origin)?;
                 }
                 seq.end()
             }

@@ -25,6 +25,7 @@ mod activation;
 mod coax;
 mod damage;
 mod events;
+mod machine_gun;
 mod panzerfaust;
 mod priority;
 mod projection;
@@ -441,26 +442,46 @@ pub(in crate::game) fn combat_system(
             if ready {
                 let extra_miss_chance =
                     entities.get(id).map(moving_fire_miss_chance).unwrap_or(0.0);
-                let shot_victim = apply_damage(
-                    map,
-                    entities,
-                    &blockers,
-                    teams,
-                    events,
-                    fog,
-                    rng,
-                    id,
-                    tid,
-                    weapon_profile,
-                    dmg,
-                    owner,
-                    px,
-                    py,
-                    tx,
-                    ty,
-                    extra_miss_chance,
-                    tick,
-                );
+                let shot_victim = if machine_gun::is_machine_gun(weapon_profile.id) {
+                    machine_gun::fire(
+                        map,
+                        entities,
+                        teams,
+                        spatial,
+                        &los,
+                        fog,
+                        rng,
+                        events,
+                        firing_reveals,
+                        id,
+                        tid,
+                        weapon_profile,
+                        range_px,
+                        tick,
+                    );
+                    None
+                } else {
+                    apply_damage(
+                        map,
+                        entities,
+                        &blockers,
+                        teams,
+                        events,
+                        fog,
+                        rng,
+                        id,
+                        tid,
+                        weapon_profile,
+                        dmg,
+                        owner,
+                        px,
+                        py,
+                        tx,
+                        ty,
+                        extra_miss_chance,
+                        tick,
+                    )
+                };
                 if is_unit {
                     if let Some(shot) = shot_victim.filter(|shot| shot.reveals_attacker) {
                         let player_ids = events.keys().copied().collect::<Vec<_>>();

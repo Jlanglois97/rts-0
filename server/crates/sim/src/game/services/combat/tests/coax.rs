@@ -68,8 +68,8 @@ fn tank_coax_fires_in_arc_with_small_arms_damage_and_weapon_event() {
 
     assert_eq!(
         worker_hp_before - entities.get(worker).expect("worker should exist").hp,
-        4,
-        "coax should deal its small-arms base damage to infantry"
+        6,
+        "three seeded burst rays should hit this infantry target"
     );
     let tank_entity = entities.get(tank).expect("tank should exist");
     assert_eq!(
@@ -83,12 +83,12 @@ fn tank_coax_fires_in_arc_with_small_arms_damage_and_weapon_event() {
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
-        vec!["tank_coax".to_string()]
+        vec!["tank_coax".to_string(); 5]
     );
 }
 
 #[test]
-fn clear_obstacle_area_makes_coax_prioritize_traps_over_infantry() {
+fn clear_obstacle_area_coax_bullets_can_be_intercepted_by_infantry() {
     let map = open_map(16);
     let mut entities = EntityStore::new();
     let tank = entities
@@ -117,9 +117,9 @@ fn clear_obstacle_area_makes_coax_prioritize_traps_over_infantry() {
 
     assert_eq!(
         entities.get(worker).expect("worker should exist").hp,
-        worker_hp
+        worker_hp - 8
     );
-    assert!(entities.get(trap).expect("trap should exist").hp < trap_hp);
+    assert_eq!(entities.get(trap).expect("trap should exist").hp, trap_hp);
 }
 
 #[test]
@@ -182,16 +182,16 @@ fn tank_coax_attack_events_remain_fog_projected() {
 
     assert_eq!(
         worker_hp_before - entities.get(worker).expect("worker should exist").hp,
-        4
+        6
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
-        vec!["tank_coax".to_string()],
+        vec!["tank_coax".to_string(); 5],
         "the attacker team should receive coax feedback"
     );
     assert_eq!(
         attack_weapon_kinds(&events, 2, tank),
-        vec!["tank_coax".to_string()],
+        vec!["tank_coax".to_string(); 5],
         "the visible victim owner should receive coax feedback"
     );
     assert!(
@@ -272,7 +272,7 @@ fn tank_coax_pairwise_precedence_alternates_by_tick() {
 }
 
 #[test]
-fn tank_coax_only_damages_its_selected_target() {
+fn tank_coax_burst_does_not_reach_a_body_beyond_weapon_range() {
     let map = open_map(16);
     let mut entities = EntityStore::new();
     let tank = entities
@@ -296,12 +296,12 @@ fn tank_coax_only_damages_its_selected_target() {
 
     assert_eq!(
         primary_before - entities.get(primary).expect("primary should exist").hp,
-        4
+        6
     );
     assert_eq!(
         secondary_before - entities.get(secondary).expect("secondary should exist").hp,
         0,
-        "coax must not damage units behind its selected target"
+        "coax must not damage the rear unit beyond weapon range"
     );
     let player_events = events.get(&1).expect("attacker events should exist");
     assert!(
@@ -337,13 +337,13 @@ fn tank_coax_prioritizes_infantry_over_nearer_fallback_targets() {
 
     assert_eq!(
         worker_hp_before - entities.get(worker).expect("worker should exist").hp,
-        4,
-        "infantry-priority targets should beat nearer fallback vehicles"
+        6,
+        "infantry-priority aim should send three seeded rays into the worker"
     );
     assert_eq!(
         entities.get(nearer_tank).expect("tank should exist").hp,
-        tank_hp_before,
-        "nearer fallback target should not be hit while an infantry-priority target is legal"
+        tank_hp_before - 1,
+        "off-axis burst bullets may hit the nearer vehicle while aiming at infantry"
     );
 }
 
@@ -404,7 +404,7 @@ fn tank_coax_rejects_infantry_when_enemy_hard_blocker_would_take_the_shot() {
 
     assert_eq!(
         blocker_hp_before - entities.get(blocker).expect("blocker should exist").hp,
-        1,
+        2,
         "the intervening hard blocker should be selected as the legal fallback target"
     );
     assert_eq!(
@@ -442,12 +442,16 @@ fn tank_cannon_and_coax_same_tick_emit_cannon_before_coax() {
 
     assert_eq!(
         hp_before - entities.get(target).expect("target should exist").hp,
-        61,
+        62,
         "same-tick cannon and coax should both damage a surviving armored target"
     );
     assert_eq!(
         attack_weapon_kinds(&events, 1, tank),
-        vec!["tank_cannon".to_string(), "tank_coax".to_string()],
+        [
+            vec!["tank_cannon".to_string()],
+            vec!["tank_coax".to_string(); 5]
+        ]
+        .concat(),
         "Tank cannon attack feedback must be emitted before the same-tick coax feedback"
     );
     let tank_entity = entities.get(tank).expect("tank should exist");
@@ -490,7 +494,7 @@ fn tank_coax_does_not_mutate_tank_target_or_path_state() {
 
     assert_eq!(
         worker_hp_before - entities.get(worker).expect("worker should exist").hp,
-        4
+        6
     );
     let tank_entity = entities.get(tank).expect("tank should exist");
     assert_eq!(

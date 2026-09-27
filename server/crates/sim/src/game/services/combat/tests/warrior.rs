@@ -40,6 +40,7 @@ fn warrior_sword_two_shots_rifleman_without_secondary_damage() {
                 Event::Attack {
                     from,
                     to,
+                    shot_origin: None,
                     weapon_kind: Some(weapon_kind),
                     ..
                 } if *from == warrior && *to == rifleman && weapon_kind == "warrior_sword"

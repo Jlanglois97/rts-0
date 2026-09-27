@@ -1,5 +1,5 @@
 {
-  "reason": "extract bundled map catalog loading from the core map model",
+  "reason": "MG prototype reuses existing geometry, LOS and spatial query services for first-hit burst rays",
   "line_counts": [
     {
       "path": "ability.rs",
@@ -1264,6 +1264,14 @@
     {
       "path": "world_combat.rs",
       "lines": 446
+    },
+    {
+      "path": "services/combat/machine_gun.rs",
+      "lines": 254
+    },
+    {
+      "path": "services/combat/machine_gun/tests.rs",
+      "lines": 165
     }
   ],
   "service_edges": [
@@ -1770,6 +1778,24 @@
       "target": "spatial",
       "path": "services/world_query.rs",
       "line": 21
+    },
+    {
+      "source": "combat",
+      "target": "geometry",
+      "path": "services/combat/machine_gun.rs",
+      "line": 11
+    },
+    {
+      "source": "combat",
+      "target": "line_of_sight",
+      "path": "services/combat/machine_gun.rs",
+      "line": 15
+    },
+    {
+      "source": "combat",
+      "target": "spatial",
+      "path": "services/combat/machine_gun.rs",
+      "line": 16
     }
   ],
   "broad_mutable_signatures": [

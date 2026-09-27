@@ -1216,6 +1216,7 @@ mod tests {
                         setup_state: Some("deployed".to_string()),
                     }),
                     to_pos: Some([48.0, 96.0]),
+                    shot_origin: Some([12.0, 24.0]),
                     weapon_kind: Some(weapons::ANTI_TANK_GUN.to_string()),
                 },
                 Event::Miss { to: 8 },
@@ -1389,6 +1390,7 @@ mod tests {
         );
         assert_eq!(value["ev"][0][4], serde_json::json!([48.0, 96.0]));
         assert_eq!(value["ev"][0][5], serde_json::json!(6));
+        assert_eq!(value["ev"][0][6], serde_json::json!([12.0, 24.0]));
         assert_eq!(value["ev"][1], serde_json::json!([15, 8]));
         assert_eq!(
             value["ev"][5],
@@ -1495,3 +1497,5 @@ mod tests {
 }
 
 // EntityView::rocket_rack_count is re-exported from rts-contract; compact v56 uses slot 43.
+
+// MG prototype: Attack.shotOrigin (compact v57, slot 6) fixes the ray origin; toPos fixes its endpoint.

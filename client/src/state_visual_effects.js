@@ -63,6 +63,7 @@ export class VisualEffectBuffers {
   }
 
   applySnapshotEvents(events, now, entityById) {
+    const burstIndices = new Map();
     for (const ev of events) {
       if (ev && ev.e === EVENT.ATTACK && typeof ev.from === "number" && typeof ev.to === "number") {
         const targetPos = eventTargetPos(ev);
@@ -72,9 +73,11 @@ export class VisualEffectBuffers {
             to: ev.to,
             targetPos,
             weaponKind: normalizedWeaponKind(ev.weaponKind),
-            createdAt: now,
+            shotOrigin: ev.shotOrigin,
+            createdAt: now + (ev.shotOrigin ? (burstIndices.get(ev.from) || 0) * 20 : 0),
           });
         }
+        if (ev.shotOrigin) burstIndices.set(ev.from, (burstIndices.get(ev.from) || 0) + 1);
         if (ev.weaponKind !== WEAPON_KIND.TANK_COAX) {
           this.weaponRecoilById.set(ev.from, recoilRecord(now, ev.weaponKind));
         }

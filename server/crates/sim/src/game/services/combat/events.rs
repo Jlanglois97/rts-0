@@ -62,6 +62,7 @@ pub(super) fn emit_attack_event(
             to: victim,
             reveal: reveal.clone(),
             to_pos: Some([vx, vy]),
+            shot_origin: None,
             weapon_kind: weapon_kind.map(str::to_string),
         });
         recipients.push(pid);

@@ -862,7 +862,7 @@ safe for the recipient or the recipient is an owner/spectator/full-world viewer.
 MessagePack compact binary snapshot frames are the live WebSocket snapshot path. Each binary frame
 starts with the ASCII magic `RTSM`, a one-byte snapshot codec version (`1`), then a MessagePack map
 containing the same compact snapshot object shape shown below. The active snapshot codec is
-`messagepack-compact`, codec version 1, compact snapshot version 56. The client also accepts compact
+`messagepack-compact`, codec version 1, compact snapshot version 57. The client also accepts compact
 snapshot versions 51 through 55: version 52 only appends a kind code, version 53 appends the
 optional `unitsKilled` entity slot, version 54 appends an optional `rocket` style bit to mortar
 launch/impact event records, and version 55 adds the `artilleryIncoming` event code, so the older
@@ -900,7 +900,7 @@ adds an explicit application compression envelope.
 ```
 {
   "t": "snapshot",
-  "v": 56,
+  "v": 57,
   "gr": groundDecalRevision, // omitted when zero
   "gd": [afterRevision, [    // omitted when this tick has no discovered/created revision
     [id, decalClass, sourceKindCode, x, y, owner, seed, facing, weaponFacing, radiusTiles]
@@ -1874,3 +1874,18 @@ restored keyframe to the target tick. Analysis state is not serialized separatel
 `ReplayKeyframe`.
 
 ---
+
+### Machine-gun prototype ray feedback (compact version 57)
+
+`attack` gains optional `shotOrigin: [x, y]`. When present, `toPos` is the fixed
+first-impact/range endpoint, not a live target center. Compact attacks append
+`shotOrigin` at slot 6: `[1, from, to, revealOrNull, toPosOrNull, weaponKindOrNull, shotOrigin]`.
+`to: 0` denotes a miss or an endpoint without a disclosed victim. Each MG cycle
+emits up to five ray events per viewer. The server resolves damage immediately and
+the client animates short moving streaks along these fixed rays. Ordinary attacks
+omit the field. Version 56 remains decodable.
+
+Prototype ray projection requires current team visibility along the ray (sampled
+every four world pixels) and only includes a victim id when its center is visible.
+Rays crossing hidden space are omitted rather than exposing hidden impact positions.
+This can hide some firing feedback at fog edges; it never changes authoritative damage.

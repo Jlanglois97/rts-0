@@ -60,3 +60,5 @@ mod tests {
         );
     }
 }
+
+// MG prototype: Attack.shotOrigin (compact v57, slot 6) fixes the ray origin; toPos fixes its endpoint.

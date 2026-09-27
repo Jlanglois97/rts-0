@@ -1060,6 +1060,9 @@ pub enum Event {
         to_pos: Option<[f32; 2]>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         weapon_kind: Option<String>,
+        /// Fixed server ray origin; toPos is the first impact or range endpoint.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shot_origin: Option<[f32; 2]>,
     },
     Miss {
         to: u32,
