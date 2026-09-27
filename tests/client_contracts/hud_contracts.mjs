@@ -474,6 +474,8 @@ withFakeHudDocument(({ FakeElement }) => {
     const hud = new HUD(root, state, {}, null);
     hud._renderSelectedPanel();
     const stableNode = panel.children[0];
+    assert(stableNode.innerHTML.includes(`<div class="sel-name">Tank</div>`), "HUD selected detail shows the unit name without its icon acronym");
+    assert(!stableNode.innerHTML.includes("TK</span>Tank"), "HUD selected detail omits the stat icon acronym from the unit name");
     hud._renderSelectedPanel();
     assert(panel.children[0] === stableNode, "HUD selected detail skips unchanged DOM rebuilds");
     selected.hp = 40;
