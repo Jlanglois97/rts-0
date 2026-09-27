@@ -1092,7 +1092,7 @@ mod tests {
     }
 
     #[test]
-    fn tank_one_hit_destroys_tank_trap() {
+    fn tank_two_hits_destroy_tank_trap() {
         let tank_trap_hp = defs::building_def(EntityKind::TankTrap)
             .expect("tank trap def")
             .stats
@@ -1105,7 +1105,8 @@ mod tests {
         );
 
         assert_eq!(tank_shot, 60);
-        assert!(tank_trap_hp <= tank_shot, "one Tank shot should kill");
+        assert!(tank_trap_hp > tank_shot, "one Tank shot should not kill");
+        assert!(tank_trap_hp <= tank_shot * 2, "two Tank shots should kill");
     }
 
     #[test]
