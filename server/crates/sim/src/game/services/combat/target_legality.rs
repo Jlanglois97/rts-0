@@ -49,7 +49,12 @@ pub(super) fn direct_fire_target_legal(
             attacker,
         )
     };
-    if !targetable {
+    if !targetable
+        || !crate::rules::target::default_weapon_can_target(
+            attacker_entity.kind,
+            target_entity.kind,
+        )
+    {
         return false;
     }
     let end = (target_entity.pos_x, target_entity.pos_y);
@@ -114,6 +119,9 @@ pub(super) fn auto_target_candidate(
         owner,
         attacker.id,
     ) {
+        return None;
+    }
+    if !crate::rules::target::default_weapon_can_target(attacker.kind, target.kind) {
         return None;
     }
     let concealment = terrain::concealment_modifier(target.kind, TerrainKind::Open).max(0.0);
