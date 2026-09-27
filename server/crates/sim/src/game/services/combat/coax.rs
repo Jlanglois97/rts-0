@@ -106,6 +106,7 @@ pub(super) fn fire_tank_coax_system(
             spatial,
             los,
             fog,
+            smokes,
             rng,
             events,
             firing_reveals,

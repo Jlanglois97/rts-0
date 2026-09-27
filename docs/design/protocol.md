@@ -1886,6 +1886,7 @@ the client animates short moving streaks along these fixed rays. Ordinary attack
 omit the field. Version 56 remains decodable.
 
 Prototype ray projection requires current team visibility along the ray (sampled
-every four world pixels) and only includes a victim id when its center is visible.
-Rays crossing hidden space are omitted rather than exposing hidden impact positions.
+every four world pixels) and omits impacts on victims hidden by fog, concealment, or smoke, including bodies
+whose edges cross into visible space. Rays crossing hidden space are also omitted
+rather than exposing hidden impact positions.
 This can hide some firing feedback at fog edges; it never changes authoritative damage.

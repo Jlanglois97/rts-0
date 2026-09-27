@@ -450,6 +450,7 @@ pub(in crate::game) fn combat_system(
                         spatial,
                         &los,
                         fog,
+                        smokes,
                         rng,
                         events,
                         firing_reveals,

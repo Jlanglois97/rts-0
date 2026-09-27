@@ -14,6 +14,7 @@ use crate::game::services::geometry::{
 };
 use crate::game::services::line_of_sight::LineOfSight;
 use crate::game::services::spatial::SpatialIndex;
+use crate::game::smoke::SmokeCloudStore;
 use crate::game::teams::TeamRelations;
 use crate::protocol::Event;
 use crate::rules::terrain::TerrainKind;
@@ -97,6 +98,7 @@ pub(super) fn fire(
     spatial: &SpatialIndex,
     los: &LineOfSight<'_>,
     fog: &Fog,
+    smokes: &SmokeCloudStore,
     rng: &mut impl Rng,
     events: &mut HashMap<u32, Vec<Event>>,
     firing_reveals: &mut Vec<FiringRevealSource>,
@@ -235,12 +237,22 @@ pub(super) fn fire(
             }) {
                 continue;
             }
-            let visible_victim = entities.get(victim).is_some_and(|v| {
-                projection::team_visible_world(*viewer, v.pos_x, v.pos_y, fog, teams)
-            });
+            // A visible impact can still belong to a hidden body whose edge crosses into
+            // visible space. Withholding only its id would disclose that body's position.
+            if let Some(v) = entities.get(victim) {
+                let visible = teams.same_team_or_same_owner(*viewer, v.owner)
+                    || (projection::team_visible_world(*viewer, v.pos_x, v.pos_y, fog, teams)
+                        && !smokes.point_inside(v.pos_x, v.pos_y)
+                        && !projection::entity_hidden_by_concealment_from_team(
+                            *viewer, v, map, fog, teams,
+                        ));
+                if !visible {
+                    continue;
+                }
+            }
             output.push(Event::Attack {
                 from: attacker,
-                to: if visible_victim { victim } else { 0 },
+                to: victim,
                 reveal: attack_reveal_for(entities.get(attacker)),
                 to_pos: Some([end.0, end.1]),
                 weapon_kind: Some(profile.id.stable_id().to_string()),

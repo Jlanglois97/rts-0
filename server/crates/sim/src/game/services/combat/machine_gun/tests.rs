@@ -129,6 +129,7 @@ fn burst_damages_front_only_and_emits_fixed_rays_without_hidden_viewer_data() {
         &spatial,
         &LineOfSight::new(&map),
         &fog,
+        &SmokeCloudStore::new(),
         &mut SmallRng::seed_from_u64(1),
         &mut events,
         &mut reveals,
@@ -162,4 +163,69 @@ fn terrain_clips_missed_bullets_before_wall() {
     map.terrain[3 * 16 + 5] = crate::protocol::terrain::ROCK;
     let end = clear_endpoint(&LineOfSight::new(&map), (100.0, 100.0), (300.0, 100.0));
     assert!((159.0..160.0).contains(&end.0));
+}
+
+#[test]
+fn hidden_incidental_victims_do_not_disclose_impact_positions() {
+    for hidden_by in ["fog", "concealment", "smoke"] {
+        let mut map = open_map(16);
+        if hidden_by == "concealment" {
+            map.concealment_tiles = vec![(4, 3)];
+        }
+        let mut entities = EntityStore::new();
+        let attacker = entities
+            .spawn_unit(1, EntityKind::MachineGunner, 100.0, 100.0)
+            .unwrap();
+        let hidden = entities
+            .spawn_unit(2, EntityKind::Rifleman, 130.0, 100.0)
+            .unwrap();
+        let intended = entities
+            .spawn_unit(2, EntityKind::Rifleman, 190.0, 100.0)
+            .unwrap();
+        let mut grid = vec![true; 16 * 16];
+        if hidden_by == "fog" {
+            grid[3 * 16 + 4] = false;
+        }
+        let fog = Fog::from_checkpoint_grids(
+            16,
+            16,
+            BTreeMap::from([(1, grid)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let mut smokes = crate::game::smoke::SmokeCloudStore::new();
+        if hidden_by == "smoke" {
+            smokes.spawn(138.0, 100.0, 10.0 / 32.0, 100, 0).unwrap();
+        }
+        let spatial = SpatialIndex::build(&entities, map.width, map.height);
+        let mut events = HashMap::from([(1, vec![])]);
+        fire(
+            &map,
+            &mut entities,
+            &TeamRelations::from_player_teams([(1, 1), (2, 2)]),
+            &spatial,
+            &LineOfSight::with_smoke(&map, &smokes),
+            &fog,
+            &smokes,
+            &mut SmallRng::seed_from_u64(1),
+            &mut events,
+            &mut vec![],
+            attacker,
+            intended,
+            rules::weapon_profile(rules::WeaponKind::MachineGunnerMg).unwrap(),
+            209.2,
+            1,
+        );
+        assert_eq!(
+            entities.get(hidden).unwrap().hp,
+            35,
+            "{hidden_by}: authoritative hits still resolve"
+        );
+        assert!(
+            events[&1].is_empty(),
+            "{hidden_by}: hidden body must not disclose its impact: {:?}",
+            events[&1]
+        );
+    }
 }
