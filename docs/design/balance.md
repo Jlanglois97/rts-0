@@ -162,7 +162,7 @@ start contains one completed Engineer and six completed Steel Mines attached to 
 base's live Steel patches, plus one completed Pump Jack attached to one home-base Oil patch.
 
 Steel Mine uses placeholder presentation. It is a 1x1 completed-capable
-building with 50 HP, Small/unarmored combat classification, 1-tile sight, no weapon, no supply,
+building with 37 HP, Small/unarmored combat classification, 1-tile sight, no weapon, no supply,
 and no survival-building contribution. It must be centered on one live Steel patch within the
 existing `MINING_ANCHOR_RANGE_TILES = 11` coverage of the producing Resource Depot. It extracts
 `STEEL_LOAD = 2` Steel every `HARVEST_TICKS = 40` ticks and disappears when its bound patch is
