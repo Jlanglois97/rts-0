@@ -10,10 +10,7 @@ use crate::{movement_body_class, EntityKind, MovementBodyClass};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InfantryTargetPolicy {
     None,
-    AntiTankGun {
-        damage_multiplier: f32,
-        incidental_miss_chance: f32,
-    },
+    AntiTankGun { damage_multiplier: f32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,25 +86,6 @@ pub fn is_anti_tank_gun_infantry_target(kind: EntityKind) -> bool {
             | EntityKind::Panzerfaust
             | EntityKind::MachineGunner
     )
-}
-
-/// Miss probability for an incidental shell intersection. Intended targets do not use this roll.
-pub fn miss_chance(attacker_kind: EntityKind, victim_kind: EntityKind) -> f32 {
-    combat::default_weapon_profile(attacker_kind)
-        .map(|profile| miss_chance_for_weapon(profile, victim_kind))
-        .unwrap_or(0.0)
-}
-
-pub fn miss_chance_for_weapon(profile: &combat::WeaponProfile, victim_kind: EntityKind) -> f32 {
-    match profile.infantry_target_policy {
-        InfantryTargetPolicy::AntiTankGun {
-            incidental_miss_chance,
-            ..
-        } if is_anti_tank_gun_infantry_target(victim_kind) => {
-            incidental_miss_chance.clamp(0.0, 1.0)
-        }
-        _ => 0.0,
-    }
 }
 
 /// Applies weapon-specific target-type damage modifiers after armor and terrain calculations.

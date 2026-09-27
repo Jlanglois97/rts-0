@@ -425,12 +425,12 @@ entities/resources, no supply credit for faction units/buildings, and no legal
 build/train/research/gather/ability surface.
 
 Command validation, queued attack promotion, combat target acquisition, direct damage attribution,
-shot interception, overpenetration, support-weapon splash attribution, worker-retreat metadata, and
+shot interception, support-weapon splash attribution, worker-retreat metadata, and
 under-attack notice routing use `TeamRelations` snapshots derived from `PlayerState`. Hostile target
 checks must call `is_enemy_owner` through that relationship surface rather than relying on raw
 `owner != player`; this covers explicit attack commands, ordered attack retention, attack-move and
 idle auto-acquisition, shoot-while-moving target retention, Anti-Tank Gun tank preference, hostile
-building target acquisition, direct-fire damage attribution, and overpenetration victims. Raw
+building target acquisition, direct-fire damage attribution, and direct-shot victims. Raw
 `owner == player` checks remain correct for strict authority and economy surfaces such as
 selected-unit ownership, production/research/cancel authority, build/gather ownership, rally
 control, supply, upgrades, and resource spending. Snapshot entity visibility and `visibleTiles`
@@ -585,7 +585,7 @@ normally lit when ordinary sight already covers it; only a tile lacking ordinary
 presentation-dark.
 Concealed deaths do not publish positional death events or global death decals. No-vehicle tiles seed
 vehicle-body occupancy only, so vehicles path around them while infantry can traverse the same tile.
-Damage-reduction tiles reduce incoming direct, area, loaded-shot, overpenetration, and ability-projectile
+Damage-reduction tiles reduce incoming direct, area, loaded-shot, and ability-projectile
 damage by 25% after existing weapon/armor/facing and entrenchment policy, rounding a non-zero
 fractional result up.
 Slow-movement tiles apply a 0.75x movement-budget multiplier from the unit-centre tile and multiply
@@ -989,10 +989,10 @@ policy is centralized instead of scattered through services.
   `is_armored`), target-ranking classifiers (`target_threat_role`, `default_weapon_target_fit`),
   target priority policy ids (`default_weapon`, `vehicle_default_weapon`, `tank_cannon`, and
   `tank_coax_machine_gun`), compatibility helpers such as
-  `attack_profile(kind) -> AttackProfile`, and weapon-aware direct damage/miss/facing helpers such
+  `attack_profile(kind) -> AttackProfile`, and weapon-aware direct damage/facing helpers such
   as `effective_damage_for_weapon(profile, victim_kind, base_dmg, victim_terrain) -> u32`. The
   Tank coax profile is a live secondary Tank weapon (`tank_coax`, 6 tiles, 4 damage, 12-tick
-  cooldown, small arms, direct-fire overpenetration). The Panzerfaust loaded-shot target predicate
+  cooldown, small arms, single-target direct fire). The Panzerfaust loaded-shot target predicate
   for Scout Cars, Tanks, and Command Cars lives here as rules vocabulary while the one-shot state machine stays in
   the sim combat service.
 - `rules::target` — pure `TargetFacts` snapshots for target policy consumers. Facts include unit,
@@ -1185,21 +1185,16 @@ then follows its normal target-pursuit rule and may tear down a Machine Gunner t
 
 Incoming direct-fire accuracy is weapon-specific: Anti-Tank Guns may deliberately target
 infantry-sized units, and those intended hits have no intrinsic miss roll but deal only 30% damage.
-Each incidental infantry body intersected behind the intended target retains an independent 90%
-chance to dodge and takes the same 30% target-type modifier after normal half-damage
-overpenetration. Tank cannon shots have no intrinsic miss chance and entrenchment adds no miss
+Tank cannon shots have no intrinsic miss chance and entrenchment adds no miss
 chance.
-Carry-through follows the ray from the primary victim's center. Incidental units are hit only
-when that ray crosses the inner 70% of their collision body; touching the outer edge or standing
-beside the victim is insufficient. Buildings retain their full blocking footprints.
+Each direct shot damages only its resolved victim. Enemy tanks and blocking building footprints
+may intercept the shot before the intended target; units behind the resolved victim take no damage.
 After a direct hit's normal
 weapon, armor, and facing calculations, `entrenchment_combat::reduce_direct_damage` reduces damage
 by 50% for actively entrenched eligible infantry. Area effects call
 `entrenchment_combat::reduce_area_damage` after their normal falloff and armor calculations, so
 Mortar and Artillery splash deal 75% of their current post-formula damage to actively entrenched
-eligible infantry. Direct-fire over-penetration stops after hitting
-an entrenched primary victim, and actively entrenched secondary candidates are skipped rather than
-taking over-penetration damage or emitting secondary hit feedback.
+eligible infantry.
 
 The `entrenchment_inspection` dev-watch scenario seeds a two-player inspection map with researched
 Entrenchment for player 1, a dig-capable Rifleman, friendly and enemy eligible reuse units, a
@@ -1252,9 +1247,8 @@ five-to-17-tile range band, setup/repositioning rules, weapon reload, and queued
 Artillery point-fire shells follow the same support-weapon friendly-fire contract: blast damage can
 hit owned and allied entities in the radius, but same-team damage is unattributed and cannot award
 enemy kill credit. Direct-fire weapons are the opposite rule: normal target selection, ordered
-attacks, shot interception, and overpenetration only damage enemies. Allied entities may block a
-direct line of fire through the friendly-blocker safety rule, but they are not legal direct-fire or
-overpenetration victims.
+attacks and shot interception only damage enemies. Allied entities may block a
+direct line of fire through the friendly-blocker safety rule, but they are not legal direct-fire victims.
 
 `server/crates/archcheck` classifies each top-level service module before accepting
 service-to-service imports. The roles are intentionally coarse and are part of the command/order
@@ -1477,8 +1471,6 @@ lockouts, and uses remain separate from weapon cooldown state. Tanks use this ke
 the `tank_cannon` and `tank_coax` reloads independent.
 
 Auto-acquisition prefers unit targets before building cleanup targets by default. Building fallback targets still use weapon-fit ranking among eligible cleanup targets.
-
-Overpenetration checks use the target's pre-damage entrenchment state, so lethal primary hits keep the same entrenched blocking decision used before damage resolution.
 
 Entrenchment auto-occupation chooses the nearest trench that has a legal occupation slot for the
 unit. A closer trench with no legal slot does not block searching for a farther usable trench. For

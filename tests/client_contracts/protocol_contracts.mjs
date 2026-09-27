@@ -269,7 +269,7 @@ assert(
     eg: [1, 3, 2, 1],
     ev: [
       [EVENT_CODE[EVENT.ATTACK], 1, 7],
-      [EVENT_CODE[EVENT.OVERPENETRATION], 22],
+      [EVENT_CODE[EVENT.MISS], 22],
       [EVENT_CODE[EVENT.MISS], 7],
       [EVENT_CODE[EVENT.DEATH], 200, 64, 96, KIND_CODE[KIND.STEEL]],
       [EVENT_CODE[EVENT.BUILD], 3, KIND_CODE[KIND.RESOURCE_DEPOT]],
@@ -484,8 +484,8 @@ assert(
     "unknown compact weaponKind falls back to a missing weapon hint",
   );
   assert(
-    decoded.events[1].e === EVENT.OVERPENETRATION && decoded.events[1].to === 22,
-    "overpenetration event decodes",
+    decoded.events[1].e === EVENT.MISS && decoded.events[1].to === 22,
+    "miss event decodes for a second target",
   );
   assert(decoded.events[2].e === EVENT.MISS && decoded.events[2].to === 7, "miss event decodes");
   assert(decoded.events[3].kind === KIND.STEEL, "death event kind decodes");

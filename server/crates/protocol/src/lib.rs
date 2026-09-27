@@ -1218,7 +1218,7 @@ mod tests {
                     to_pos: Some([48.0, 96.0]),
                     weapon_kind: Some(weapons::ANTI_TANK_GUN.to_string()),
                 },
-                Event::Overpenetration { to: 8 },
+                Event::Miss { to: 8 },
                 Event::Death {
                     id: 200,
                     x: 64.0,
@@ -1389,7 +1389,7 @@ mod tests {
         );
         assert_eq!(value["ev"][0][4], serde_json::json!([48.0, 96.0]));
         assert_eq!(value["ev"][0][5], serde_json::json!(6));
-        assert_eq!(value["ev"][1], serde_json::json!([10, 8]));
+        assert_eq!(value["ev"][1], serde_json::json!([15, 8]));
         assert_eq!(
             value["ev"][5],
             serde_json::json!([9, 9, [256.0, 272.0], [320.0, 352.0], 1.5, 68])

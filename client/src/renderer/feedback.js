@@ -1244,15 +1244,6 @@ export function _drawMuzzleFlashes(state) {
     const my = origin.y;
 
     if (targetPos) {
-      const dx = targetPos.x - mx;
-      const dy = targetPos.y - my;
-      const shotLen = Math.hypot(dx, dy);
-      // Mirror the server overpenetration band: a round that hits a tank stops dead (no tail),
-      // and Anti-Tank Guns punch twice as deep as everyone else.
-      const tileSize = (this._map && this._map.tileSize) || 32;
-      const penFactor = target?.kind === KIND.TANK ? 0 : feedbackKind === KIND.ANTI_TANK_GUN ? 0.5 : 0.25;
-      const tailLen = (stat.rangeTiles || 0) * tileSize * penFactor;
-
       gfxStrokeLine(g, mx, my, targetPos.x, targetPos.y,
         style.tracerWidth, style.tracerColor, style.tracerAlpha * fade);
       if (style.tracerCoreWidth > 0) {
@@ -1260,14 +1251,6 @@ export function _drawMuzzleFlashes(state) {
           style.tracerCoreWidth, style.tracerCoreColor, style.tracerCoreAlpha * fade);
       }
 
-      if (shotLen > 0.001 && tailLen > 0) {
-        const ux = dx / shotLen;
-        const uy = dy / shotLen;
-        const ex = targetPos.x + ux * tailLen;
-        const ey = targetPos.y + uy * tailLen;
-        gfxStrokeLine(g, targetPos.x, targetPos.y, ex, ey,
-          style.tailWidth, style.tailColor, style.tailAlpha * fade);
-      }
     }
 
     const rigOwnsTankCannonFlash = attacker.kind === KIND.TANK && f.weaponKind !== WEAPON_KIND.TANK_COAX;

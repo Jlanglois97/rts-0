@@ -14,11 +14,9 @@ fn apply_test_damage_with_weapon(
     ay: f32,
     vx: f32,
     vy: f32,
-    range_px: f32,
 ) {
     let map = Map::generate(2, 0x00C0_FFEE);
     let fog = Fog::new(map.width, map.height);
-    let smokes = SmokeCloudStore::new();
     let mut rng = SmallRng::seed_from_u64(0);
     let blockers = ShotBlockerIndex::build(&map, entities);
     apply_damage(
@@ -28,7 +26,6 @@ fn apply_test_damage_with_weapon(
         teams,
         events,
         &fog,
-        &smokes,
         &mut rng,
         attacker,
         victim,
@@ -39,7 +36,6 @@ fn apply_test_damage_with_weapon(
         ay,
         vx,
         vy,
-        range_px,
         0.0,
         10,
     );
@@ -72,7 +68,6 @@ fn tank_default_cannon_direct_hit_uses_ap_damage() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -115,7 +110,6 @@ fn machine_gunner_default_hit_remains_small_arms_against_armor() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -156,7 +150,6 @@ fn allied_tank_cannon_damage_does_not_lock_armor_reaction_source() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert!(
@@ -199,109 +192,11 @@ fn direct_damage_uses_weapon_profile_instead_of_attacker_kind() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
         before - entities.get(victim).expect("victim tank should exist").hp,
         10,
         "a Tank firing a small-arms weapon profile must not inherit Tank cannon AP"
-    );
-}
-
-#[test]
-fn overpenetration_uses_weapon_profile_for_secondary_damage() {
-    let mut entities = EntityStore::new();
-    let attacker = entities
-        .spawn_unit(1, EntityKind::Tank, 100.0, 100.0)
-        .expect("tank attacker should spawn");
-    let primary = entities
-        .spawn_unit(2, EntityKind::Rifleman, 140.0, 100.0)
-        .expect("primary target should spawn");
-    let secondary = entities
-        .spawn_unit(2, EntityKind::Tank, 190.0, 100.0)
-        .expect("secondary tank should spawn");
-    entities
-        .get_mut(secondary)
-        .expect("secondary tank should exist")
-        .set_facing(std::f32::consts::PI);
-    let secondary_before = entities
-        .get(secondary)
-        .expect("secondary tank should exist")
-        .hp;
-    let weapon = combat_rules::weapon_profile(combat_rules::WeaponKind::MachineGunnerMg)
-        .expect("machine-gun profile should exist");
-    let mut events: HashMap<u32, Vec<Event>> = HashMap::from([(1, Vec::new()), (2, Vec::new())]);
-
-    apply_test_damage_with_weapon(
-        &mut entities,
-        &default_team_relations(),
-        &mut events,
-        attacker,
-        primary,
-        weapon,
-        20,
-        1,
-        100.0,
-        100.0,
-        140.0,
-        100.0,
-        128.0,
-    );
-
-    assert_eq!(
-        secondary_before
-            - entities
-                .get(secondary)
-                .expect("secondary tank should exist")
-                .hp,
-        2,
-        "secondary overpenetration damage should stay small-arms when the weapon profile is small-arms"
-    );
-}
-
-#[test]
-fn overpenetration_depth_comes_from_weapon_profile() {
-    let mut entities = EntityStore::new();
-    let attacker = entities
-        .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
-        .expect("rifleman attacker should spawn");
-    let primary = entities
-        .spawn_unit(2, EntityKind::ScoutCar, 140.0, 100.0)
-        .expect("primary scout car should spawn");
-    let secondary = entities
-        .spawn_unit(2, EntityKind::ScoutCar, 195.0, 100.0)
-        .expect("secondary scout car should spawn");
-    let secondary_before = entities
-        .get(secondary)
-        .expect("secondary scout car should exist")
-        .hp;
-    let weapon = combat_rules::weapon_profile(combat_rules::WeaponKind::AntiTankGun)
-        .expect("anti-tank profile should exist");
-    let mut events: HashMap<u32, Vec<Event>> = HashMap::from([(1, Vec::new()), (2, Vec::new())]);
-
-    apply_test_damage_with_weapon(
-        &mut entities,
-        &default_team_relations(),
-        &mut events,
-        attacker,
-        primary,
-        weapon,
-        20,
-        1,
-        100.0,
-        100.0,
-        140.0,
-        100.0,
-        128.0,
-    );
-
-    assert!(
-        entities
-            .get(secondary)
-            .expect("secondary scout car should exist")
-            .hp
-            < secondary_before,
-        "anti-tank weapon profile should keep its longer overpenetration depth independent of attacker kind"
     );
 }

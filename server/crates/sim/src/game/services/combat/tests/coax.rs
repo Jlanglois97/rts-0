@@ -272,7 +272,7 @@ fn tank_coax_pairwise_precedence_alternates_by_tick() {
 }
 
 #[test]
-fn tank_coax_overpenetration_uses_small_arms_profile_without_extra_attack_event() {
+fn tank_coax_only_damages_its_selected_target() {
     let map = open_map(16);
     let mut entities = EntityStore::new();
     let tank = entities
@@ -300,21 +300,15 @@ fn tank_coax_overpenetration_uses_small_arms_profile_without_extra_attack_event(
     );
     assert_eq!(
         secondary_before - entities.get(secondary).expect("secondary should exist").hp,
-        2,
-        "coax overpenetration should use the small-arms coax profile, not Tank cannon damage"
+        0,
+        "coax must not damage units behind its selected target"
     );
     let player_events = events.get(&1).expect("attacker events should exist");
     assert!(
         player_events
             .iter()
-            .any(|event| matches!(event, Event::Overpenetration { to } if *to == secondary)),
-        "secondary coax hit should emit overpenetration feedback"
-    );
-    assert!(
-        player_events
-            .iter()
             .all(|event| !matches!(event, Event::Attack { to, .. } if *to == secondary)),
-        "secondary coax overpenetration should not emit a separate attack event"
+        "secondary coax target should not emit a separate attack event"
     );
 }
 

@@ -35,12 +35,6 @@ export function decodeCompactEvent(record, index) {
         }
         return ev;
       }
-    case EVENT.OVERPENETRATION:
-      requireLength(fields, 2, `overpenetration event ${index}`);
-      return {
-        e: EVENT.OVERPENETRATION,
-        to: readU32(fields[1], "event.overpenetration.to"),
-      };
     case EVENT.MISS:
       requireLength(fields, 2, `miss event ${index}`);
       return {

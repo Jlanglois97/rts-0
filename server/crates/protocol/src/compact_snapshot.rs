@@ -1097,12 +1097,6 @@ impl Serialize for CompactEvent<'_> {
                 }
                 seq.end()
             }
-            Event::Overpenetration { to } => {
-                let mut seq = serializer.serialize_seq(Some(2))?;
-                seq.serialize_element(&event_code("overpenetration"))?;
-                seq.serialize_element(to)?;
-                seq.end()
-            }
             Event::Miss { to } => {
                 let mut seq = serializer.serialize_seq(Some(2))?;
                 seq.serialize_element(&event_code("miss"))?;

@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-use crate::game::entity::{EntityKind, EntityStore};
+use crate::game::entity::EntityStore;
 use crate::game::entrenchment_combat;
 use crate::game::fog::Fog;
 use crate::game::map::Map;
-use crate::game::services::line_of_sight::LineOfSight;
-use crate::game::smoke::SmokeCloudStore;
 use crate::game::teams::TeamRelations;
 use crate::protocol::Event;
 use crate::rules::combat as combat_rules;
@@ -14,10 +12,10 @@ use crate::rules::terrain::TerrainKind;
 use rand::Rng;
 
 use super::events::{
-    attack_reveal_for, emit_attack_event, emit_miss_event, push_under_attack_notice,
+    attack_reveal_for, emit_attack_event, emit_miss_event,
     push_under_attack_notices_for_visible_attack,
 };
-use super::projection::{carry_through_intersection, resolve_shot_victim};
+use super::projection::resolve_shot_victim;
 use super::shot_blocker_index::ShotBlockerIndex;
 
 #[derive(Clone, Copy)]
@@ -37,7 +35,6 @@ pub(super) fn apply_damage(
     teams: &TeamRelations,
     events: &mut HashMap<u32, Vec<Event>>,
     fog: &Fog,
-    smokes: &SmokeCloudStore,
     rng: &mut impl Rng,
     attacker: u32,
     victim: u32,
@@ -48,7 +45,6 @@ pub(super) fn apply_damage(
     ay: f32,
     vx: f32,
     vy: f32,
-    range_px: f32,
     extra_miss_chance: f32,
     tick: u32,
 ) -> Option<ShotOutcome> {
@@ -82,7 +78,6 @@ pub(super) fn apply_damage(
         .then(|| attack_reveal_for(entities.get(attacker)))
         .flatten();
     let victim_facing = victim.map(|e| e.facing());
-    let victim_entrenched = victim.is_some_and(entrenchment_combat::is_actively_entrenched);
     let victim_owner = entities.get(shot_victim).map(|e| e.owner).unwrap_or(0);
     let attack_recipients = emit_attack_event(
         events,
@@ -99,13 +94,8 @@ pub(super) fn apply_damage(
         Some(weapon_profile.id.stable_id()),
     );
 
-    // Resolve weapon-specific accuracy before computing damage. Entrenchment is deterministic
-    // damage reduction, not another miss source. A miss still leaves the shell path live so each
-    // overpenetration candidate can make its own independent accuracy roll.
+    // Intended targets have no intrinsic weapon miss roll. Movement penalties may still miss.
     let primary_missed = if entities.get(shot_victim).is_some() {
-        // Intended targets have no intrinsic weapon miss roll. Movement penalties remain able to
-        // make a primary shot miss; weapon-specific infantry dodge applies only to incidental
-        // overpenetration candidates below.
         let mc = extra_miss_chance.clamp(0.0, 1.0);
         if mc > 0.0 && rng.gen::<f32>() < mc {
             emit_miss_event(events, &attack_recipients, shot_victim);
@@ -165,184 +155,8 @@ pub(super) fn apply_damage(
             shot_victim_pos.1,
         );
     }
-    if damaged || primary_missed {
-        apply_overpenetration(
-            map,
-            entities,
-            teams,
-            events,
-            fog,
-            smokes,
-            rng,
-            attacker,
-            shot_victim,
-            weapon_profile,
-            damaged && victim_entrenched,
-            // Target-type and tile modifiers protect this victim without draining the
-            // projectile's downstream overpenetration energy; each later candidate applies its
-            // own modifiers independently. A direct hit on entrenched infantry stops the shell.
-            dmg,
-            attacker_owner,
-            ax,
-            ay,
-            shot_victim_pos.0,
-            shot_victim_pos.1,
-            range_px,
-            tick,
-        );
-    }
     victim_kind.map(|_| ShotOutcome {
         victim_owner,
         reveals_attacker,
     })
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apply_overpenetration(
-    map: &Map,
-    entities: &mut EntityStore,
-    teams: &TeamRelations,
-    events: &mut HashMap<u32, Vec<Event>>,
-    fog: &Fog,
-    smokes: &SmokeCloudStore,
-    rng: &mut impl Rng,
-    attacker: u32,
-    primary_victim: u32,
-    weapon_profile: &combat_rules::WeaponProfile,
-    primary_victim_was_entrenched: bool,
-    primary_dmg: u32,
-    attacker_owner: u32,
-    ax: f32,
-    ay: f32,
-    vx: f32,
-    vy: f32,
-    range_px: f32,
-    tick: u32,
-) {
-    if primary_victim_was_entrenched {
-        return;
-    }
-    if entities
-        .get(primary_victim)
-        .map(|e| e.kind == EntityKind::Tank || e.is_building())
-        .unwrap_or(false)
-    {
-        return;
-    }
-    let dx = vx - ax;
-    let dy = vy - ay;
-    let dist = (dx * dx + dy * dy).sqrt();
-    if dist <= f32::EPSILON {
-        return;
-    }
-
-    let overpenetration_factor = match weapon_profile.overpenetration {
-        combat_rules::OverpenetrationPolicy::DirectFire { range_factor } => range_factor,
-        combat_rules::OverpenetrationPolicy::None => return,
-    };
-    let overpenetration_limit = dist + range_px * overpenetration_factor;
-    let ux = dx / dist;
-    let uy = dy / dist;
-    let shot_start = (vx, vy);
-    let shot_end = (
-        ax + ux * overpenetration_limit,
-        ay + uy * overpenetration_limit,
-    );
-    let carry_distance = overpenetration_limit - dist;
-    let splash_dmg = primary_dmg / 2;
-    if splash_dmg == 0 {
-        return;
-    }
-
-    let player_ids: Vec<u32> = events.keys().copied().collect();
-    let mut hits: Vec<(u32, f32, f32, f32)> = Vec::new();
-    let los = LineOfSight::with_smoke(map, smokes);
-    for id in entities.ids() {
-        if id == attacker || id == primary_victim {
-            continue;
-        }
-        let Some(target) = entities.get(id) else {
-            continue;
-        };
-        if !target.is_targetable()
-            || !teams.is_enemy_owner(attacker_owner, target.owner)
-            || target.hp == 0
-        {
-            continue;
-        }
-        if entrenchment_combat::is_actively_entrenched(target) {
-            continue;
-        }
-        let Some(hit_t) = carry_through_intersection(map, target, shot_start, shot_end) else {
-            continue;
-        };
-        let along = dist + hit_t * carry_distance;
-        if !los.clear_between_world_points((ax, ay), (target.pos_x, target.pos_y)) {
-            continue;
-        }
-        hits.push((id, target.pos_x, target.pos_y, along));
-    }
-
-    hits.sort_by(|a, b| a.3.total_cmp(&b.3).then_with(|| a.0.cmp(&b.0)));
-    for (id, tx, ty, _) in hits {
-        let missed = entities.get(id).is_some_and(|target| {
-            let miss_chance = combat_rules::miss_chance_for_weapon(weapon_profile, target.kind);
-            miss_chance > 0.0 && rng.gen::<f32>() < miss_chance
-        });
-        if missed {
-            continue;
-        }
-        let effective_dmg = entities
-            .get(id)
-            .map(|e| {
-                let damage = combat_rules::effective_damage_with_facing_for_weapon(
-                    weapon_profile,
-                    e.kind,
-                    splash_dmg,
-                    Some(TerrainKind::Open),
-                    Some(e.facing()),
-                    (e.pos_x, e.pos_y),
-                    (ax, ay),
-                );
-                map.damage_after_reduction_tile(e.pos_x, e.pos_y, damage)
-            })
-            .unwrap_or(0);
-        if effective_dmg == 0 {
-            continue;
-        }
-        let victim_owner = entities.get(id).map(|e| e.owner).unwrap_or(0);
-        let shot_blocked = entities
-            .get(id)
-            .map(|e| e.kind == EntityKind::Tank || e.is_building())
-            .unwrap_or(false);
-        if let Some(v) = entities.get_mut(id) {
-            if v.apply_damage_from_entity(effective_dmg, attacker_owner, attacker, (ax, ay), tick)
-                && combat_rules::weapon_triggers_tank_armor_reaction(weapon_profile)
-            {
-                v.lock_tank_armor_reaction_source((ax, ay), tick);
-            }
-        }
-        for pid in &player_ids {
-            if !projection_rules::attack_event_visible_to_team(
-                *pid,
-                ax,
-                ay,
-                tx,
-                ty,
-                attacker_owner,
-                fog,
-                teams,
-            ) {
-                continue;
-            }
-            events
-                .entry(*pid)
-                .or_default()
-                .push(Event::Overpenetration { to: id });
-            push_under_attack_notice(events, teams, *pid, victim_owner, attacker_owner, tx, ty);
-        }
-        if shot_blocked {
-            break;
-        }
-    }
 }

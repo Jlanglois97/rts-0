@@ -1,14 +1,4 @@
 use super::*;
-use rand::Rng;
-
-fn seed_with_first_roll_at_least(miss_chance: f32) -> u64 {
-    (0..10_000)
-        .find(|seed| {
-            let mut rng = SmallRng::seed_from_u64(*seed);
-            rng.gen::<f32>() >= miss_chance
-        })
-        .expect("test should find a seed whose first roll hits")
-}
 
 #[allow(clippy::too_many_arguments)]
 fn apply_test_damage_with_seed(
@@ -22,7 +12,6 @@ fn apply_test_damage_with_seed(
     ay: f32,
     vx: f32,
     vy: f32,
-    range_px: f32,
     rng_seed: u64,
 ) {
     let weapon_profile = entities
@@ -31,7 +20,6 @@ fn apply_test_damage_with_seed(
         .expect("attacker should have a default weapon profile");
     let map = Map::generate(2, 0x00C0_FFEE);
     let fog = Fog::new(map.width, map.height);
-    let smokes = SmokeCloudStore::new();
     let mut rng = SmallRng::seed_from_u64(rng_seed);
     let blockers = ShotBlockerIndex::build(&map, entities);
     apply_damage(
@@ -41,7 +29,6 @@ fn apply_test_damage_with_seed(
         &default_team_relations(),
         events,
         &fog,
-        &smokes,
         &mut rng,
         attacker,
         victim,
@@ -52,7 +39,6 @@ fn apply_test_damage_with_seed(
         ay,
         vx,
         vy,
-        range_px,
         0.0,
         10,
     );
@@ -85,7 +71,6 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
         100.0,
         140.0,
         100.0,
-        160.0,
         0,
     );
     apply_test_damage_with_seed(
@@ -99,7 +84,6 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
         100.0,
         140.0,
         140.0,
-        160.0,
         0,
     );
 
@@ -116,7 +100,7 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
 }
 
 #[test]
-fn at_gun_primary_hits_infantry_for_reduced_damage_and_secondary_keeps_its_own_roll() {
+fn at_gun_hits_only_primary_infantry_for_reduced_damage() {
     let mut entities = EntityStore::new();
     let attacker = entities
         .spawn_unit(1, EntityKind::AntiTankGun, 100.0, 100.0)
@@ -130,8 +114,6 @@ fn at_gun_primary_hits_infantry_for_reduced_damage_and_secondary_keeps_its_own_r
     let primary_hp = entities.get(primary).expect("primary should exist").hp;
     let secondary_hp = entities.get(secondary).expect("secondary should exist").hp;
     let mut events = HashMap::from([(1, Vec::new()), (2, Vec::new())]);
-    let miss_chance = combat_rules::miss_chance(EntityKind::AntiTankGun, EntityKind::Rifleman);
-    let rng_seed = seed_with_first_roll_at_least(miss_chance);
 
     apply_test_damage_with_seed(
         &mut entities,
@@ -144,8 +126,7 @@ fn at_gun_primary_hits_infantry_for_reduced_damage_and_secondary_keeps_its_own_r
         100.0,
         140.0,
         100.0,
-        160.0,
-        rng_seed,
+        0,
     );
 
     assert_eq!(
@@ -155,15 +136,7 @@ fn at_gun_primary_hits_infantry_for_reduced_damage_and_secondary_keeps_its_own_r
     );
     assert_eq!(
         entities.get(secondary).expect("secondary should exist").hp,
-        secondary_hp.saturating_sub(15),
-        "an incidental infantry hit should take 30% of the shell's half-damage follow-through"
-    );
-    assert!(
-        events
-            .get(&1)
-            .expect("attacker events should exist")
-            .iter()
-            .any(|event| matches!(event, Event::Overpenetration { to } if *to == secondary)),
-        "the independently hit secondary should emit anti-tank-gun overpenetration feedback"
+        secondary_hp,
+        "units behind the selected target must remain unharmed"
     );
 }

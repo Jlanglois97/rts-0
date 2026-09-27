@@ -12,7 +12,6 @@ fn authored_damage_reduction_tile_reduces_direct_weapon_damage_by_a_quarter() {
     map.damage_reduction_tiles = vec![map.tile_of(victim_pos.0, victim_pos.1)];
     let teams = TeamRelations::from_player_teams([(1, 1), (2, 2)]);
     let fog = visible_fog(&map, &entities);
-    let smokes = SmokeCloudStore::new();
     let mut events = HashMap::from([(1, Vec::new()), (2, Vec::new())]);
     let mut rng = SmallRng::seed_from_u64(0);
     let blockers = ShotBlockerIndex::build(&map, &entities);
@@ -44,7 +43,6 @@ fn authored_damage_reduction_tile_reduces_direct_weapon_damage_by_a_quarter() {
         &teams,
         &mut events,
         &fog,
-        &smokes,
         &mut rng,
         attacker,
         victim,
@@ -55,7 +53,6 @@ fn authored_damage_reduction_tile_reduces_direct_weapon_damage_by_a_quarter() {
         100.0,
         victim_pos.0,
         victim_pos.1,
-        64.0,
         0.0,
         10,
     );
@@ -76,55 +73,6 @@ fn mark_entrenched(entities: &mut EntityStore, id: u32) {
         .as_mut()
         .expect("entity should have movement")
         .occupied_trench_id = Some(1);
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apply_test_damage_with_seed_and_teams(
-    entities: &mut EntityStore,
-    teams: &TeamRelations,
-    events: &mut HashMap<u32, Vec<Event>>,
-    attacker: u32,
-    victim: u32,
-    dmg: u32,
-    attacker_owner: u32,
-    ax: f32,
-    ay: f32,
-    vx: f32,
-    vy: f32,
-    range_px: f32,
-    rng_seed: u64,
-) {
-    let map = Map::generate(2, 0x00C0_FFEE);
-    let fog = Fog::new(map.width, map.height);
-    let smokes = SmokeCloudStore::new();
-    let mut rng = SmallRng::seed_from_u64(rng_seed);
-    let weapon_profile = entities
-        .get(attacker)
-        .and_then(|entity| combat_rules::default_weapon_profile(entity.kind))
-        .expect("test attacker should have a default weapon profile");
-    let blockers = ShotBlockerIndex::build(&map, entities);
-    apply_damage(
-        &map,
-        entities,
-        &blockers,
-        teams,
-        events,
-        &fog,
-        &smokes,
-        &mut rng,
-        attacker,
-        victim,
-        weapon_profile,
-        dmg,
-        attacker_owner,
-        ax,
-        ay,
-        vx,
-        vy,
-        range_px,
-        0.0,
-        10,
-    );
 }
 
 #[test]
@@ -429,7 +377,6 @@ fn entrenched_direct_shot_halves_damage_without_emitting_a_miss() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -480,115 +427,10 @@ fn direct_shots_against_buildings_ignore_entrenchment_damage_reduction() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert!(
         entities.get(depot).expect("depot should exist").hp < depot_hp,
         "entrenchment damage reduction should not affect buildings"
-    );
-}
-
-#[test]
-fn entrenched_primary_victim_stops_overpenetration_after_a_hit() {
-    for seed in 0..128 {
-        let mut entities = EntityStore::new();
-        let attacker = entities
-            .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
-            .expect("attacker should spawn");
-        let primary = entities
-            .spawn_unit(2, EntityKind::Rifleman, 140.0, 100.0)
-            .expect("primary target should spawn");
-        mark_entrenched(&mut entities, primary);
-        let secondary = entities
-            .spawn_unit(2, EntityKind::Worker, 165.0, 100.0)
-            .expect("secondary target should spawn");
-        let primary_hp = entities.get(primary).expect("primary should exist").hp;
-        let secondary_hp = entities.get(secondary).expect("secondary should exist").hp;
-        let mut events: HashMap<u32, Vec<Event>> = HashMap::new();
-        events.insert(1, Vec::new());
-        events.insert(2, Vec::new());
-
-        apply_test_damage_with_seed_and_teams(
-            &mut entities,
-            &default_team_relations(),
-            &mut events,
-            attacker,
-            primary,
-            10,
-            1,
-            100.0,
-            100.0,
-            140.0,
-            100.0,
-            128.0,
-            seed,
-        );
-
-        if entities.get(primary).expect("primary should exist").hp == primary_hp {
-            continue;
-        }
-        assert_eq!(
-            entities.get(secondary).expect("secondary should exist").hp,
-            secondary_hp,
-            "entrenched primary victims should stop overpenetration"
-        );
-        assert!(
-            events
-                .get(&1)
-                .expect("attacker owner events should exist")
-                .iter()
-                .all(|event| !matches!(event, Event::Overpenetration { to } if *to == secondary)),
-            "entrenched primary victims should not emit secondary overpenetration feedback"
-        );
-        return;
-    }
-    panic!("expected an entrenched primary victim to take deterministic direct damage");
-}
-
-#[test]
-fn entrenched_secondary_candidate_skips_overpenetration_damage() {
-    let mut entities = EntityStore::new();
-    let attacker = entities
-        .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
-        .expect("attacker should spawn");
-    let primary = entities
-        .spawn_unit(2, EntityKind::Rifleman, 140.0, 100.0)
-        .expect("primary target should spawn");
-    let secondary = entities
-        .spawn_unit(2, EntityKind::Rifleman, 165.0, 100.0)
-        .expect("secondary target should spawn");
-    mark_entrenched(&mut entities, secondary);
-    let secondary_hp = entities.get(secondary).expect("secondary should exist").hp;
-    let mut events: HashMap<u32, Vec<Event>> = HashMap::new();
-    events.insert(1, Vec::new());
-    events.insert(2, Vec::new());
-
-    apply_test_damage(
-        &mut entities,
-        &mut events,
-        attacker,
-        primary,
-        10,
-        1,
-        100.0,
-        100.0,
-        140.0,
-        100.0,
-        128.0,
-    );
-
-    assert_eq!(
-        entities.get(secondary).expect("secondary should exist").hp,
-        secondary_hp,
-        "entrenched secondary candidates should not take overpenetration damage"
-    );
-    assert!(
-        events
-            .get(&1)
-            .expect("attacker owner events should exist")
-            .iter()
-            .all(|event| !matches!(event, Event::Overpenetration { to } if *to == secondary)),
-        "skipped entrenched secondary candidates should not emit overpenetration feedback"
     );
 }

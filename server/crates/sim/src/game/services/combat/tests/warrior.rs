@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn warrior_sword_two_shots_rifleman_without_overpenetration() {
+fn warrior_sword_two_shots_rifleman_without_secondary_damage() {
     let mut entities = EntityStore::new();
     let warrior = entities
         .spawn_unit(1, EntityKind::Warrior, 100.0, 100.0)
@@ -47,9 +47,6 @@ fn warrior_sword_two_shots_rifleman_without_overpenetration() {
             .count(),
         2
     );
-    assert!(owner_events
-        .iter()
-        .all(|event| !matches!(event, Event::Overpenetration { .. })));
 }
 
 #[test]

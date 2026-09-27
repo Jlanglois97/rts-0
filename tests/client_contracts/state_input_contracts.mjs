@@ -323,19 +323,6 @@ function buttonByLabel(card, label) {
   assert(artilleryRevealState.liveMuzzleFlashes(performance.now()).length === 0, "artillery self-reveal does not draw a tracer");
   assert(artilleryRevealState.weaponRecoil(99, KIND.ARTILLERY, performance.now()) > 0, "artillery self-reveal still recoils the gun");
 
-  const overpenEventState = new GameState({ ...start, map: { ...start.map, resources: [] } });
-  overpenEventState.applySnapshot({
-    tick: 12,
-    steel: 0,
-    oil: 0,
-    supplyUsed: 0,
-    supplyCap: 10,
-    entities: [{ id: 22, owner: 2, kind: KIND.WORKER, x: 166, y: 108, hp: 30, maxHp: 40, state: STATE.IDLE }],
-    events: [{ e: EVENT.OVERPENETRATION, to: 22 }],
-  });
-  assert(overpenEventState.liveMuzzleFlashes(performance.now()).length === 0, "overpenetration event does not draw a tracer");
-  assert(overpenEventState.weaponRecoil(22, KIND.WORKER, performance.now()) === 0, "overpenetration event does not trigger weapon recoil");
-
   // Interpolation clamps alpha to [0,1]
   const entsNeg = state.entitiesInterpolated(-0.5);
   const entsOver = state.entitiesInterpolated(1.5);

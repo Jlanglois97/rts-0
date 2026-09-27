@@ -448,7 +448,6 @@ pub(in crate::game) fn combat_system(
                     teams,
                     events,
                     fog,
-                    smokes,
                     rng,
                     id,
                     tid,
@@ -459,7 +458,6 @@ pub(in crate::game) fn combat_system(
                     py,
                     tx,
                     ty,
-                    range_px,
                     extra_miss_chance,
                     tick,
                 );

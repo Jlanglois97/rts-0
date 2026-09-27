@@ -908,7 +908,7 @@ where
         }
         // Preserve Jeff's layered firing line on contact. Automatic target
         // acquisition meets the raid without dog-piling every defender into
-        // one Tank overpenetration lane.
+        // one crowded firing position.
         handled_local_defense |= jeff_layered_home_defense;
 
         let defensive_machine_gunners_available: Vec<u32> = defensive_machine_gunners

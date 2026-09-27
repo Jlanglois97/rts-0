@@ -28,7 +28,7 @@ Non-attack ability timers and attack-speed multipliers are unchanged.
 Base weapon ranges use fractional tiles (`f32`) throughout stat records and attack profiles.
 The Machine Gunner has 6.1 tiles of base range (7.1 while entrenched), giving an approaching
 attack-moving MG a small standoff margin against a stationary entrenched Rifleman's 6 tiles.
-Direct-fire damage, miss policy, tank-facing modifiers, and over-penetration policy consume the
+Direct-fire damage and tank-facing modifiers consume the
 selected weapon profile instead of inferring those behaviors only from the firing entity kind.
 The Panzerfausts Training Centre upgrade unlocks a separate Barracks-trained Panzerfaust unit. It
 inherits Rifleman combat and movement but carries one disposable anti-armor shot that deals 100
@@ -36,7 +36,7 @@ base damage with 50% armor penetration and no tank-facing modifier. The shot is 
 the same Panzerfaust immediately returns to normal movement and rifle combat while the projectile
 travels, preserving its kind, orders, HP, control-group identity, and trench.
 Tanks also have a live secondary `tank_coax` profile owned by combat rules: 6-tile range, 4 small-arms
-damage, 12-tick cooldown, no Tank armor-facing multiplier, and direct-fire overpenetration.
+damage, 12-tick cooldown, no Tank armor-facing multiplier, and single-target direct fire.
 `client/src/config.js` is the stable public facade for the subset the UI/render/fog needs (costs,
 supply, sight, sizes, colors, and command-card descriptors). Its internal
 `client/src/config/timing.js`, `client/src/config/rules_mirror.js`, and
@@ -199,8 +199,7 @@ Cultivator Engineers can also construct the faction-specific Portal for 150 Stee
 footprint, 82 HP, one tile of sight, a five-second construction time, no prerequisite, and no
 research. A completed Portal trains the Cultivator Warrior for 100 Steel and 2 Supply in 300 ticks.
 The Warrior is a 135-HP, 13.5-pixel-radius ground melee unit moving at 1.6 pixels per tick. Its
-23-damage sword has 0.5-tile reach, a 64-tick cooldown, 50% armor penetration, and no
-overpenetration. See
+23-damage sword has 0.5-tile reach, a 64-tick cooldown, and 50% armor penetration. See
 [Cultivators specification](cultivators.md).
 
 
@@ -315,8 +314,7 @@ movement, and 25% faster rifle attacks plus the Panzerfaust windup boost. Machin
 Methamphetamines move at unupgraded Rifleman speed and use half-length setup/teardown timers; other
 mobile combat units still hold position once a target is in weapon range. Scout cars also fire while
 moving using an independent rear machine-gun facing. They are unarmored light vehicles and do not
-receive armored damage reduction; Anti-Tank Guns deal their full damage to them and do not roll an
-incidental infantry miss chance against them.
+receive armored damage reduction; Anti-Tank Guns deal their full damage to them.
 Plain `Move` tanks, scout cars, and Methamphetamines-upgraded Riflemen and Panzerfausts only fire at enemies already in
 weapon range. Their active `AttackMove` orders use the same moving-fire policy while they are still
 following the player-issued path: auto-acquisition can aim and fire only at targets that are
@@ -387,7 +385,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
   0.75x ratio into deterministic cardinal/diagonal tile costs and declines the clear-segment
   shortcut when its sampled centerline crosses slow terrain. This lets infantry take a faster
   open-ground detour without treating forests as impassable. Damage reduction applies after weapon
-  armor, facing, falloff, and entrenchment calculations to direct fire, overpenetration, Mortar,
+  armor, facing, falloff, and entrenchment calculations to direct fire, Mortar,
   Artillery, loaded Panzerfaust, and damaging ability projectiles; fractional non-zero damage rounds
   up.
 - Gravel A/B/C, Dirt A/B/C, Mud A/B/C, and Frosted Ground are visual Open-terrain variants. They
@@ -506,13 +504,10 @@ profiles and explicit activation/autocast policy instead of being folded into de
   infantry unit, so nearby eligible infantry dig their own adjacent trenches instead of sharing one.
   Active occupation grants +1 tile weapon range, reduces incoming direct damage by 50% after
   normal weapon/armor/facing calculations,
-  reduces incoming area damage by 25% after existing falloff/armor rules, and suppresses
-  over-penetration through or into the entrenched unit. Entrenchment does not add a direct-shot
+  reduces incoming area damage by 25% after existing falloff/armor rules. Entrenchment does not add a direct-shot
   miss chance. Tank cannon direct shots have no intrinsic infantry dodge chance. Anti-Tank Guns
   can deliberately target infantry-sized units, dealing 30 damage from their 100-damage shell with
-  no intrinsic miss roll. Their existing 90% infantry miss roll still applies independently to each
-  incidental overpenetration candidate, and an incidental hit applies the same 30% infantry damage
-  modifier after the shell's normal half-damage follow-through.
+  no intrinsic miss roll. Direct shots damage only their resolved victim.
   The trench radius is 0.375 tile.
   The client
   renders neutral trench terrain as brown ground and marks occupied eligible infantry with a small
@@ -658,7 +653,7 @@ Unit stats (hp, dmg, range[tiles], cooldown[ticks], speed[px/tick], sight[tiles]
 |-----------------|-----|-----|-------|----|-------|-------|-----|-----|-----|-----------|
 | worker          | 40  | 4   | 1     | 48 | 2.0   | 10    | 50  | 0   | 1   | 150 (5s) |
 | golem           | 160 | 16  | 1     | 48 | 2.0   | 10    | 0   | 0   | 4   | 396 (~13.2s); provisional free Ekat worker-like economy body trained at Zamok; mines at 4x worker load; can be consumed by Ekat for full heal |
-| warrior         | 135 | 23  | 0.5   | 64 | 1.6   | 11    | 100 | 0   | 2   | 300 (~10s); Cultivator Portal-trained melee bruiser; 50% armor penetration; no projectile, tracer, or overpenetration |
+| warrior         | 135 | 23  | 0.5   | 64 | 1.6   | 11    | 100 | 0   | 2   | 300 (~10s); Cultivator Portal-trained melee bruiser; 50% armor penetration; no projectile or tracer |
 | rifleman        | 45  | 5   | 5     | 32 | 1.6   | 11    | 35  | 0   | 1   | 300 (~10s) |
 | panzerfaust     | 45  | 5 rifle / 100 launcher | 5 | 32 rifle / one lifetime launcher | 1.6 | 11 | 55 | 10 | 1 | 300 (~10s); requires completed Panzerfausts research |
 | machine_gunner  | 55  | 4   | 6.1   | 12  | 1.28  | 11    | 75  | 10  | 2   | 400 (~13s) |

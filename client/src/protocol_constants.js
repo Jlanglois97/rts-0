@@ -265,7 +265,6 @@ export const EVENT = Object.freeze({
   ARTILLERY_FIRING: "artilleryFiring",
   PANZERFAUST_LAUNCH: "panzerfaustLaunch",
   PANZERFAUST_IMPACT: "panzerfaustImpact",
-  OVERPENETRATION: "overpenetration",
   MISS: "miss",
 });
 
@@ -450,7 +449,6 @@ export const EVENT_CODE = Object.freeze({
   [EVENT.ARTILLERY_TARGET]: 7,
   [EVENT.ARTILLERY_IMPACT]: 8,
   [EVENT.MORTAR_LAUNCH]: 9,
-  [EVENT.OVERPENETRATION]: 10,
   [EVENT.ARTILLERY_FIRING]: 11,
   [EVENT.PANZERFAUST_LAUNCH]: 12,
   [EVENT.PANZERFAUST_IMPACT]: 13,
