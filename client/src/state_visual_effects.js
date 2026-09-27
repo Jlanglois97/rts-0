@@ -1,4 +1,4 @@
-import { ARTILLERY_OUTER_RADIUS_TILES, MORTAR_OUTER_RADIUS_TILES } from "./config.js";
+import { ARTILLERY_OUTER_RADIUS_TILES, MORTAR_OUTER_RADIUS_TILES, MORTAR_IMPACT_DURATION_MS } from "./config.js";
 import { EVENT, KIND, STATE, WEAPON_KIND, isUnit } from "./protocol.js";
 import { sampleWeaponRecoilCycle } from "./weapon_recoil_cycle.js";
 
@@ -305,7 +305,7 @@ export class VisualEffectBuffers {
   }
 
   liveMortarImpacts(now) {
-    const ttlMs = 1000;
+    const ttlMs = MORTAR_IMPACT_DURATION_MS;
     this.mortarImpacts = this.mortarImpacts.filter((f) => now - f.createdAt <= ttlMs);
     return this.mortarImpacts;
   }

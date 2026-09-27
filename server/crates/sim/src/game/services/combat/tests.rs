@@ -25,6 +25,7 @@ mod range_targeting;
 mod retention;
 mod support_weapon_attack_move;
 mod tank_traps;
+mod tank_he;
 mod target_legality;
 mod target_priority;
 mod warrior;

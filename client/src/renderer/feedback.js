@@ -9,6 +9,7 @@ import {
   ARTILLERY_MAX_RANGE_TILES,
   ARTILLERY_MIN_RANGE_TILES,
   MORTAR_INNER_RADIUS_TILES,
+  MORTAR_IMPACT_DURATION_MS,
   MORTAR_FIELD_OF_FIRE_RAD,
   MORTAR_MIN_RANGE_TILES,
   MORTAR_RANGE_TILES,
@@ -906,7 +907,7 @@ export function _drawMortarImpacts(state) {
 
   for (const impact of impacts) {
     const age = now - impact.createdAt;
-    const t = clamp01(age / 1000);
+    const t = clamp01(age / MORTAR_IMPACT_DURATION_MS);
     const blastFade = 1 - smoothstep01(Math.max(0, t - 0.36) / 0.28);
     const dustFade = 1 - smoothstep01(Math.max(0, t - 0.48) / 0.52);
     const outerRadius = Math.max(innerRadius + 8, impact.radiusTiles * ts);
