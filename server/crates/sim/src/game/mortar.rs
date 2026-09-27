@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use crate::config;
 use crate::game::entity::{Entity, EntityKind, EntityStore};
 use crate::game::entrenchment_combat;
-use crate::game::firing_reveal::{record_mortar_impact_firing_reveals, FiringRevealSource};
+use crate::game::firing_reveal::{
+    record_global_firing_reveals_for_enemy_players, record_mortar_impact_firing_reveals,
+    FiringRevealSource,
+};
 use crate::game::fog::Fog;
 use crate::game::map::Map;
 use crate::game::services::dist2;
@@ -227,6 +230,17 @@ impl MortarShellStore {
                     delay_ticks,
                     shell.rocket,
                 );
+                if shell.rocket {
+                    let player_ids = events.keys().copied().collect::<Vec<_>>();
+                    record_global_firing_reveals_for_enemy_players(
+                        firing_reveals,
+                        &player_ids,
+                        teams,
+                        shell.owner,
+                        shell.attacker,
+                        tick,
+                    );
+                }
                 shell.launched = true;
             }
             if shell.launched && shell.impact_tick <= tick {

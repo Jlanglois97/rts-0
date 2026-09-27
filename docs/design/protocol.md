@@ -849,6 +849,10 @@ Artillery Fire creates the same kind of actionable temporary live fog for every 
 subject to normal smoke suppression, when the shell is launched. The reveal exposes the firing gun
 as a normal snapshot entity without exposing the target point, its terrain tile, surrounding
 terrain, or pre-impact target marker.
+Each Rocket Truck barrage launch grants the same 6.5-second actionable firing reveal to every
+enemy player and extends the same continuous reveal episode during the four-second unload. A
+firing-revealed Rocket Truck appears in world view and on the minimap above presentation fog using
+its ordinary unit icon; the reveal does not expose its target point or surrounding terrain.
 Lingering death sight is ordinary temporary team sight for five seconds. It makes current
 non-owned units/buildings visible as normal entities, contributes to `visibleTiles`, refreshes
 remembered buildings, and can drive command validation and combat auto-acquisition while active.
