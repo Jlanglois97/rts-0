@@ -50,7 +50,10 @@ pub(super) fn direct_fire_target_legal(
         )
     };
     if !targetable
-        || !crate::rules::target::default_weapon_can_target(attacker_entity.kind, target_entity.kind)
+        || !crate::rules::target::default_weapon_can_target(
+            attacker_entity.kind,
+            target_entity.kind,
+        )
     {
         return false;
     }
