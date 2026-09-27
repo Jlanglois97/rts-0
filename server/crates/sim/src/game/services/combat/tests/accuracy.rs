@@ -74,8 +74,11 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
         0,
     );
     let scout_car_after_splash = entities.get(scout_car).expect("scout car should exist").hp;
-    assert_eq!(scout_car_after_splash, scout_car_hp.saturating_sub(30),
-        "nearby unarmored vehicles take HE splash from the infantry hit");
+    assert_eq!(
+        scout_car_after_splash,
+        scout_car_hp.saturating_sub(30),
+        "nearby unarmored vehicles take HE splash from the infantry hit"
+    );
     apply_test_damage_with_seed(
         &mut entities,
         &mut events,
