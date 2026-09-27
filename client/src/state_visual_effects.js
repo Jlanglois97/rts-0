@@ -161,16 +161,19 @@ export class VisualEffectBuffers {
 
   addMortarImpact(ev, now = performance.now()) {
     if (!Number.isFinite(ev.x) || !Number.isFinite(ev.y)) return;
+    const radiusTiles = Number.isFinite(ev.radiusTiles) ? ev.radiusTiles : MORTAR_OUTER_RADIUS_TILES;
+    // Shared impact visuals also carry instant tank HE blasts. Only retire flights
+    // with a matching blast profile, so HE cannot erase an incoming mortar shell.
     this.mortarTargets = this.mortarTargets.filter(
-      (target) => Math.hypot(target.x - ev.x, target.y - ev.y) > 2,
+      (target) => target.radiusTiles !== radiusTiles || Math.hypot(target.x - ev.x, target.y - ev.y) > 2,
     );
     this.mortarShells = this.mortarShells.filter(
-      (shell) => Math.hypot(shell.toX - ev.x, shell.toY - ev.y) > 2,
+      (shell) => shell.radiusTiles !== radiusTiles || Math.hypot(shell.toX - ev.x, shell.toY - ev.y) > 2,
     );
     this.mortarImpacts.push({
       x: ev.x,
       y: ev.y,
-      radiusTiles: Number.isFinite(ev.radiusTiles) ? ev.radiusTiles : MORTAR_OUTER_RADIUS_TILES,
+      radiusTiles,
       seed: Math.floor(ev.x * 13 + ev.y * 7 + now) >>> 0,
       createdAt: now,
       rocket: ev.rocket === true,
