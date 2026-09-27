@@ -1,12 +1,14 @@
 use super::geometry::{clamp_to_map, dist2, normalized_direction, tile_center};
 use super::*;
 
+mod catch_up;
 mod formation;
 #[cfg(test)]
 mod formation_tests;
 mod legacy_beta;
 pub(super) mod smoke;
 
+use self::catch_up::*;
 use self::formation::*;
 #[cfg(test)]
 use self::legacy_beta::{compact_group_near, containment_regroup_radius_tiles};
@@ -44,7 +46,6 @@ const MIN_CONTAINMENT_RIFLE_ESCORTS: usize = 2;
 const CONTAINMENT_HOME_RIFLE_RESERVE: usize = 4;
 const CONTAINMENT_ESCORT_SELECTION_RADIUS_TILES: f32 = 12.0;
 const CONTAINMENT_TANK_SPACING_TILES: f32 = 1.5;
-const CONTAINMENT_TANK_CATCH_UP_BEHIND_TILES: f32 = 1.5;
 const CONTAINMENT_ASSEMBLY_TOLERANCE_TILES: f32 = 1.75;
 const CONTAINMENT_LONGITUDINAL_SPREAD_TILES: f32 = 2.0;
 const CONTAINMENT_LATERAL_SLOP_TILES: f32 = 1.0;
@@ -1119,80 +1120,6 @@ fn frontmost_unit_position(
                 .then_with(|| left.id.cmp(&right.id))
         })
         .map(|unit| (unit.x, unit.y))
-}
-
-fn frontmost_unit_id(
-    observation: &AiObservation,
-    unit_ids: &[u32],
-    toward_objective: (f32, f32),
-) -> Option<u32> {
-    observation
-        .owned
-        .iter()
-        .filter(|unit| unit_ids.contains(&unit.id))
-        .max_by(|left, right| {
-            let left_progress = left.x * toward_objective.0 + left.y * toward_objective.1;
-            let right_progress = right.x * toward_objective.0 + right.y * toward_objective.1;
-            left_progress
-                .total_cmp(&right_progress)
-                .then_with(|| left.id.cmp(&right.id))
-        })
-        .map(|unit| unit.id)
-}
-
-fn rearmost_unit_id(
-    observation: &AiObservation,
-    unit_ids: &[u32],
-    toward_objective: (f32, f32),
-) -> Option<u32> {
-    observation
-        .owned
-        .iter()
-        .filter(|unit| unit_ids.contains(&unit.id))
-        .min_by(|left, right| {
-            let left_progress = left.x * toward_objective.0 + left.y * toward_objective.1;
-            let right_progress = right.x * toward_objective.0 + right.y * toward_objective.1;
-            left_progress
-                .total_cmp(&right_progress)
-                .then_with(|| left.id.cmp(&right.id))
-        })
-        .map(|unit| unit.id)
-}
-
-fn unit_position(observation: &AiObservation, unit_id: u32) -> Option<(f32, f32)> {
-    observation
-        .owned
-        .iter()
-        .find(|unit| unit.id == unit_id)
-        .map(|unit| (unit.x, unit.y))
-}
-
-fn tank_catch_up_point(
-    lead_position: (f32, f32),
-    own_base: (f32, f32),
-    objective: (f32, f32),
-    map: AiMapSummary,
-) -> Option<(f32, f32)> {
-    let direction = normalized_direction(own_base, objective)?;
-    let distance = CONTAINMENT_TANK_CATCH_UP_BEHIND_TILES * map.tile_size as f32;
-    Some(clamp_to_map(
-        (
-            lead_position.0 - direction.0 * distance,
-            lead_position.1 - direction.1 * distance,
-        ),
-        map,
-    ))
-}
-
-fn tank_catch_up_point_on_route(
-    analysis: &AiMapAnalysis,
-    rear_position: (f32, f32),
-    lead_position: (f32, f32),
-) -> Option<(f32, f32)> {
-    // The final route point is the lead Tank's tile. Select the preceding passable tile so the
-    // rear Tank closes to formation distance without attempting to occupy the lead's space.
-    let route = analysis.compact_group_route(rear_position, lead_position, 1);
-    (route.len() >= 2).then(|| route[route.len() - 2])
 }
 
 fn enemy_natural_edge(
