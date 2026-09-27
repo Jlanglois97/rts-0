@@ -2,12 +2,26 @@ use super::*;
 
 pub(super) const SEARCH_TICKS: u32 = config::TICK_HZ * 2;
 const REACQUIRE_TILES: f32 = 1.5;
+/// A Tank that has not moved for three seconds reaches this range (the simulation ramps it from
+/// the 5-tile base). Any movement or hull turn resets it to the base range.
+const STATIONARY_TANK_RANGE_TILES: f32 = 14.0;
+/// A Tank beyond stationary range closes to here and parks, so it settles inside full range
+/// before the attackers reach it.
+const STATIONARY_TANK_CLOSE_TO_TILES: f32 = 12.0;
+/// Spotters stop this far short of the threat: inside the 10-tile sight radius, outside the
+/// Rifleman and Machine Gunner reach.
+const SPOTTER_STANDOFF_TILES: f32 = 8.0;
+const MAX_SPOTTERS: usize = 2;
 
+/// `stationary_tanks` keeps defending Tanks parked for their stationary range bonus and sends
+/// infantry forward to provide the vision for those long shots, instead of ordering the Tanks to
+/// attack (which drives them to the 5-tile base range).
 pub(in crate::ai_core::decision) fn respond_to_local_incident(
     actions: &mut AiActionContext<'_>,
     observation: &AiObservation,
     memory: &mut AiDecisionMemory,
     local_defenders: &[u32],
+    stationary_tanks: bool,
 ) -> Option<Vec<u32>> {
     if let Some(contact) = local_defense_contact(observation) {
         memory.note_defensive_contact(
@@ -48,6 +62,19 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
             };
             interceptors.retain(|unit| *unit != scout);
         }
+        if stationary_tanks {
+            if let Some(target) = primary_defense_target(observation, &attack_targets) {
+                return stationary_tank_defense(
+                    actions,
+                    observation,
+                    memory,
+                    interceptors,
+                    local_defenders,
+                    &attack_targets,
+                    target,
+                );
+            }
+        }
         return if let Some(target) = primary_defense_target(observation, &attack_targets) {
             actions::attack_units(actions, interceptors, target)
         } else {
@@ -66,9 +93,10 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
     });
     if reached_last_contact {
         memory.clear_defensive_incident();
+        memory.local_defense_held_tanks.clear();
         return None;
     }
-    let interceptors = select_defensive_interceptors(
+    let mut interceptors = select_defensive_interceptors(
         observation,
         memory,
         candidates,
@@ -76,12 +104,147 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         incident.threat_value,
         incident.armored_threat,
     );
+    // Parked Tanks keep their range while infantry search; if nobody else can search, the Tanks
+    // must go themselves.
+    if stationary_tanks
+        && interceptors
+            .iter()
+            .any(|id| !memory.local_defense_held_tanks.contains(id))
+    {
+        interceptors.retain(|id| !memory.local_defense_held_tanks.contains(id));
+    } else {
+        memory.local_defense_held_tanks.clear();
+    }
     actions::attack_move_units(
         actions,
         interceptors,
         incident.position.0,
         incident.position.1,
     )
+}
+
+fn stationary_tank_defense(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    memory: &mut AiDecisionMemory,
+    interceptors: Vec<u32>,
+    local_defenders: &[u32],
+    attack_targets: &[u32],
+    target: u32,
+) -> Option<Vec<u32>> {
+    let ts = observation.map.tile_size as f32;
+    let target_position = observation
+        .visible_enemies
+        .iter()
+        .find(|enemy| enemy.id == target)
+        .map(|enemy| (enemy.x, enemy.y))?;
+    let threats: Vec<(f32, f32)> = observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| attack_targets.contains(&enemy.id))
+        .map(|enemy| (enemy.x, enemy.y))
+        .collect();
+    let owned = |id: u32| observation.owned.iter().find(|unit| unit.id == id);
+    let (tanks, mut infantry): (Vec<u32>, Vec<u32>) = interceptors
+        .into_iter()
+        .partition(|id| owned(*id).is_some_and(|unit| unit.kind == EntityKind::Tank));
+    memory
+        .local_defense_held_tanks
+        .retain(|id| tanks.contains(id));
+
+    let mut assigned = Vec::new();
+    let mut hold = Vec::new();
+    for tank_id in &tanks {
+        let Some(tank) = owned(*tank_id) else {
+            continue;
+        };
+        let in_range = threats.iter().any(|threat| {
+            dist2(tank.x, tank.y, threat.0, threat.1) <= squared(STATIONARY_TANK_RANGE_TILES * ts)
+        });
+        if in_range {
+            // Holding clears the Tank's target, so re-issue it only when something moved it.
+            if !memory.local_defense_held_tanks.contains(tank_id)
+                || tank.state == AiEntityState::Move
+            {
+                hold.push(*tank_id);
+                memory.local_defense_held_tanks.insert(*tank_id);
+            }
+        } else {
+            memory.local_defense_held_tanks.remove(tank_id);
+            let direction =
+                normalized_direction(target_position, (tank.x, tank.y)).unwrap_or((0.0, 1.0));
+            let park = clamp_to_map(
+                (
+                    target_position.0 + direction.0 * STATIONARY_TANK_CLOSE_TO_TILES * ts,
+                    target_position.1 + direction.1 * STATIONARY_TANK_CLOSE_TO_TILES * ts,
+                ),
+                observation.map,
+            );
+            if let Some(units) = actions::move_units(actions, [*tank_id], park.0, park.1) {
+                assigned.extend(units);
+            }
+        }
+    }
+    if let Some(units) = actions::hold_position_units(actions, hold) {
+        assigned.extend(units);
+    }
+    // Held Tanks keep their slot in the response even on ticks where no new order is needed.
+    assigned.extend(memory.local_defense_held_tanks.iter().copied());
+
+    // Parked Tanks outrange their own 10-tile sight: without infantry ahead of them, the long
+    // shots have no vision. Add spotters when the response selected only armor.
+    let mut spotters = Vec::new();
+    if infantry.is_empty() && !tanks.is_empty() {
+        let mut candidates: Vec<&AiEntitySummary> =
+            eligible_local_defenders(observation, local_defenders)
+                .into_iter()
+                .filter_map(owned)
+                .filter(|unit| {
+                    matches!(unit.kind, EntityKind::Rifleman | EntityKind::MachineGunner)
+                })
+                .filter(|unit| {
+                    memory.estimated_entrenchment_ticks(observation, unit.id)
+                        < rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS
+                })
+                .collect();
+        candidates.sort_by(|left, right| {
+            dist2(left.x, left.y, target_position.0, target_position.1)
+                .total_cmp(&dist2(
+                    right.x,
+                    right.y,
+                    target_position.0,
+                    target_position.1,
+                ))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        spotters.extend(candidates.iter().take(MAX_SPOTTERS).map(|unit| unit.id));
+    }
+    for spotter_id in &spotters {
+        let Some(spotter) = owned(*spotter_id) else {
+            continue;
+        };
+        let direction =
+            normalized_direction(target_position, (spotter.x, spotter.y)).unwrap_or((0.0, 1.0));
+        let point = clamp_to_map(
+            (
+                target_position.0 + direction.0 * SPOTTER_STANDOFF_TILES * ts,
+                target_position.1 + direction.1 * SPOTTER_STANDOFF_TILES * ts,
+            ),
+            observation.map,
+        );
+        if let Some(units) = actions::move_units(actions, [*spotter_id], point.0, point.1) {
+            assigned.extend(units);
+        }
+    }
+
+    // Selected infantry advance into contact as before, which also lights the targets.
+    infantry.retain(|id| !spotters.contains(id));
+    if let Some(units) = actions::attack_units(actions, infantry, target) {
+        assigned.extend(units);
+    }
+    assigned.sort_unstable();
+    assigned.dedup();
+    (!assigned.is_empty()).then_some(assigned)
 }
 
 fn eligible_local_defenders(observation: &AiObservation, local_defenders: &[u32]) -> Vec<u32> {
