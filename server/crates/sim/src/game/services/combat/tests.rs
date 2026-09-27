@@ -17,10 +17,10 @@ mod accuracy;
 mod anti_tank_acquisition;
 mod anti_tank_behavior;
 mod coax;
+mod direct_hits;
 mod entrenchment;
 mod fog_visibility;
 mod moving_fire_policy;
-mod overpenetration;
 mod range_targeting;
 mod retention;
 mod support_weapon_attack_move;
@@ -259,7 +259,6 @@ fn apply_test_damage(
     ay: f32,
     vx: f32,
     vy: f32,
-    range_px: f32,
 ) {
     apply_test_damage_with_teams(
         entities,
@@ -273,7 +272,6 @@ fn apply_test_damage(
         ay,
         vx,
         vy,
-        range_px,
     );
 }
 #[allow(clippy::too_many_arguments)]
@@ -289,7 +287,6 @@ fn apply_test_damage_with_teams(
     ay: f32,
     vx: f32,
     vy: f32,
-    range_px: f32,
 ) {
     let weapon_profile = entities
         .get(attacker)
@@ -297,7 +294,6 @@ fn apply_test_damage_with_teams(
         .expect("test attacker should have a default weapon profile");
     let map = Map::generate(2, 0x00C0_FFEE);
     let fog = Fog::new(map.width, map.height);
-    let smokes = SmokeCloudStore::new();
     let mut rng = SmallRng::seed_from_u64(0);
     let blockers = ShotBlockerIndex::build(&map, entities);
     apply_damage(
@@ -307,7 +303,6 @@ fn apply_test_damage_with_teams(
         teams,
         events,
         &fog,
-        &smokes,
         &mut rng,
         attacker,
         victim,
@@ -318,7 +313,6 @@ fn apply_test_damage_with_teams(
         ay,
         vx,
         vy,
-        range_px,
         0.0,
         10,
     );
@@ -2131,7 +2125,6 @@ fn tank_front_and_rear_hits_take_different_damage() {
             attacker_pos.1,
             100.0,
             100.0,
-            128.0,
         );
 
         entities.get(victim).expect("victim tank should exist").hp
@@ -2149,66 +2142,7 @@ fn tank_front_and_rear_hits_take_different_damage() {
 }
 
 #[test]
-fn shots_overpenetrate_past_non_blocking_primary_target() {
-    let mut entities = EntityStore::new();
-    let attacker = entities
-        .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
-        .expect("attacker should spawn");
-    let primary = entities
-        .spawn_unit(2, EntityKind::Rifleman, 140.0, 100.0)
-        .expect("primary target should spawn");
-    let secondary = entities
-        .spawn_unit(2, EntityKind::Worker, 165.0, 100.0)
-        .expect("secondary target should spawn");
-    let mut events: HashMap<u32, Vec<Event>> = HashMap::new();
-    events.insert(1, Vec::new());
-    events.insert(2, Vec::new());
-
-    apply_test_damage(
-        &mut entities,
-        &mut events,
-        attacker,
-        primary,
-        10,
-        1,
-        100.0,
-        100.0,
-        140.0,
-        100.0,
-        128.0,
-    );
-
-    assert_eq!(entities.get(primary).expect("primary should exist").hp, 35);
-    let secondary_id = secondary;
-    let secondary = entities.get(secondary_id).expect("secondary should exist");
-    assert_eq!(secondary.hp, 35);
-    assert!(
-        matches!(secondary.order(), Order::Idle),
-        "overpenetration damage must not mutate worker orders"
-    );
-    let attacker_events = events.get(&1).expect("attacker owner events should exist");
-    assert!(
-        attacker_events
-            .iter()
-            .any(|event| matches!(event, Event::Attack { from, to, .. } if *from == attacker && *to == primary)),
-        "primary shot should still emit attack feedback"
-    );
-    assert!(
-        attacker_events
-            .iter()
-            .any(|event| matches!(event, Event::Overpenetration { to } if *to == secondary_id)),
-        "secondary hit should emit overpenetration feedback"
-    );
-    assert!(
-        attacker_events
-            .iter()
-            .all(|event| !matches!(event, Event::Attack { to, .. } if *to == secondary_id)),
-        "secondary overpenetration hit must not emit an attack event"
-    );
-}
-
-#[test]
-fn overpenetration_does_not_damage_allied_entity_behind_enemy() {
+fn direct_shot_does_not_damage_allied_entity_behind_enemy() {
     let mut entities = EntityStore::new();
     let attacker = entities
         .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
@@ -2238,7 +2172,6 @@ fn overpenetration_does_not_damage_allied_entity_behind_enemy() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert!(
@@ -2248,7 +2181,7 @@ fn overpenetration_does_not_damage_allied_entity_behind_enemy() {
     assert_eq!(
         entities.get(ally_behind).expect("ally should exist").hp,
         ally_hp_before,
-        "overpenetration must not damage allied entities behind an enemy"
+        "direct shots must not damage allied entities behind an enemy"
     );
 }
 
@@ -2278,7 +2211,6 @@ fn allied_damage_does_not_update_last_damage_signal() {
         100.0,
         120.0,
         100.0,
-        128.0,
     );
 
     let ally = entities.get(ally).expect("ally should exist");
@@ -2316,7 +2248,6 @@ fn intended_anti_tank_gun_infantry_hit_emits_attack_feedback() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -2359,7 +2290,6 @@ fn anti_tank_gun_seeded_shot_hits_scout_car_without_miss_roll() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -2396,7 +2326,6 @@ fn shots_do_not_continue_into_resource_nodes() {
         100.0,
         140.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(entities.get(primary).expect("primary should exist").hp, 35);
@@ -2405,52 +2334,6 @@ fn shots_do_not_continue_into_resource_nodes() {
         Some(config::STEEL_PATCH_AMOUNT)
     );
     assert_eq!(entities.get(node).expect("node should exist").hp, 1);
-}
-
-#[test]
-fn tank_behind_primary_target_blocks_overpenetration() {
-    let mut entities = EntityStore::new();
-    let attacker = entities
-        .spawn_unit(1, EntityKind::Rifleman, 100.0, 100.0)
-        .expect("attacker should spawn");
-    let primary = entities
-        .spawn_unit(2, EntityKind::Rifleman, 140.0, 100.0)
-        .expect("primary target should spawn");
-    let blocker = entities
-        .spawn_unit(2, EntityKind::Tank, 165.0, 100.0)
-        .expect("blocking tank should spawn");
-    let behind = entities
-        .spawn_unit(2, EntityKind::Worker, 190.0, 100.0)
-        .expect("unit behind blocker should spawn");
-    let blocker_hp_before = entities.get(blocker).expect("blocker should exist").hp;
-    let behind_hp_before = entities.get(behind).expect("behind should exist").hp;
-    let mut events: HashMap<u32, Vec<Event>> = HashMap::new();
-    events.insert(1, Vec::new());
-    events.insert(2, Vec::new());
-
-    apply_test_damage(
-        &mut entities,
-        &mut events,
-        attacker,
-        primary,
-        20,
-        1,
-        100.0,
-        100.0,
-        140.0,
-        100.0,
-        128.0,
-    );
-
-    assert!(
-        entities.get(blocker).expect("blocker should exist").hp < blocker_hp_before,
-        "tank behind the primary target should take overpenetration damage"
-    );
-    assert_eq!(
-        entities.get(behind).expect("behind should exist").hp,
-        behind_hp_before,
-        "overpenetration should stop at the tank"
-    );
 }
 
 #[test]
@@ -2482,7 +2365,6 @@ fn tank_between_attacker_and_target_blocks_the_shot() {
         100.0,
         190.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -2533,7 +2415,6 @@ fn building_between_attacker_and_target_blocks_the_shot() {
         100.0,
         230.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(
@@ -2629,7 +2510,6 @@ fn pump_jack_between_attacker_and_target_does_not_block_the_shot() {
         100.0,
         230.0,
         100.0,
-        128.0,
     );
 
     assert_eq!(

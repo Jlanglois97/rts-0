@@ -5,9 +5,7 @@ use crate::terrain::{self, TerrainKind};
 use crate::{movement_body_class, EntityKind, MovementBodyClass};
 use serde::{Deserialize, Serialize};
 
-pub use crate::target::{
-    damage_after_target_type_modifier, miss_chance, miss_chance_for_weapon, InfantryTargetPolicy,
-};
+pub use crate::target::{damage_after_target_type_modifier, InfantryTargetPolicy};
 
 const FRONT_ARC_RAD: f32 = std::f32::consts::FRAC_PI_4;
 const SIDE_ARC_RAD: f32 = std::f32::consts::PI * 3.0 / 4.0;
@@ -95,12 +93,6 @@ pub enum FacingDamagePolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum OverpenetrationPolicy {
-    None,
-    DirectFire { range_factor: f32 },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WeaponProfile {
     pub id: WeaponKind,
     pub range_tiles: f32,
@@ -110,7 +102,6 @@ pub struct WeaponProfile {
     pub armor_penetration: f32,
     pub infantry_target_policy: InfantryTargetPolicy,
     pub facing_damage_policy: FacingDamagePolicy,
-    pub overpenetration: OverpenetrationPolicy,
 }
 
 impl WeaponProfile {
@@ -133,7 +124,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::GolemFists,
@@ -144,7 +134,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::WarriorSword,
@@ -155,7 +144,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: 0.5,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::None,
     },
     WeaponProfile {
         id: WeaponKind::RiflemanRifle,
@@ -166,7 +154,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::MachineGunnerMg,
@@ -177,7 +164,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::ScoutCarMg,
@@ -188,7 +174,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::AntiTankGun,
@@ -199,10 +184,8 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: FULL_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::AntiTankGun {
             damage_multiplier: crate::balance::ANTI_TANK_GUN_INFANTRY_DAMAGE_MULTIPLIER,
-            incidental_miss_chance: 0.90,
         },
         facing_damage_policy: FacingDamagePolicy::TankArmorFacing,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.50 },
     },
     WeaponProfile {
         id: WeaponKind::PanzerfaustLoadedShot,
@@ -213,7 +196,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: crate::balance::PANZERFAUST_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::None,
     },
     WeaponProfile {
         id: WeaponKind::MortarTeamMortar,
@@ -224,7 +206,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::None,
     },
     WeaponProfile {
         id: WeaponKind::ArtilleryGun,
@@ -235,7 +216,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::None,
     },
     WeaponProfile {
         id: WeaponKind::TankCannon,
@@ -246,7 +226,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: FULL_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::TankArmorFacing,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
     WeaponProfile {
         id: WeaponKind::TankCoax,
@@ -257,7 +236,6 @@ pub const WEAPON_PROFILES: &[WeaponProfile] = &[
         armor_penetration: NO_ARMOR_PENETRATION,
         infantry_target_policy: InfantryTargetPolicy::None,
         facing_damage_policy: FacingDamagePolicy::None,
-        overpenetration: OverpenetrationPolicy::DirectFire { range_factor: 0.25 },
     },
 ];
 
@@ -886,16 +864,11 @@ mod tests {
             anti_tank_gun.infantry_target_policy,
             InfantryTargetPolicy::AntiTankGun {
                 damage_multiplier: crate::balance::ANTI_TANK_GUN_INFANTRY_DAMAGE_MULTIPLIER,
-                incidental_miss_chance: 0.90,
             }
         );
         assert_eq!(
             anti_tank_gun.facing_damage_policy,
             FacingDamagePolicy::TankArmorFacing
-        );
-        assert_eq!(
-            anti_tank_gun.overpenetration,
-            OverpenetrationPolicy::DirectFire { range_factor: 0.50 }
         );
 
         let tank_cannon = weapon_profile(WeaponKind::TankCannon).expect("tank cannon profile");
@@ -907,10 +880,6 @@ mod tests {
         assert_eq!(
             tank_cannon.facing_damage_policy,
             FacingDamagePolicy::TankArmorFacing
-        );
-        assert_eq!(
-            tank_cannon.overpenetration,
-            OverpenetrationPolicy::DirectFire { range_factor: 0.25 }
         );
 
         let machine_gunner = weapon_profile(WeaponKind::MachineGunnerMg).expect("MG profile");
@@ -935,10 +904,6 @@ mod tests {
         assert_eq!(tank_coax.infantry_target_policy, InfantryTargetPolicy::None);
         assert_eq!(tank_coax.facing_damage_policy, FacingDamagePolicy::None);
         assert_eq!(
-            tank_coax.overpenetration,
-            OverpenetrationPolicy::DirectFire { range_factor: 0.25 }
-        );
-        assert_eq!(
             default_weapon_profile(EntityKind::Tank)
                 .expect("Tank default profile")
                 .id,
@@ -954,7 +919,6 @@ mod tests {
             crate::balance::PANZERFAUST_ARMOR_PENETRATION
         );
         assert_eq!(panzerfaust.facing_damage_policy, FacingDamagePolicy::None);
-        assert_eq!(panzerfaust.overpenetration, OverpenetrationPolicy::None);
         assert_eq!(
             panzerfaust_loaded_shot_damage(EntityKind::Tank, None),
             effective_damage_for_weapon(
@@ -970,7 +934,6 @@ mod tests {
     fn weapon_policy_helpers_use_profile_metadata() {
         let tank_cannon = weapon_profile(WeaponKind::TankCannon).expect("tank cannon profile");
         let machine_gunner = weapon_profile(WeaponKind::MachineGunnerMg).expect("MG profile");
-        let anti_tank_gun = weapon_profile(WeaponKind::AntiTankGun).expect("AT gun profile");
 
         assert_eq!(
             effective_damage_for_weapon(tank_cannon, EntityKind::Tank, 40, None),
@@ -991,14 +954,6 @@ mod tests {
                 ArmorFacing::Rear,
             ),
             1.0
-        );
-        assert_eq!(
-            miss_chance_for_weapon(anti_tank_gun, EntityKind::Rifleman),
-            0.90
-        );
-        assert_eq!(
-            miss_chance_for_weapon(tank_cannon, EntityKind::Rifleman),
-            0.0
         );
     }
 
@@ -1322,44 +1277,6 @@ mod tests {
             ),
             WeaponTargetFit::PreferredArmor
         );
-    }
-
-    #[test]
-    fn anti_tank_gun_incidental_hits_miss_infantry_sized_targets_nine_times_out_of_ten() {
-        for victim in [
-            EntityKind::Worker,
-            EntityKind::Golem,
-            EntityKind::Warrior,
-            EntityKind::Rifleman,
-            EntityKind::Panzerfaust,
-            EntityKind::MachineGunner,
-        ] {
-            assert_eq!(miss_chance(EntityKind::AntiTankGun, victim), 0.90);
-        }
-
-        for victim in [
-            EntityKind::ScoutCar,
-            EntityKind::AntiTankGun,
-            EntityKind::Tank,
-        ] {
-            assert_eq!(miss_chance(EntityKind::AntiTankGun, victim), 0.0);
-        }
-    }
-
-    #[test]
-    fn tank_cannon_has_no_intrinsic_miss_chance() {
-        for victim in [
-            EntityKind::Worker,
-            EntityKind::Rifleman,
-            EntityKind::Panzerfaust,
-            EntityKind::MachineGunner,
-            EntityKind::Golem,
-            EntityKind::ScoutCar,
-            EntityKind::AntiTankGun,
-            EntityKind::Tank,
-        ] {
-            assert_eq!(miss_chance(EntityKind::Tank, victim), 0.0);
-        }
     }
 
     #[test]

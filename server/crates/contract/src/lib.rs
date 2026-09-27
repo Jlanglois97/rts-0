@@ -1061,9 +1061,6 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         weapon_kind: Option<String>,
     },
-    Overpenetration {
-        to: u32,
-    },
     Miss {
         to: u32,
     },

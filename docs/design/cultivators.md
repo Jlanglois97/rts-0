@@ -58,7 +58,7 @@ Its sword has 0.5-tile reach beyond collision radii, deals 23 base damage, attac
 and applies 50% armor penetration. The 23 damage makes two successful hits lethal to a 45-HP
 Rifleman; the 64-tick cooldown interprets "half Rifleman attack speed" as half as many attacks per
 second. The sword uses general-purpose SmallArms target preference but has no projectile, tracer,
-muzzle flash, area damage, or overpenetration. It holds position while attacking and otherwise uses
+muzzle flash or area damage. It holds position while attacking and otherwise uses
 the ordinary attack, attack-move, hold, rally, fog, blocker, damage, and death rules.
 
 The first implementation uses clearly placeholder matte-white/off-white unarmored Chinese

@@ -236,8 +236,7 @@ impl SelfPlayRunner {
             for event in events {
                 let attacker = match &event {
                     Event::Attack { from, .. } => self.attacker_info(*from),
-                    Event::Overpenetration { .. }
-                    | Event::Miss { .. }
+                    Event::Miss { .. }
                     | Event::Death { .. }
                     | Event::Build { .. }
                     | Event::Notice { .. }

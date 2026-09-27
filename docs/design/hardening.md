@@ -166,23 +166,20 @@ The server treats every client as potentially hostile. Scout Planes are exposed 
   issuer's own authoritative remembered-building store. The server derives the center from that
   record rather than accepting a client coordinate, rejects never-observed ids, and still requires
   current visibility before any hidden trap becomes a combat target.
-- **Team-safe damage attribution**: direct-fire damage, shot interception, overpenetration, damage
+- **Team-safe damage attribution**: direct-fire damage, shot interception, damage
   metadata, worker-retreat triggers, under-attack notices, and kill credit use the authoritative
-  team relationship snapshot. Same-team entities are not legal direct-fire or overpenetration
+  team relationship snapshot. Same-team entities are not legal direct-fire
   victims, and same-team damage does not update `last_damage_*` metadata or award player/unit kill credit.
   If unattributed damage deals the killing blow, stale prior damage attribution is cleared so an
   older enemy hit cannot receive credit for a friendly-fire kill. Mortar and artillery splash remain
   intentional friendly-fire surfaces: they can damage owned and allied entities in the blast radius,
   but same-team splash stays unattributed.
-- **Shot blocking and overpenetration**: ranged attacks first resolve against the first enemy tank
+- **Shot blocking**: ranged attacks first resolve against the first enemy tank
   body or non-Tank-Trap building footprint intersecting the line from attacker to intended target.
   That blocker takes the shot damage and the intended target behind it is unharmed. Tank Traps are
   targetable buildings and still block vehicle movement, but they do not intercept shots; attacks
-  aimed at a unit behind a Tank Trap continue to that unit. Shots that hit ordinary enemy units
-  still overpenetrate past the primary target, but any enemy tank body or enemy non-Tank-Trap
-  building footprint hit by that carry-through damage absorbs the shot and stops further
-  overpenetration. Allied entities behind the primary target are ignored by overpenetration. Stone
-  blocks target acquisition and primary fire.
+  aimed at a unit behind a Tank Trap continue to that unit. Direct shots damage only the resolved
+  victim, including when that hit is lethal. Stone blocks target acquisition and primary fire.
 - **Tank body and weapon facing**: the snapshot `facing` field is the tank hull/body angle. Tanks
   rotate that body angle at a bounded rate (`TANK_BODY_TURN_RATE_RAD_PER_TICK = 0.035`) on
   movement paths; badly misaligned tanks pivot in place instead of sliding sideways at full speed.

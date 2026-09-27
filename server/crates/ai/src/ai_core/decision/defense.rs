@@ -506,8 +506,8 @@ pub(super) fn stage_home_rifleman_screen(
         .collect();
     let tolerance = EXPANSION_DEFENSIVE_LINE_REISSUE_EPS_TILES * tile_size;
     let tolerance2 = squared(tolerance);
-    // A single dense rank creates ideal overpenetration lanes for Tanks. Keep
-    // the cheap Riflemen as first contact, but stagger them across two ranks.
+    // Keep defensive staging spread across ranks to preserve firing positions.
+    // The cheap Riflemen remain first contact, staggered across two ranks.
     let rank_count = 2usize;
     let mut staged = Vec::new();
     for (index, unit_id) in ready_units.iter().copied().enumerate() {

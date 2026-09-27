@@ -1251,7 +1251,7 @@ export class Renderer {
   /** Draw the resource hover's nearest Resource Depot mining link. @private */
   /**
    * Draw a brief muzzle flash on the attacker plus a yellow tracer line to the
-   * target, then a fainter continuation past the target for overpenetration.
+   * target.
    * Size scales by attacker kind (tank > anti-tank gun > MG > rifleman).
    * @private
    */

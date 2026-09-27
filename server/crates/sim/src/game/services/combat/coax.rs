@@ -107,7 +107,6 @@ pub(super) fn fire_tank_coax_system(
             teams,
             events,
             fog,
-            smokes,
             rng,
             id,
             tid,
@@ -118,7 +117,6 @@ pub(super) fn fire_tank_coax_system(
             snapshot.pos_y,
             tx,
             ty,
-            snapshot.range_px,
             0.0,
             tick,
         );
