@@ -170,9 +170,10 @@ fn hidden_rocket_truck_is_revealed_by_launch_without_hitting_an_enemy() {
         .expect("launching truck should be visible to the enemy without an impact");
     assert!(!view.vision_only);
     assert!(
-        game.snapshot_for(2).visible_tiles
-            [(pos.1 / config::TILE_SIZE as f32) as usize * game.state.map.width as usize
-                + (pos.0 / config::TILE_SIZE as f32) as usize] == 0,
+        game.snapshot_for(2).visible_tiles[(pos.1 / config::TILE_SIZE as f32) as usize
+            * game.state.map.width as usize
+            + (pos.0 / config::TILE_SIZE as f32) as usize]
+            == 0,
         "the reveal must not expose the underlying terrain"
     );
 
