@@ -12,11 +12,17 @@ const LATEST_TYPES = Object.freeze([
 export function createMatchStartupInbox(net, diagnostics = null) {
   const latest = new Map();
   const receipts = [];
+  const replayResourceHistory = [];
   let reportedReceiptDrop = false;
   const handlers = new Map();
 
-  for (const type of [...LATEST_TYPES, S.COMMAND_RECEIPT]) {
+  for (const type of [...LATEST_TYPES, S.COMMAND_RECEIPT, S.REPLAY_RESOURCE_HISTORY]) {
     const handler = (message) => {
+      if (type === S.REPLAY_RESOURCE_HISTORY) {
+        if (message.replace) replayResourceHistory.length = 0;
+        replayResourceHistory.push(message);
+        return;
+      }
       if (type !== S.COMMAND_RECEIPT) {
         latest.set(type, message);
         return;
@@ -44,6 +50,7 @@ export function createMatchStartupInbox(net, diagnostics = null) {
       for (const message of receipts) match.onCommandReceipt(message);
       applyLatest(latest, S.SNAPSHOT, match.onSnapshot);
       applyLatest(latest, S.OBSERVER_ANALYSIS, match.onObserverAnalysis);
+      for (const message of replayResourceHistory) match.onReplayResourceHistory(message);
     },
   };
 }

@@ -113,6 +113,26 @@ import { textWithin } from "./dom_text.mjs";
   );
   history.record({ tick: 60, players: [{ id: 1, resources: { last5s: {} } }] });
   assert(history.samples.length === 0, "resource collection history stays disabled outside 1v1s");
+
+  const replayHistory = new ResourceCollectionHistory();
+  replayHistory.applyReplaySamples({ replace: true, samples: [
+    { tick: 0, steel: 0, oil: 0 },
+    { tick: 30, steel: 12, oil: -4 },
+    { tick: 60, steel: 18, oil: -8 },
+  ] });
+  replayHistory.applyReplaySamples({ replace: false, samples: [{ tick: 90, steel: 20, oil: -8 }] });
+  assert(
+    replayHistory.samples.length === 4 && replayHistory.samples[0].tick === 0
+      && replayHistory.samples[3].tick === 90,
+    "replay resource history backfills the opening timeline and appends live samples",
+  );
+  replayHistory.applyReplaySamples({ replace: true, samples: [
+    { tick: 0, steel: 0, oil: 0 }, { tick: 30, steel: 8, oil: 0 },
+  ] });
+  assert(
+    replayHistory.samples.length === 2 && replayHistory.samples.at(-1).steel === 8,
+    "replay resource history replaces future samples after a backward seek",
+  );
 }
 
 {
@@ -744,6 +764,21 @@ import { textWithin } from "./dom_text.mjs";
       resourceGroups.every((group) => group.querySelectorAll(".replay-resources-name")
         .map((name) => name.textContent).join("|") === "Red|Blue"),
       "resources tab lists every player under each time window",
+    );
+    overlay.applyReplayResourceHistory({ replace: true, samples: [
+      { tick: 0, steel: 0, oil: 0 }, { tick: 30, steel: 12, oil: -4 },
+    ] });
+    assert(
+      findFakes(root, (el) => el.classList.contains("replay-resource-advantage-chart")).length === 2,
+      "Resources charts render immediately when replay history arrives after analysis",
+    );
+    const firstChart = findFakes(root, (el) => el.classList.contains("replay-resource-advantage-chart"))[0];
+    overlay.applyReplayResourceHistory({ replace: true, samples: [
+      { tick: 0, steel: 0, oil: 0 }, { tick: 30, steel: -12, oil: 4 },
+    ] });
+    assert(
+      findFakes(root, (el) => el.classList.contains("replay-resource-advantage-chart"))[0] !== firstChart,
+      "a replay history replacement redraws the chart even when analysis has not changed",
     );
     assert(
       findFakes(root, (el) => el.classList.contains("replay-resources-steel"))

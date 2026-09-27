@@ -260,7 +260,8 @@ const LARGE_FILE_BASELINES = new Map(Object.entries({
   // coordinates authoritative reconcile, pause freezing, and authoritative-only fallback.
   // Perspective decal swaps add only a narrow empty-repair completion callback; hydration and
   // surface ownership remain isolated in the renderer and decal sync modules.
-  "match.js": 50486,
+  // Replay resource history adds one injected diagnostic listener and symmetric teardown.
+  "match.js": 50793,
   // Artillery minimap markers add a compact visual-only firing event.
   "protocol.js": 45366,
   // Protocol cleanup split compact snapshot decoding behind protocol.js.

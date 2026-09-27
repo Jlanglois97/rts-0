@@ -294,6 +294,42 @@ impl RoomTask {
             return;
         }
         self.send_scoped_replay_observer_analysis(session, [watcher_id]);
+        self.send_replay_resource_history(session, [watcher_id], true);
+    }
+
+    fn send_replay_resource_history(
+        &self,
+        session: &ReplaySession,
+        recipient_ids: impl IntoIterator<Item = u32>,
+        replace: bool,
+    ) {
+        if session.artifact.players.len() != 2 {
+            return;
+        }
+        let samples = if replace {
+            session.resource_history.samples.clone()
+        } else {
+            session
+                .resource_history
+                .samples
+                .last()
+                .copied()
+                .into_iter()
+                .collect()
+        };
+        for id in recipient_ids {
+            if let Some(player) = self.players.get(&id) {
+                send_or_log(
+                    &self.room,
+                    id,
+                    &player.msg_tx,
+                    ServerMessage::ReplayResourceHistory {
+                        replace,
+                        samples: samples.clone(),
+                    },
+                );
+            }
+        }
     }
 
     fn broadcast_room_time_state_for(&self, session: &ReplaySession) {
@@ -358,6 +394,9 @@ impl RoomTask {
                         perf.as_mut(),
                     );
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                    if advance.completed {
+                        self.send_replay_resource_history(&session, self.order.clone(), true);
+                    }
                 }
                 Ok(_) => {}
                 Err(err) => {
@@ -375,6 +414,7 @@ impl RoomTask {
                         perf.as_mut(),
                     );
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                    self.send_replay_resource_history(&session, self.order.clone(), true);
                 }
             }
         } else if session.has_remaining_ticks() {
@@ -417,6 +457,14 @@ impl RoomTask {
                 perf.as_mut(),
             );
             self.broadcast_observer_analysis_for(&session, context.projection_policy);
+            if session
+                .resource_history
+                .samples
+                .last()
+                .is_some_and(|sample| sample.tick == session.current_tick())
+            {
+                self.send_replay_resource_history(&session, self.order.clone(), false);
+            }
             self.broadcast_replay_chat(replay_chat);
         } else {
             self.broadcast_room_time_state_for(&session);
@@ -467,10 +515,17 @@ impl RoomTask {
             None => return,
         }
 
+        let mut canceled_seek = false;
         if let Phase::ReplayViewer(session) = &mut self.phase {
+            canceled_seek = session.is_seeking() && speed == ReplaySession::PAUSED_SPEED;
             session.set_speed(player_id, speed);
             let state = session.state();
             self.broadcast(&ServerMessage::RoomTimeState(state));
+        }
+        if canceled_seek {
+            if let Phase::ReplayViewer(session) = &self.phase {
+                self.send_replay_resource_history(session, self.order.clone(), true);
+            }
         }
     }
 
@@ -697,6 +752,9 @@ impl RoomTask {
                 );
                 if send_analysis {
                     self.broadcast_observer_analysis_for(&session, context.projection_policy);
+                }
+                if !session.is_seeking() {
+                    self.send_replay_resource_history(&session, self.order.clone(), true);
                 }
             }
             Err(err) => {

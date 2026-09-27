@@ -1,4 +1,5 @@
 use super::reconstruction::contain_reconstruction;
+use super::replay_resource_history::ReplayResourceHistory;
 use super::replay_validation;
 use super::{normalize_start_team_id, ReplayBranchSeed, MAX_PLAYERS};
 use crate::protocol::{
@@ -60,6 +61,7 @@ pub(super) struct ReplaySession {
     pub(super) next_command: usize,
     next_chat: usize,
     pub(super) keyframes: Vec<ReplayKeyframe>,
+    pub(super) resource_history: ReplayResourceHistory,
     start_tick: u32,
     pub(super) duration_ticks: u32,
     speed: f32,
@@ -143,12 +145,13 @@ impl ReplaySession {
             build_ms = build_start.elapsed().as_millis(),
             "replay session built"
         );
-        Ok(ReplaySession {
+        let mut session = ReplaySession {
             artifact,
             game,
             next_command: 0,
             next_chat: 0,
             keyframes,
+            resource_history: ReplayResourceHistory::default(),
             start_tick,
             duration_ticks,
             speed: Self::DEFAULT_SPEED,
@@ -156,7 +159,9 @@ impl ReplaySession {
             last_seek_at: None,
             next_seek_id: 0,
             active_seek: None,
-        })
+        };
+        session.resource_history.record(&session.game);
+        Ok(session)
     }
 
     pub(super) fn validate_artifact_for_launch(
@@ -470,7 +475,9 @@ impl ReplaySession {
         &mut self,
         perf: Option<&mut rts_sim::perf::TickPerf>,
     ) -> HashMap<u32, Vec<Event>> {
-        self.game.tick_with_perf(perf).into_iter().collect()
+        let events = self.game.tick_with_perf(perf).into_iter().collect();
+        self.resource_history.record(&self.game);
+        events
     }
 
     pub(super) fn take_chat_through_current_tick(&mut self) -> Vec<ChatLogEntry> {
@@ -534,6 +541,7 @@ impl ReplaySession {
 
         *self.game = game;
         self.next_command = next_command;
+        self.resource_history.truncate(keyframe_tick);
         // A seek presents the target state without replaying its earlier transient chat. Position
         // the independent chat cursor at the target immediately; rewinding before an entry still
         // re-arms it when ordinary playback resumes.

@@ -12,6 +12,7 @@ export const S = Object.freeze({
   ROOM_TIME_SEEK_STARTED: "roomTimeSeekStarted",
   LIVE_PAUSE_STATE: "livePauseState",
   OBSERVER_ANALYSIS: "observerAnalysis",
+  REPLAY_RESOURCE_HISTORY: "replayResourceHistory",
   JOIN_REPLAY_PROMPT: "joinReplayPrompt",
   BRANCH_FROM_TICK_CREATED: "branchFromTickCreated",
   BRANCH_STAGING: "branchStaging",

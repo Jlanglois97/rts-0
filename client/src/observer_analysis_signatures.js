@@ -28,7 +28,7 @@ export function renderObserverAnalysisBody(overlay, tab, frameViews, ids, { prof
   } else if (tab.id === ids.units) {
     replace(analysisSig, () => overlay.renderUnits(overlay.analysis));
   } else if (tab.id === ids.resources) {
-    replace(analysisSig, () => overlay.renderResources(overlay.analysis));
+    replace(`${analysisSig}|history:${overlay.resourceCollectionHistory.revision}`, () => overlay.renderResources(overlay.analysis));
   } else if (tab.id === ids.aliveResources) {
     replace(analysisSig, () => overlay.renderAliveResources(overlay.analysis));
   } else if (tab.id === ids.unitsLost) {

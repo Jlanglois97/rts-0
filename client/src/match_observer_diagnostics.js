@@ -5,6 +5,7 @@ export class MatchObserverDiagnostics {
   constructor({
     root,
     capabilities,
+    replayViewer = false,
     observerAnalysisOverlayPreferences = null,
     aiDiagnosticsPanelPreferences = null,
     getEntities = () => [],
@@ -16,6 +17,7 @@ export class MatchObserverDiagnostics {
     this.observerAnalysisOverlay = shouldMountObserverAnalysisOverlay({ capabilities })
       ? new ObserverAnalysisOverlay({
         root,
+        replayViewer,
         preferences: observerAnalysisOverlayPreferences || undefined,
         getEntities,
         getCameraBounds,
@@ -41,6 +43,10 @@ export class MatchObserverDiagnostics {
     this.latestMapAnalysis = payload?.mapAnalysis || null;
     this.observerAnalysisOverlay?.applyObserverAnalysis(payload);
     this.aiDiagnosticsPanel?.applyObserverAnalysis(payload);
+  }
+
+  applyReplayResourceHistory(payload) {
+    this.observerAnalysisOverlay?.applyReplayResourceHistory(payload);
   }
 
   mapOverlayModel() {

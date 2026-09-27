@@ -98,6 +98,11 @@ pub enum ServerMessage {
     LivePauseState(LivePauseState),
     /// Authoritative observer analysis data for replay viewers and live spectators.
     ObserverAnalysis(ObserverAnalysisPayload),
+    /// Reliable replay-only collection history. `replace` resets the chart after join/seek.
+    ReplayResourceHistory {
+        replace: bool,
+        samples: Vec<ReplayResourceSample>,
+    },
     /// The requested room is currently replay playback. The client should confirm before retrying
     /// `join` with `replayOk: true`.
     JoinReplayPrompt {

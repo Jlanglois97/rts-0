@@ -40,6 +40,7 @@ export function shouldMountObserverAnalysisOverlay({ capabilities } = {}) {
 export class ObserverAnalysisOverlay {
   constructor({
     root,
+    replayViewer = false,
     preferences = createObserverAnalysisOverlayPreferences(),
     getEntities = () => [],
     getCameraBounds = () => null,
@@ -60,6 +61,7 @@ export class ObserverAnalysisOverlay {
     this.positioner = null;
     this.analysis = null;
     this.resourceCollectionHistory = new ResourceCollectionHistory();
+    this.replayViewer = replayViewer;
     this.buttonActivationBindings = [];
     this.onKeyDown = (ev) => this.handleKeyDown(ev);
     this.mount();
@@ -266,7 +268,7 @@ export class ObserverAnalysisOverlay {
 
   applyObserverAnalysis(payload) {
     this.analysis = normalizeObserverAnalysisPayload(payload);
-    this.resourceCollectionHistory.record(this.analysis);
+    if (!this.replayViewer) this.resourceCollectionHistory.record(this.analysis);
     if (!this.bodyEl || this.bodyEl.hidden) return;
     const selected = isObserverAnalysisTabId(this.preferences.selectedTab)
       ? this.preferences.selectedTab
@@ -282,6 +284,13 @@ export class ObserverAnalysisOverlay {
     ) {
       const tab = OBSERVER_ANALYSIS_TABS.find((item) => item.id === selected);
       this.renderBody(tab);
+    }
+  }
+
+  applyReplayResourceHistory(payload) {
+    this.resourceCollectionHistory.applyReplaySamples(payload);
+    if (this.bodyEl && !this.bodyEl.hidden && this.preferences.selectedTab === RESOURCES_TAB_ID) {
+      this.renderBody(OBSERVER_ANALYSIS_TABS.find((tab) => tab.id === RESOURCES_TAB_ID));
     }
   }
 

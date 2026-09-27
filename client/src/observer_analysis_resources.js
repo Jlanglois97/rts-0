@@ -18,6 +18,22 @@ export const RESOURCE_ADVANTAGE_MIN_EXTENT = Object.freeze({
 export class ResourceCollectionHistory {
   constructor() {
     this.samples = [];
+    this.revision = 0;
+  }
+
+  applyReplaySamples(payload) {
+    if (!Array.isArray(payload?.samples)) return;
+    if (payload.replace) this.samples = [];
+    for (const entry of payload.samples) {
+      const tick = Number(entry?.tick);
+      if (!Number.isSafeInteger(tick) || tick < 0) continue;
+      const steel = Number(entry?.steel);
+      const oil = Number(entry?.oil);
+      if (!Number.isSafeInteger(steel) || !Number.isSafeInteger(oil)) continue;
+      if (this.samples.length && this.samples.at(-1).tick >= tick) continue;
+      this.samples.push({ tick, steel, oil });
+    }
+    this.revision += 1;
   }
 
   record(analysis) {
