@@ -6,7 +6,7 @@ fn deployed_anti_tank_gun_tracks_target_inside_fixed_arc_before_firing() {
     let at_id = entities
         .spawn_unit(1, EntityKind::AntiTankGun, 100.0, 100.0)
         .expect("anti-tank gun should spawn");
-    let target_angle = config::ANTI_TANK_GUN_FIELD_OF_FIRE_RAD * 0.45;
+    let target_angle = 18.0_f32.to_radians();
     let target_distance = 80.0;
     let enemy_id = entities
         .spawn_unit(

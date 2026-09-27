@@ -135,7 +135,7 @@ fn deployed_anti_tank_gun_auto_acquisition_skips_out_of_arc_priority_target() {
         .spawn_unit(1, EntityKind::AntiTankGun, 100.0, 100.0)
         .expect("anti-tank gun should spawn");
     let out_of_arc_anti_tank_gun = entities
-        .spawn_unit(2, EntityKind::AntiTankGun, 300.0, 166.0)
+        .spawn_unit(2, EntityKind::AntiTankGun, 300.0, 180.0)
         .expect("enemy anti-tank gun should spawn");
     let tank = entities
         .spawn_unit(2, EntityKind::Tank, 310.0, 100.0)
