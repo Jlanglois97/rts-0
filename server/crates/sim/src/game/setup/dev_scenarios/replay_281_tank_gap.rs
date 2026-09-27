@@ -203,7 +203,7 @@ mod tests {
         );
         setup.game.enqueue(setup.player_id, setup.command());
         // Movement remains exact to the recorded replay; HP reflects first-hit MG cone
-        // bursts without changing positions, states, targets, or stuck ticks.
+        // bursts and tank HE splash. Positions, states, targets, and stuck ticks are unchanged.
         let golden: Vec<GoldenTick> =
             serde_json::from_str(include_str!("fixtures/replay_281_ticks_13537_13620.json"))
                 .expect("valid replay-281 golden trace");

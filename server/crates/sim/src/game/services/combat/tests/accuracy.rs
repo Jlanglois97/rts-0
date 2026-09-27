@@ -73,6 +73,12 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
         100.0,
         0,
     );
+    let scout_car_after_splash = entities.get(scout_car).expect("scout car should exist").hp;
+    assert_eq!(
+        scout_car_after_splash,
+        scout_car_hp.saturating_sub(30),
+        "nearby unarmored vehicles take HE splash from the infantry hit"
+    );
     apply_test_damage_with_seed(
         &mut entities,
         &mut events,
@@ -94,7 +100,7 @@ fn tank_cannon_seeded_shot_hits_infantry_and_scout_cars() {
     );
     assert_eq!(
         entities.get(scout_car).expect("scout car should exist").hp,
-        scout_car_hp.saturating_sub(60),
+        scout_car_after_splash.saturating_sub(60),
         "scout cars should continue taking direct tank-shell damage"
     );
 }

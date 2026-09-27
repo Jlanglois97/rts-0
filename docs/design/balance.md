@@ -37,6 +37,16 @@ the same Panzerfaust immediately returns to normal movement and rifle combat whi
 travels, preserving its kind, orders, HP, control-group identity, and trench.
 Tanks also have a live secondary `tank_coax` profile owned by combat rules: 6-tile range, 4 small-arms
 damage, 12-tick cooldown, no Tank armor-facing multiplier, and single-target direct fire.
+Tank HE: cannon shots aimed at infantry (Workers, Golems, Warriors,
+Riflemen, Panzerfausts, and Machine Gunners) retain the normal immediate 60-damage direct hit.
+On a successful resolved infantry hit, every other eligible entity within 1.4 tiles of the
+impact takes 30 base splash damage, including friendlies, using mortar armor scaling but
+**direct** entrenchment protection (50% reduction). There is no inner circle, falloff, double
+hit on the primary, or shell travel delay. Terrain damage reduction applies afterward.
+Vehicle/support-weapon/building-targeted cannon shots and the coax remain unchanged.
+The existing fog-filtered mortar impact effect carries the 1.4-tile radius; no wire shape changes.
+The shared mortar impact animation (including tank HE) lasts 500 ms, including its dust fade.
+
 `client/src/config.js` is the stable public facade for the subset the UI/render/fog needs (costs,
 supply, sight, sizes, colors, and command-card descriptors). Its internal
 `client/src/config/timing.js`, `client/src/config/rules_mirror.js`, and

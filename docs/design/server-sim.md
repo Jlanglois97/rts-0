@@ -1187,8 +1187,13 @@ Incoming direct-fire accuracy is weapon-specific: Anti-Tank Guns may deliberatel
 infantry-sized units, and those intended hits have no intrinsic miss roll but deal only 30% damage.
 Tank cannon shots have no intrinsic miss chance and entrenchment adds no miss
 chance.
-Each direct shot damages only its resolved victim. Enemy tanks and blocking building footprints
-may intercept the shot before the intended target; units behind the resolved victim take no damage.
+Direct shots normally damage only their resolved victim. Enemy tanks and blocking building
+footprints may intercept the shot before the intended target. Tank HE adds
+an exception when a cannon both targets and hits infantry: the primary takes its unchanged direct
+hit, and other eligible entities within 1.4 tiles take 30 base damage with mortar armor scaling,
+friendly fire, and direct (50%) trench protection. The blast is immediate, has no inner circle,
+and emits the existing mortar impact effect only to teams that can see its location.
+Vehicle-targeted and intercepted non-infantry hits do not produce this blast.
 After a direct hit's normal
 weapon, armor, and facing calculations, `entrenchment_combat::reduce_direct_damage` reduces damage
 by 50% for actively entrenched eligible infantry. Area effects call
