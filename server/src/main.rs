@@ -32,11 +32,13 @@ mod interact_lab_artifacts;
 mod main_replay_tests;
 mod map_authoring_analysis;
 mod map_handoffs;
+mod match_replay_http;
 mod player_activity;
 mod player_name;
 mod stress_tests;
 mod wiki;
 
+use match_replay_http::{match_replay_artifact_handler, match_replay_launch_handler};
 use player_activity::is_player_activity;
 use player_name::sanitize_name;
 use rts_server::db::Db;
@@ -264,6 +266,10 @@ async fn main() {
         .route(
             "/api/matches/{id}/replay",
             post(match_replay_launch_handler),
+        )
+        .route(
+            "/api/matches/{id}/replay-artifact",
+            get(match_replay_artifact_handler),
         )
         .nest_service("/maps", ServeDir::new(maps_dir))
         .fallback_service(static_service)
@@ -549,53 +555,6 @@ struct MatchReplayLaunchResponse {
 #[derive(Serialize)]
 struct ApiError {
     error: String,
-}
-
-/// POST /api/matches/{id}/replay — create a spectator replay room for a compatible persisted match.
-async fn match_replay_launch_handler(
-    State(state): State<AppState>,
-    ConnectInfo(remote): ConnectInfo<SocketAddr>,
-    Path(match_id): Path<i64>,
-) -> impl IntoResponse {
-    let Some(db) = state.db.clone() else {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(ApiError {
-                error: "Replay is unavailable because match history is not configured.".to_string(),
-            }),
-        )
-            .into_response();
-    };
-    let include_local = request_allows_local_match_history(&remote);
-    let artifact = match db.replay_artifact_for_match(match_id, include_local).await {
-        Ok(Some(artifact)) => artifact,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ApiError {
-                    error: "Replay is unavailable for this match.".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(err) => {
-            rts_server::log_warn!(%err, match_id, "match replay load failed");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiError {
-                    error: "Replay could not be loaded.".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    if let Some(reason) = replay_incompatibility_reason(&artifact, &state.version) {
-        return (StatusCode::CONFLICT, Json(ApiError { error: reason })).into_response();
-    }
-
-    let room = state.lobby.persisted_replay_room(match_id, artifact).await;
-    Json(MatchReplayLaunchResponse { room }).into_response()
 }
 
 fn request_allows_local_match_history(remote: &SocketAddr) -> bool {
