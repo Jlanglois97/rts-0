@@ -1237,7 +1237,7 @@ mod tests {
                     kind: "build".to_string(),
                     x: 160.0,
                     y: 192.0,
-                    building_kind: Some("barracks".to_string()),
+                    building_kind: Some("depot".to_string()),
                 },
                 OrderPlanMarker {
                     kind: "move".to_string(),
