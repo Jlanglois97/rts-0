@@ -401,6 +401,7 @@ export class Input {
   update(dt) {
     void dt;
     this._flushPointerLockCursor();
+    this._intent()?.updateContextualBuildPreview?.(null);
     if (this.inputRouter?.activePreviewSurface?.()) {
       this._cancelFormationGesture();
       this._intent()?.updateLabToolPreview?.(null);

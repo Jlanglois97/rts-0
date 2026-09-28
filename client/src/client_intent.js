@@ -45,6 +45,8 @@ export class ClientIntent {
     this.attackTargetPreview = null;
     /** @type {null | {resourceId:number, resourceX:number, resourceY:number, anchorId:number, anchorX:number, anchorY:number, inRange:boolean}} */
     this.resourceMiningPreview = null;
+    /** @type {null | {building:string, tileX:number, tileY:number, valid:boolean}} */
+    this.contextualBuildPreview = null;
     /** @type {null | {source?:string, mouseX:number, mouseY:number, guns:Array<object>}} */
     this.antiTankGunSetupPreview = null;
     /** @type {null | {ability:string, source?:string, mouseX?:number, mouseY?:number, carriers:Array<object>, areaOrigins?:Array<object>, rangeOrigins?:Array<object>, pathOrigins?:Array<object>, returnMarkers?:Array<object>, rangePx?:number, hoverInRange:boolean, hoverInsideMinRange?:boolean}} */
@@ -233,6 +235,11 @@ export class ClientIntent {
    */
   updateAttackTargetPreview(preview) {
     this.attackTargetPreview = preview;
+  }
+
+  /** Set the footprint for the build that a normal right-click would issue. */
+  updateContextualBuildPreview(preview) {
+    this.contextualBuildPreview = preview;
   }
 
   /**
@@ -447,6 +454,7 @@ export class ClientIntent {
     this.commandCardMode = null;
     this.attackTargetPreview = null;
     this.resourceMiningPreview = null;
+    this.contextualBuildPreview = null;
     const active = { id, kind };
     if (tool?.payload && typeof tool.payload === "object") active.payload = { ...tool.payload };
     if (typeof tool?.label === "string" && tool.label) active.label = tool.label;

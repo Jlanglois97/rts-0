@@ -2168,6 +2168,16 @@ use real time and are hidden or out of scope for the clean Pixi viewport artifac
 fixed capture of them must extend the injected seam explicitly rather than changing their clocks
 as a side effect.
 
+
+**Contextual Pump Jack hover.**
+
+With an Engineer selected, the ordinary right-click action resolver also supplies a
+`ClientIntent.contextualBuildPreview` when the click would issue Pump Jack construction.
+The feedback view projects it through the existing one-tile placement drawing without arming
+placement mode. Moving off the oil hit area, changing selection, dragging, targeting another
+command, or hovering UI clears or suppresses the hint. The hint identifies the command; the
+server still validates construction when the order arrives.
+
 ### 4.1a Targeted ability mode (Smoke, Mortar Fire, Artillery Fire, Scout Plane)
 
 `input/commands.js` exposes `_onAbilityTarget` and `_refreshAbilityTargetPreview` for world-point
