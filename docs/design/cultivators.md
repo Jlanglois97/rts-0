@@ -14,7 +14,7 @@ Engineers inherit all Worker stats, cost, training time, movement, construction 
 the faction build catalog permits only Nexus. Existing hotkeys and audio are reused.
 
 The standard start contains one completed Nexus, one Engineer, six Steel Mines, one Oil Pumpjack,
-75 Steel and zero Oil, matching Kriegsia's economy without its starting Riflemen. Resource-patch
+25 Steel and zero Oil, matching Kriegsia's economy without its starting Riflemen. Resource-patch
 placement uses the existing loadout logic. No research or combat units are available. Losing the
 Nexus interrupts its economy in exactly the same way as losing a Resource Depot. Expansion has
 the same cost and vulnerability; this slice provides an economy to develop the faction further.

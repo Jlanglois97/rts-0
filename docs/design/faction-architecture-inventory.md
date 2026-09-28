@@ -77,7 +77,7 @@ Ekat, or fixture special cases casually.
 
 Steel, Oil, and Supply are the only player resources in snapshots, compact snapshots, replay
 analysis, match history replay artifacts, and the HUD. Start-map resources are still only Steel and
-Oil nodes. Current Kriegsia starting values are `STARTING_STEEL = 75`, `STARTING_OIL = 0`, and
+Oil nodes. Current Kriegsia starting values are `STARTING_STEEL = 25`, `STARTING_OIL = 0`, and
 `STARTING_WORKERS = 1`, and `STARTING_RIFLEMEN = 4`.
 
 Compact snapshots encode resources as fixed scalar slots: tick, Steel, Oil, Supply used, and Supply

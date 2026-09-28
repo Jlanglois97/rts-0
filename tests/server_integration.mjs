@@ -73,7 +73,7 @@ const { ok } = assertions;
   const snap = await A.waitFor((m) => m.t === "snapshot" && m.entities.length > 0, 3000, "A snapshot");
   ok(A.rawSnapshots.some((m) => m.t === "snapshot" && m.v === COMPACT_SNAPSHOT_VERSION && Array.isArray(m.s) && Array.isArray(m.e)),
      `server sends compact v${COMPACT_SNAPSHOT_VERSION} snapshot frames`);
-  ok(snap.steel === 75, `A starts with 75 steel (${snap.steel})`);
+  ok(snap.steel === 25, `A starts with 25 steel (${snap.steel})`);
   ok(snap.oil === 0, `A starts with 0 oil (${snap.oil})`);
   ok(snap.supplyCap === 300, `A intrinsic supply cap = 300 (${snap.supplyCap})`);
   ok(snap.supplyUsed === 5, `A supply used = 5 (${snap.supplyUsed})`);
@@ -144,10 +144,10 @@ const { ok } = assertions;
     await sleep(500);
     if (A.lastSnapshot) {
       peak = Math.max(peak, A.lastSnapshot.steel);
-      if (A.lastSnapshot.steel > 75) break;
+      if (A.lastSnapshot.steel > 25) break;
     }
   }
-  ok(peak > 75, `EXTRACTORS: starting Steel Mines produced steel (peak=${peak})`);
+  ok(peak > 25, `EXTRACTORS: starting Steel Mines produced steel (peak=${peak})`);
 
   A.command({ c: "train", building: mine.find((e) => e.kind === "resource_depot").id, unit: "worker" });
   await sleep(1200);

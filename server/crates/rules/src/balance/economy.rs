@@ -1,6 +1,6 @@
 //! Economy and resource-node balance constants.
 
-pub const STARTING_STEEL: u32 = 75;
+pub const STARTING_STEEL: u32 = 25;
 pub const STARTING_OIL: u32 = 0;
 pub const STARTING_WORKERS: u32 = 1;
 pub const STARTING_RIFLEMEN: u32 = 4;
