@@ -197,9 +197,9 @@ pub(crate) struct AiMapAnalysis {
     chokes: Vec<AiMapChoke>,
     starts: Vec<AiStartMapping>,
     resource_clusters: Vec<AiResourceCluster>,
-    /// Per start, where the shortest ground route from the nearest enemy start first comes within
-    /// `BASE_ROUTE_ENTRY_TILES` of it: the side an attack on that base actually arrives from.
-    route_entries: Vec<(u32, AiTile)>,
+    /// Per start, the shortest ground route from the nearest enemy start to it, one tile per step,
+    /// starting at the enemy: the way an attack on that base actually arrives.
+    base_routes: Vec<(u32, Vec<AiTile>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -352,23 +352,39 @@ impl AiMapAnalysis {
             chokes,
             starts,
             resource_clusters,
-            route_entries: Vec::new(),
+            base_routes: Vec::new(),
         };
-        analysis.route_entries = analysis.build_route_entries();
+        analysis.base_routes = analysis.build_base_routes();
         analysis
     }
 
     /// Where an attack on `player_id`'s start arrives: the point on the shortest ground route from
     /// the nearest enemy start that first comes within `BASE_ROUTE_ENTRY_TILES` of it.
     pub(crate) fn base_route_entry(&self, player_id: u32) -> Option<(f32, f32)> {
-        self.route_entries
-            .iter()
-            .find(|(id, _)| *id == player_id)
-            .map(|(_, tile)| tile_center_world(*tile, self.tile_size))
+        self.base_route_point(player_id, BASE_ROUTE_ENTRY_TILES)
     }
 
-    fn build_route_entries(&self) -> Vec<(u32, AiTile)> {
-        let radius = BASE_ROUTE_ENTRY_TILES * self.tile_size as f32;
+    /// The first point on the route an attack on `player_id`'s start takes that is within
+    /// `radius_tiles` of that start (straight-line), walking in from the enemy.
+    pub(crate) fn base_route_point(&self, player_id: u32, radius_tiles: f32) -> Option<(f32, f32)> {
+        let (_, route) = self.base_routes.iter().find(|(id, _)| *id == player_id)?;
+        let start = self
+            .starts
+            .iter()
+            .find(|start| start.player_id == player_id)?;
+        let own = tile_center_world(start.start_tile, self.tile_size);
+        let radius = radius_tiles * self.tile_size as f32;
+        route
+            .iter()
+            .map(|tile| tile_center_world(*tile, self.tile_size))
+            .find(|point| {
+                let dx = point.0 - own.0;
+                let dy = point.1 - own.1;
+                dx * dx + dy * dy <= radius * radius
+            })
+    }
+
+    fn build_base_routes(&self) -> Vec<(u32, Vec<AiTile>)> {
         self.starts
             .iter()
             .filter_map(|start| {
@@ -384,17 +400,15 @@ impl AiMapAnalysis {
                     })?;
                 let own = tile_center_world(start.start_tile, self.tile_size);
                 let from = tile_center_world(enemy.start_tile, self.tile_size);
-                let entry = self
+                let tile_size = self.tile_size.max(1) as f32;
+                let route = self
                     .compact_group_route(from, own, 1)
                     .into_iter()
-                    .find(|point| {
-                        let dx = point.0 - own.0;
-                        let dy = point.1 - own.1;
-                        dx * dx + dy * dy <= radius * radius
-                    })?;
-                let tile_size = self.tile_size.max(1) as f32;
-                let tile = AiTile::new((entry.0 / tile_size) as u32, (entry.1 / tile_size) as u32);
-                Some((start.player_id, tile))
+                    .map(|point| {
+                        AiTile::new((point.0 / tile_size) as u32, (point.1 / tile_size) as u32)
+                    })
+                    .collect::<Vec<_>>();
+                (!route.is_empty()).then_some((start.player_id, route))
             })
             .collect()
     }

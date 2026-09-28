@@ -377,6 +377,25 @@ where
     );
     intents.extend(later_base.intents.iter().cloned());
 
+    // Jeff's picket on the enemy's route and warned sealing of the home line. Its units are
+    // reserved from every other system for this decision.
+    if uses_current_jeffs_ai_policy(profile.id) {
+        let route_line = defense::plan_route_line(&mut actions, observation, memory, map_analysis);
+        if !route_line.ordered.is_empty() {
+            intents.push(AiIntent::Move {
+                units: route_line.ordered,
+            });
+        }
+        if !route_line.released.is_empty() {
+            // Released sealers still carry the live adapter's cached staging; assembling clears it
+            // so their normal posts are sent again.
+            intents.push(AiIntent::Assemble {
+                units: route_line.released,
+            });
+        }
+    }
+    let route_line_reserved: BTreeSet<u32> = memory.route_line.reserved().collect();
+
     let economy_plan = economy_manager_output.plan.clone();
     let save_worker_training_for_tech = defer_economy_for_panic;
     let should_train_workers = economy_manager_output.proposes(EconomyProposal::TrainWorker);
@@ -814,6 +833,7 @@ where
     frontal_exclusions.extend(expansion_footprint_blockers.iter().copied());
     // New-base guards stay out of the push until the base is covered.
     frontal_exclusions.extend(memory.later_bases.guards.iter().copied());
+    frontal_exclusions.extend(route_line_reserved.iter().copied());
     let frontal_wave = plan_frontal_wave(
         observation,
         attack_policy,
@@ -883,6 +903,8 @@ where
                     .map(|unit| unit.id),
             );
         }
+        // The picket holds its trench on the route; it never runs back to answer a raid.
+        local_defenders.retain(|id| Some(*id) != memory.route_line.picket());
         local_defenders.sort_unstable();
         local_defenders.dedup();
         if new_jeff_defense {
@@ -963,6 +985,7 @@ where
                             && !local_defense_assigned.contains(&unit.id)
                             && !memory.containment_active_riflemen.contains(&unit.id)
                             && !memory.expansion_security.riflemen.contains(&unit.id)
+                            && !route_line_reserved.contains(&unit.id)
                     })
                     .map(|unit| unit.id)
                     .collect()

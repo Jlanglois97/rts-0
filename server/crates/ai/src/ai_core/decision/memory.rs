@@ -49,6 +49,8 @@ pub(crate) struct AiDecisionMemory {
     pub(super) expansion_security: super::expansion_security::ExpansionSecurity,
     /// Jeff's bases beyond the natural: dry-well unlocks, the site being taken and its guards.
     pub(super) later_bases: super::later_bases::LaterBases,
+    /// Jeff's forward picket and the Riflemen sealing the home line during a raid alert.
+    pub(super) route_line: super::defense::RouteLine,
     profile_id: Option<&'static str>,
     attack_first_size: Option<usize>,
     next_attack_size: usize,
@@ -109,6 +111,7 @@ impl AiDecisionMemory {
         Self {
             expansion_security: Default::default(),
             later_bases: Default::default(),
+            route_line: Default::default(),
             profile_id: Some(profile.id),
             attack_first_size: Some(profile.attack.first_attack_size),
             next_attack_size: profile.attack.first_attack_size,

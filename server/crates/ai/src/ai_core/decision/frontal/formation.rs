@@ -82,6 +82,10 @@ pub(super) fn select_rifle_escorts(
                 && unit.free_for_combat
                 && !defensive_riflemen.contains(&unit.id)
                 && !memory.expansion_security.riflemen.contains(&unit.id)
+                && !memory
+                    .route_line
+                    .reserved()
+                    .any(|reserved| reserved == unit.id)
                 && dist2(unit.x, unit.y, anchor.0, anchor.1) <= radius2
         })
         .map(|unit| unit.id)

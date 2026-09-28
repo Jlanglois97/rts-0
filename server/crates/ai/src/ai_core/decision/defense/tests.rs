@@ -848,12 +848,15 @@ fn a_raid_on_buildings_is_answered_even_below_two_to_one() {
     // Two Riflemen cannot reach twice the value of six, so a probe is left alone.
     let quiet = stationary_defense_commands(&observation, &mut memory, &[41, 42]);
     assert!(attackers(&quiet).is_empty(), "{quiet:?}");
+    assert!(attack_movers(&quiet).is_empty(), "{quiet:?}");
 
-    // Once the raiders start killing buildings, everyone answers.
+    // Once the raiders start killing buildings, both go to the attacked building. They
+    // attack-move there rather than attack a raider, so they cannot chase it out of the base.
     observation.tick += 9;
     observation.owned[0].hp -= 20;
     let raid = stationary_defense_commands(&observation, &mut memory, &[41, 42]);
-    assert_eq!(attackers(&raid), vec![41, 42], "{raid:?}");
+    assert_eq!(attack_movers(&raid), vec![41, 42], "{raid:?}");
+    assert!(attackers(&raid).is_empty(), "{raid:?}");
 }
 
 #[test]
@@ -877,4 +880,123 @@ fn machine_gunners_are_never_sent_out_as_spotters() {
         );
         observation.tick += 9;
     }
+}
+
+fn attack_movers(commands: &[Command]) -> Vec<u32> {
+    let mut units: Vec<u32> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::AttackMove { units, .. } => Some(units.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    units.sort_unstable();
+    units
+}
+
+fn ordered_units(commands: &[Command]) -> BTreeSet<u32> {
+    commands
+        .iter()
+        .flat_map(|command| match command {
+            Command::Move { units, .. }
+            | Command::AttackMove { units, .. }
+            | Command::Attack { units, .. }
+            | Command::HoldPosition { units, .. } => units.clone(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+/// Raid with Riflemen 41 and 42 out of reach and 43 within 5 tiles of a raider. With `dug_in`,
+/// 41 and 42 have stood still long enough after Entrenchment to be in trenches.
+fn raid_with_rifle_in_reach(in_reach: bool, dug_in: bool) -> Vec<Command> {
+    let mut observation = raid_observation(3);
+    let ts = observation.map.tile_size as f32;
+    if in_reach {
+        observation
+            .owned
+            .push(combat_unit(43, EntityKind::Rifleman, 16.5 * ts, 5.5 * ts));
+    }
+    let mut memory = AiDecisionMemory::default();
+    if dug_in {
+        observation.upgrades.push(UpgradeKind::Entrenchment);
+        memory.sync_defender_posture(&observation);
+        observation.tick += rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS;
+        memory.sync_defender_posture(&observation);
+    }
+    let defenders: Vec<u32> = if in_reach {
+        vec![41, 42, 43]
+    } else {
+        vec![41, 42]
+    };
+    stationary_defense_commands(&observation, &mut memory, &defenders);
+    observation.tick += 9;
+    observation.owned[0].hp -= 20;
+    stationary_defense_commands(&observation, &mut memory, &defenders)
+}
+
+#[test]
+fn a_rifleman_already_in_reach_of_a_raid_fights_where_it_stands() {
+    let commands = raid_with_rifle_in_reach(true, false);
+    assert!(!ordered_units(&commands).contains(&43), "{commands:?}");
+    assert_eq!(attack_movers(&commands), vec![41, 42], "{commands:?}");
+}
+
+#[test]
+fn dug_in_riflemen_keep_their_trenches_while_someone_reaches_the_raid() {
+    let commands = raid_with_rifle_in_reach(true, true);
+    let ordered = ordered_units(&commands);
+    assert!(
+        !ordered.contains(&41) && !ordered.contains(&42),
+        "{commands:?}"
+    );
+}
+
+#[test]
+fn dug_in_riflemen_leave_their_trenches_when_nobody_reaches_the_raid() {
+    let commands = raid_with_rifle_in_reach(false, true);
+    assert_eq!(attack_movers(&commands), vec![41, 42], "{commands:?}");
+}
+
+#[test]
+fn a_lone_raider_draws_a_bounded_response_and_leaves_the_trenches_alone() {
+    let mut observation = raid_observation(1);
+    let ts = observation.map.tile_size as f32;
+    for id in 43..=46 {
+        observation.owned.push(combat_unit(
+            id,
+            EntityKind::Rifleman,
+            9.5 * ts,
+            (3.0 + (id - 43) as f32) * ts,
+        ));
+    }
+    let mut memory = AiDecisionMemory::default();
+    let defenders = [41, 42, 43, 44, 45, 46];
+    stationary_defense_commands(&observation, &mut memory, &defenders);
+    observation.tick += 9;
+    observation.owned[0].hp -= 20;
+    let commands = stationary_defense_commands(&observation, &mut memory, &defenders);
+    assert_eq!(
+        attack_movers(&commands).len(),
+        4,
+        "at least four: {commands:?}"
+    );
+
+    // Dug in and out of reach: a single raider never empties the trenches.
+    let commands = raid_with_single_raider_and_trenches();
+    assert!(attack_movers(&commands).is_empty(), "{commands:?}");
+}
+
+fn raid_with_single_raider_and_trenches() -> Vec<Command> {
+    let mut observation = raid_observation(1);
+    let mut memory = AiDecisionMemory::default();
+    observation.upgrades.push(UpgradeKind::Entrenchment);
+    memory.sync_defender_posture(&observation);
+    observation.tick += rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS;
+    memory.sync_defender_posture(&observation);
+    stationary_defense_commands(&observation, &mut memory, &[41, 42]);
+    observation.tick += 9;
+    observation.owned[0].hp -= 20;
+    stationary_defense_commands(&observation, &mut memory, &[41, 42])
 }
