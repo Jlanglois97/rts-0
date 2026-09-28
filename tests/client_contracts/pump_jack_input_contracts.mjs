@@ -4,6 +4,10 @@ import { Input } from "../../client/src/input/index.js";
 import { buildSelectionScene } from "../../client/src/input/selection_projection.js";
 import { KIND } from "../../client/src/protocol.js";
 
+import { ClientIntent } from "../../client/src/client_intent.js";
+import { buildRendererFeedbackView } from "../../client/src/renderer/feedback_view_model.js";
+import { STATS } from "../../client/src/config.js";
+
 const worker = { id: 1, owner: 1, kind: KIND.WORKER, x: 64, y: 64 };
 const friendlyTank = { id: 2, owner: 2, kind: KIND.TANK, x: 112, y: 112, facing: 0 };
 const oil = { id: 3, owner: 0, kind: KIND.OIL, x: 112, y: 112, remaining: 1000 };
@@ -19,6 +23,7 @@ input.state = {
   isEnemyOwner: () => false,
   addCommandFeedback() {},
 };
+input.clientIntent = new ClientIntent();
 input.commandInteraction = { issueCommand(command) { commands.push(command); } };
 input._groundAtScreen = (x, y) => ({ x, y });
 const projection = createOrthographicProjectionSnapshot({
@@ -43,6 +48,9 @@ assert(
   "Pump Jack friendly-unit fixture must hit the tank hull outside the oil proxy",
 );
 
+input.mouse = friendlyTankHullPoint;
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "nearby move has no build footprint");
 input._onRightClick(friendlyTankHullPoint);
 assert(
   commands.length === 1 &&
@@ -56,6 +64,43 @@ input._onRightClick({ x: oil.x, y: oil.y });
 assert(commands.length === 1 && commands[0].c === "build" &&
   commands[0].building === KIND.PUMP_JACK && commands[0].tileX === 3 && commands[0].tileY === 3,
   "Engineer right-click on live oil builds a centered Pump Jack");
+
+input.mouse = { x: oil.x, y: oil.y };
+input._refreshAttackTargetPreview();
+const hover = input.clientIntent.contextualBuildPreview;
+assert(hover?.building === commands[0].building && hover.tileX === commands[0].tileX &&
+  hover.tileY === commands[0].tileY && hover.valid, "hover footprint matches the actual build command");
+assert(input.clientIntent.placement === null, "hover does not arm left-click placement");
+assert(STATS[hover.building].footW === 1 && STATS[hover.building].footH === 1,
+  "contextual Pump Jack footprint is one by one tile");
+const feedback = (options = {}) => buildRendererFeedbackView(input.state,
+  { clientIntent: input.clientIntent, ...options });
+assert(feedback().placement === hover, "renderer receives the contextual footprint");
+assert(feedback({ previewSurface: "minimap" }).placement === null, "UI hover hides the footprint");
+input.clientIntent.beginCommandTarget("move");
+assert(feedback().placement === null, "explicit move mode hides the contextual footprint immediately");
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "explicit command clears build hover");
+input.clientIntent.endCommandTarget();
+input._refreshAttackTargetPreview();
+input._drag = {};
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "selection drag clears build hover");
+input._drag = null;
+input._refreshAttackTargetPreview();
+input.mouse = friendlyTankHullPoint;
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "moving off oil clears a previous footprint");
+input.mouse = { x: oil.x, y: oil.y };
+input.state.selectedEntities = () => [friendlyTank];
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "selection without an Engineer has no footprint");
+input.state.selectedEntities = () => [worker];
+oil.remaining = 0;
+input.selectionScene = buildSelectionScene({ entities: [worker, friendlyTank, oil], tileSize: map.tileSize, projection });
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null, "depleted oil has no footprint");
+oil.remaining = 1000;
 
 const attackingTank = { id: 60, owner: 1, kind: KIND.TANK, x: 64, y: 64, facing: 0 };
 const enemyPumpJack = { id: 61, owner: 3, kind: KIND.PUMP_JACK, x: oil.x, y: oil.y, hp: 100, maxHp: 100 };
@@ -79,6 +124,12 @@ assert(
   commands.length === 1 && commands[0].c === "attack" && commands[0].target === enemyPumpJack.id,
   "enemy Pump Jack accepts a contextual attack within one-sixth tile beyond its footprint",
 );
+
+input.state.selectedEntities = () => [worker];
+input._refreshAttackTargetPreview();
+assert(input.clientIntent.contextualBuildPreview === null && input.clientIntent.attackTargetPreview,
+  "enemy extractor attack takes precedence over Engineer build hover");
+input.state.selectedEntities = () => [attackingTank];
 
 const steel = { id: 62, owner: 0, kind: KIND.STEEL, x: 176, y: 176, remaining: 1000 };
 const enemySteelMine = { id: 63, owner: 3, kind: KIND.STEEL_MINE, x: steel.x, y: steel.y, hp: 100, maxHp: 100 };

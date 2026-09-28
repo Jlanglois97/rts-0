@@ -836,6 +836,7 @@ export function _refreshResourceMiningPreview() {
 
 export function _refreshAttackTargetPreview() {
   const intent = clientIntent(this);
+  intent?.updateContextualBuildPreview?.(null);
   if (
     !intent ||
     this._drag ||
@@ -862,9 +863,18 @@ export function _refreshAttackTargetPreview() {
     );
     return;
   }
-  intent.updateAttackTargetPreview(
-    attackTargetPreviewForRightClickAction(normalRightClickAction(this, this.mouse)),
-  );
+  const action = normalRightClickAction(this, this.mouse);
+  intent.updateAttackTargetPreview(attackTargetPreviewForRightClickAction(action));
+  // Share the command decision, including resource picking and attack priority.
+  // This is a hover hint only; it must not arm left-click placement mode.
+  if (action?.kind === "build" && action.building === KIND.PUMP_JACK) {
+    intent.updateContextualBuildPreview?.({
+      building: action.building,
+      tileX: action.tileX,
+      tileY: action.tileY,
+      valid: true,
+    });
+  }
 }
 
 function clearObstaclePreviewEntities(input) {

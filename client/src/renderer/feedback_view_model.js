@@ -59,7 +59,10 @@ export function buildRendererFeedbackView(
     feedbackOwnerIds: controlOwner.feedbackOwnerIds,
     issueAsOwnerId: controlOwner.issueAsOwnerId,
     map: state?.map || null,
-    placement: previewSurface ? null : intent?.placement || null,
+    placement: previewSurface ? null : intent?.placement || (
+      !intent?.commandTarget && !intent?.activeLabTool && !intent?.formationMovePreview
+        ? intent?.contextualBuildPreview || null : null
+    ),
     formationMovePreview: previewSurface ? null : intent?.formationMovePreview || null,
     labToolPreview: previewSurface ? null : intent?.labToolPreview || null,
     labRuler: labRulerView(intent?.labRuler, !!previewSurface),
