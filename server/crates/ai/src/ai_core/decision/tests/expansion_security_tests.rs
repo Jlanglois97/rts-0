@@ -809,7 +809,7 @@ fn surplus_tank_moves_forward_while_reserved_tank_stays_home() {
         .push(combat_at(52, EntityKind::Tank, 11.0 * ts, 10.0 * ts));
     let target = expansion_security::tank_staging_center(&obs, None).unwrap();
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_wave_launched = true;
+    memory.containment.wave_launched = true;
     memory.home_defensive_tank = Some(51);
     memory.home_defensive_tank_assigned_once = true;
 

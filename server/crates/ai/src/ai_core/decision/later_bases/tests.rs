@@ -219,7 +219,7 @@ fn guards_are_the_nearest_tanks_outside_the_push_and_home_defense() {
     ];
     let mut memory = AiDecisionMemory::default();
     memory.home_defensive_tank = Some(1);
-    memory.containment_active_tanks = BTreeSet::from([2]);
+    memory.containment.active_tanks = BTreeSet::from([2]);
     select_guards(&observation, &mut memory, (40.0 * TS, 40.0 * TS));
     assert_eq!(memory.later_bases.guards, BTreeSet::from([3, 5]));
 }

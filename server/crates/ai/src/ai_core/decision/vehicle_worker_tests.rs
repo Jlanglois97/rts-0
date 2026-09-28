@@ -476,7 +476,7 @@ fn jeff_does_not_research_retired_anti_tank_unlock() {
     let width = observation.map.width;
     let height = observation.map.height;
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_wave_launched = true;
+    memory.containment.wave_launched = true;
     let decision = decide_profile_without_static_map_for_tests(
         &observation,
         &JEFFS_AI,
@@ -503,8 +503,8 @@ fn jeff_does_not_research_retired_anti_tank_unlock() {
 #[test]
 fn jeff_attack_phase_switch_preserves_home_defense_assignment() {
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_wave_launched = true;
-    memory.containment_opening_tanks.extend([101, 102]);
+    memory.containment.wave_launched = true;
+    memory.containment.opening_tanks.extend([101, 102]);
     memory.home_defensive_tank = Some(103);
     memory.home_defensive_tank_assigned_once = true;
     memory.enemy_natural_resource_depot = Some(201);
@@ -513,8 +513,8 @@ fn jeff_attack_phase_switch_preserves_home_defense_assignment() {
     transitioned_attack.first_attack_size += 1;
     memory.desired_attack_size_for(&JEFFS_AI, transitioned_attack, 9_000);
 
-    assert!(memory.containment_wave_launched);
-    assert_eq!(memory.containment_opening_tanks, BTreeSet::from([101, 102]));
+    assert!(memory.containment.wave_launched);
+    assert_eq!(memory.containment.opening_tanks, BTreeSet::from([101, 102]));
     assert_eq!(memory.home_defensive_tank, Some(103));
     assert!(memory.home_defensive_tank_assigned_once);
     assert_eq!(memory.enemy_natural_resource_depot, Some(201));
@@ -712,11 +712,11 @@ fn jeff_does_not_queue_riflemen_after_a_second_barracks_spends_to_the_reserve() 
 #[test]
 fn jeff_enters_larger_repush_recovery_after_an_active_tank_is_lost() {
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_wave_launched = true;
-    memory.containment_opening_tanks = BTreeSet::from([101, 102]);
-    memory.containment_active_tanks = BTreeSet::from([101, 102]);
-    memory.containment_active_scout = Some(203);
-    memory.containment_active_riflemen = BTreeSet::from([301, 302]);
+    memory.containment.wave_launched = true;
+    memory.containment.opening_tanks = BTreeSet::from([101, 102]);
+    memory.containment.active_tanks = BTreeSet::from([101, 102]);
+    memory.containment.active_scout = Some(203);
+    memory.containment.active_riflemen = BTreeSet::from([301, 302]);
     memory.home_defensive_tank = Some(200);
     let observation = observation(
         AiEconomy {
@@ -732,10 +732,10 @@ fn jeff_enters_larger_repush_recovery_after_an_active_tank_is_lost() {
     );
 
     sync_containment_recovery(&observation, &JEFFS_AI, &mut memory);
-    assert!(memory.containment_recovery_active);
-    assert_eq!(memory.containment_repush_count, 1);
-    assert!(memory.containment_active_tanks.is_empty());
-    assert!(memory.containment_active_riflemen.is_empty());
+    assert!(memory.containment.recovery_active);
+    assert_eq!(memory.containment.repush_count, 1);
+    assert!(memory.containment.active_tanks.is_empty());
+    assert!(memory.containment.active_riflemen.is_empty());
     assert_eq!(
         JEFFS_AI
             .expansion_containment

@@ -367,8 +367,8 @@ fn smoke_is_applied_to_healthy_rear_tank_and_focus_is_preserved() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -387,11 +387,11 @@ fn smoke_is_applied_to_healthy_rear_tank_and_focus_is_preserved() {
         &[],
         100,
         13.5,
-        memory.containment_smoke_target,
+        memory.containment.smoke_target,
     );
     let commands = actions.into_commands();
 
-    assert_eq!(memory.containment_smoke_target, Some(101));
+    assert_eq!(memory.containment.smoke_target, Some(101));
     assert!(matches!(
         commands.first(),
         Some(Command::UseAbility { units, ability: AbilityKind::Smoke, x: Some(_), y: Some(_), .. }) if units == &[4]
@@ -413,8 +413,8 @@ fn rear_focus_switches_the_smoke_candidate_to_the_forward_tank() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(101);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(101);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 101;
 
     let _ = maybe_issue_isolation_smoke(
@@ -427,7 +427,7 @@ fn rear_focus_switches_the_smoke_candidate_to_the_forward_tank() {
         true,
     );
 
-    assert_eq!(memory.containment_smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_target, Some(100));
 }
 
 #[test]
@@ -445,8 +445,8 @@ fn stale_split_tank_orders_do_not_suppress_a_coordinated_smoke_volley() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -459,7 +459,7 @@ fn stale_split_tank_orders_do_not_suppress_a_coordinated_smoke_volley() {
         true,
     );
 
-    assert_eq!(memory.containment_smoke_target, Some(101));
+    assert_eq!(memory.containment.smoke_target, Some(101));
     assert!(matches!(
         actions.into_commands().first(),
         Some(Command::UseAbility {
@@ -545,8 +545,8 @@ fn lone_local_tank_is_smoked_only_when_an_exposed_target_can_be_engaged() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -560,8 +560,8 @@ fn lone_local_tank_is_smoked_only_when_an_exposed_target_can_be_engaged() {
     );
 
     assert_eq!(focus, 102);
-    assert_eq!(memory.containment_smoke_target, Some(100));
-    assert_eq!(memory.containment_smoke_focus_target, Some(102));
+    assert_eq!(memory.containment.smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_focus_target, Some(102));
     assert!(matches!(
         actions.into_commands().first(),
         Some(Command::UseAbility {
@@ -580,8 +580,8 @@ fn lone_local_tank_is_suppressed_while_grouped_tanks_hold_fire() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -600,12 +600,12 @@ fn lone_local_tank_is_suppressed_while_grouped_tanks_hold_fire() {
         &[],
         focus,
         13.5,
-        memory.containment_smoke_target,
+        memory.containment.smoke_target,
     );
     let commands = actions.into_commands();
 
-    assert_eq!(memory.containment_smoke_target, Some(100));
-    assert_eq!(memory.containment_smoke_focus_target, None);
+    assert_eq!(memory.containment.smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_focus_target, None);
     assert!(matches!(
         commands.first(),
         Some(Command::UseAbility {
@@ -636,8 +636,8 @@ fn distant_second_tank_requests_a_bounded_scout_launch_position() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 100;
 
     let launch = maybe_issue_isolation_smoke(
@@ -777,7 +777,7 @@ fn a_tank_the_push_already_holds_is_not_held_again() {
     let observation = held_tank_observation(AiEntityState::Idle);
     let facts = AiFacts::from_observation(&observation);
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_held_tanks.insert(1);
+    memory.containment.held_tanks.insert(1);
 
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     hold_containment_tanks(&mut actions, &observation, &memory, [1, 3]);
@@ -791,7 +791,7 @@ fn a_held_tank_seen_moving_or_attacking_is_held_again() {
         let observation = held_tank_observation(state);
         let facts = AiFacts::from_observation(&observation);
         let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-        memory.containment_held_tanks.insert(1);
+        memory.containment.held_tanks.insert(1);
 
         let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
         hold_containment_tanks(&mut actions, &observation, &memory, [1]);
@@ -810,7 +810,7 @@ fn any_order_other_than_hold_releases_a_held_tank() {
     actions::hold_position_units(&mut actions, [1, 3]);
     actions::attack_units(&mut actions, [3], 100);
     note_containment_holds(&actions, &mut memory, start);
-    assert_eq!(memory.containment_held_tanks, BTreeSet::from([1]));
+    assert_eq!(memory.containment.held_tanks, BTreeSet::from([1]));
 }
 
 #[test]
@@ -933,8 +933,8 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
         !matches!(intent, Some(AiIntent::Attack { .. })),
         "{intent:?}"
     );
-    assert!(memory.containment_active_tanks.is_empty());
-    assert!(!memory.containment_wave_launched);
+    assert!(memory.containment.active_tanks.is_empty());
+    assert!(!memory.containment.wave_launched);
 
     // Two Tanks stay home, so eight ready Tanks push six. With four enemy Tanks seen recently the
     // push needs a three-Tank lead, seven, so nine must be ready.
@@ -961,7 +961,7 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
             None,
             &mut memory,
         );
-        (intent, memory.containment_active_tanks.len())
+        (intent, memory.containment.active_tanks.len())
     };
     let (intent, pushing) = form(8, 0);
     assert!(
@@ -1045,7 +1045,7 @@ fn tanks_join_the_push_until_it_leaves_and_not_after() {
         };
     issue(&observation, &plan, &mut memory);
     assert_eq!(
-        memory.containment_active_tanks.len(),
+        memory.containment.active_tanks.len(),
         18,
         "20 ready, 2 stay home"
     );
@@ -1062,16 +1062,16 @@ fn tanks_join_the_push_until_it_leaves_and_not_after() {
     };
     add_tanks(&mut observation, &mut plan, [950, 951, 952]);
     issue(&observation, &plan, &mut memory);
-    assert_eq!(memory.containment_active_tanks.len(), 21);
+    assert_eq!(memory.containment.active_tanks.len(), 21);
 
     // Once it has left, Tanks built afterwards stay home.
-    memory.containment_wave_launched = true;
-    memory.containment_recovery_active = false;
-    memory.containment_launch_tanks = 21;
-    let left_with = memory.containment_active_tanks.clone();
+    memory.containment.wave_launched = true;
+    memory.containment.recovery_active = false;
+    memory.containment.launch_tanks = 21;
+    let left_with = memory.containment.active_tanks.clone();
     add_tanks(&mut observation, &mut plan, [960, 961, 962]);
     issue(&observation, &plan, &mut memory);
-    assert_eq!(memory.containment_active_tanks, left_with);
+    assert_eq!(memory.containment.active_tanks, left_with);
 }
 
 #[test]
@@ -1094,12 +1094,12 @@ fn a_large_push_carries_on_until_half_of_it_is_lost() {
         owned.push(scout.clone());
         let observation = regroup_test_observation(owned);
         let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-        memory.containment_wave_launched = true;
-        memory.containment_active_tanks = (1..=10).collect();
-        memory.containment_active_scout = Some(99);
-        memory.containment_launch_tanks = 10;
+        memory.containment.wave_launched = true;
+        memory.containment.active_tanks = (1..=10).collect();
+        memory.containment.active_scout = Some(99);
+        memory.containment.launch_tanks = 10;
         sync_containment_recovery(&observation, &JEFFS_AI, &mut memory);
-        !memory.containment_recovery_active
+        !memory.containment.recovery_active
     };
     assert!(pushed(10));
     assert!(pushed(6), "four of ten lost");

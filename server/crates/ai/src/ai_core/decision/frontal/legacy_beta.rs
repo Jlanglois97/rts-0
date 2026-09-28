@@ -99,25 +99,26 @@ pub(super) fn issue_expansion_containment_wave(
     scouts.sort_unstable();
     let owned: BTreeSet<u32> = observation.owned.iter().map(|unit| unit.id).collect();
     memory
-        .containment_active_riflemen
+        .containment
+        .active_riflemen
         .retain(|rifleman| owned.contains(rifleman));
-    if !memory.containment_wave_launched {
+    if !memory.containment.wave_launched {
         if tanks.len() < policy.minimum_tanks_to_continue {
             return None;
         }
         tanks.truncate(policy.minimum_tanks_to_continue);
         scouts.truncate(1);
-        memory.containment_opening_tanks = tanks.iter().copied().collect();
-        memory.containment_active_tanks = tanks.iter().copied().collect();
-        memory.containment_active_scout = scouts.first().copied();
+        memory.containment.opening_tanks = tanks.iter().copied().collect();
+        memory.containment.active_tanks = tanks.iter().copied().collect();
+        memory.containment.active_scout = scouts.first().copied();
         let escort_anchor = group_center(observation, &tanks).unwrap_or(own_base);
-        memory.containment_active_riflemen =
+        memory.containment.active_riflemen =
             select_beta_rifle_escorts(observation, memory, escort_anchor)
                 .into_iter()
                 .collect();
-        memory.containment_wave_launched = true;
-    } else if memory.containment_recovery_active {
-        let required = containment_repush_tank_count(policy, memory.containment_repush_count);
+        memory.containment.wave_launched = true;
+    } else if memory.containment.recovery_active {
+        let required = containment_repush_tank_count(policy, memory.containment.repush_count);
         let forward_rally = containment_regroup_point(own_base, enemy_base, observation.map)?;
         select_nearest_units(observation, &mut tanks, forward_rally, required);
         select_nearest_units(observation, &mut scouts, forward_rally, 1);
@@ -172,17 +173,17 @@ pub(super) fn issue_expansion_containment_wave(
             cohort.dedup();
             return Some(AiIntent::Stage { units: cohort });
         }
-        memory.containment_active_tanks = tanks.iter().copied().collect();
-        memory.containment_active_scout = scouts.first().copied();
-        memory.containment_active_riflemen =
+        memory.containment.active_tanks = tanks.iter().copied().collect();
+        memory.containment.active_scout = scouts.first().copied();
+        memory.containment.active_riflemen =
             select_beta_rifle_escorts(observation, memory, regroup_point)
                 .into_iter()
                 .collect();
-        memory.containment_recovery_active = false;
-        memory.containment_stationary_since = None;
+        memory.containment.recovery_active = false;
+        memory.containment.stationary_since = None;
     } else {
-        tanks.retain(|tank| memory.containment_active_tanks.contains(tank));
-        scouts.retain(|scout| Some(*scout) == memory.containment_active_scout);
+        tanks.retain(|tank| memory.containment.active_tanks.contains(tank));
+        scouts.retain(|scout| Some(*scout) == memory.containment.active_scout);
         if tanks.is_empty() || scouts.is_empty() {
             return None;
         }
@@ -259,11 +260,12 @@ pub(super) fn issue_expansion_containment_wave(
     let should_stop = tanks_in_position || contact_target.is_some();
     let stationary_range_ready = if should_stop {
         let since = memory
-            .containment_stationary_since
+            .containment
+            .stationary_since
             .get_or_insert(observation.tick);
         observation.tick.saturating_sub(*since) >= config::TICK_HZ * 3
     } else {
-        memory.containment_stationary_since = None;
+        memory.containment.stationary_since = None;
         false
     };
 
@@ -289,7 +291,7 @@ pub(super) fn issue_expansion_containment_wave(
             } else if endgame_search_active {
                 memory.endgame_search_waypoint =
                     (memory.endgame_search_waypoint + 1) % ENDGAME_SEARCH_OFFSETS.len();
-                memory.containment_stationary_since = None;
+                memory.containment.stationary_since = None;
                 let next = endgame_search_point(
                     own_base,
                     enemy_base,
@@ -332,7 +334,7 @@ pub(super) fn issue_expansion_containment_wave(
         scout_point.1,
     );
 
-    let riflemen: Vec<u32> = memory.containment_active_riflemen.iter().copied().collect();
+    let riflemen: Vec<u32> = memory.containment.active_riflemen.iter().copied().collect();
     if !riflemen.is_empty() {
         let screen_points =
             rifle_screen_points(tank_anchor, objective, observation.map, riflemen.len());

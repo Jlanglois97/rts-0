@@ -738,7 +738,7 @@ where
     if profile
         .home_anti_tank
         .is_some_and(|policy| policy.target_guns > 0)
-        && memory.containment_wave_launched
+        && memory.containment.wave_launched
         && !effective_unit_priorities.contains(&EntityKind::AntiTankGun)
     {
         effective_unit_priorities.push(EntityKind::AntiTankGun);
@@ -865,15 +865,16 @@ where
     // home, and the push keeps its own orders meanwhile. It used to lose all but two Tanks to
     // home defense within moments of leaving.
     let push_units: BTreeSet<u32> = if uses_current_jeffs_ai_policy(profile.id)
-        && memory.containment_wave_launched
-        && !memory.containment_recovery_active
+        && memory.containment.wave_launched
+        && !memory.containment.recovery_active
     {
         memory
-            .containment_active_tanks
+            .containment
+            .active_tanks
             .iter()
             .copied()
-            .chain(memory.containment_active_scout)
-            .chain(memory.containment_active_riflemen.iter().copied())
+            .chain(memory.containment.active_scout)
+            .chain(memory.containment.active_riflemen.iter().copied())
             .collect()
     } else {
         BTreeSet::new()
@@ -1042,7 +1043,7 @@ where
                             && unit.is_complete
                             && unit.hp > 0
                             && !local_defense_assigned.contains(&unit.id)
-                            && !memory.containment_active_riflemen.contains(&unit.id)
+                            && !memory.containment.active_riflemen.contains(&unit.id)
                             && !memory.expansion_security.riflemen.contains(&unit.id)
                             && !route_line_reserved.contains(&unit.id)
                     })
@@ -1062,8 +1063,8 @@ where
                 .filter(|entity| {
                     entity.is_complete
                         && matches!(entity.kind, EntityKind::Tank | EntityKind::ScoutCar)
-                        && !memory.containment_active_tanks.contains(&entity.id)
-                        && memory.containment_active_scout != Some(entity.id)
+                        && !memory.containment.active_tanks.contains(&entity.id)
+                        && memory.containment.active_scout != Some(entity.id)
                 })
                 .min_by(|left, right| {
                     geometry::dist2(left.x, left.y, own_base.0, own_base.1)
@@ -1241,7 +1242,7 @@ where
             && (!frontal_wave.ready_units.is_empty() || containment_needs_control)
         {
             if let Some(enemy_base) = facts.nearest_public_enemy_base {
-                let containment_was_launched = memory.containment_wave_launched;
+                let containment_was_launched = memory.containment.wave_launched;
                 let wave_plan = if push_only {
                     frontal_wave.push_only()
                 } else {

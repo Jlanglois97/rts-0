@@ -338,7 +338,8 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         }
     }
     memory
-        .containment_active_riflemen
+        .containment
+        .active_riflemen
         .retain(|id| !memory.expansion_security.riflemen.contains(id));
 }
 
@@ -593,7 +594,7 @@ pub(super) fn surplus_tank_for_forward_base(
     observation: &AiObservation,
     memory: &AiDecisionMemory,
 ) -> Option<u32> {
-    if memory.containment_recovery_active {
+    if memory.containment.recovery_active {
         return None;
     }
     observation
@@ -605,8 +606,8 @@ pub(super) fn surplus_tank_for_forward_base(
                 && unit.hp > 0
                 && unit.free_for_combat
                 && Some(unit.id) != memory.home_defensive_tank
-                && !memory.containment_active_tanks.contains(&unit.id)
-                && !memory.containment_opening_tanks.contains(&unit.id)
+                && !memory.containment.active_tanks.contains(&unit.id)
+                && !memory.containment.opening_tanks.contains(&unit.id)
                 && !memory.later_bases.guards.contains(&unit.id)
         })
         .min_by_key(|unit| unit.id)

@@ -300,23 +300,25 @@ pub(super) fn issue_containment_formation(
 
 pub(super) fn formation_command_due(memory: &AiDecisionMemory, tick: u32) -> bool {
     memory
-        .containment_last_formation_command_tick
+        .containment
+        .last_formation_command_tick
         .map(|last| tick.saturating_sub(last) >= CONTAINMENT_FORMATION_REISSUE_TICKS)
         .unwrap_or(true)
 }
 
 pub(super) fn note_formation_command(memory: &mut AiDecisionMemory, tick: u32) {
-    memory.containment_last_formation_command_tick = Some(tick);
+    memory.containment.last_formation_command_tick = Some(tick);
 }
 
 pub(super) fn store_waypoint(memory: &mut AiDecisionMemory, point: (f32, f32), tick: u32) {
-    memory.containment_march_waypoint = Some((point.0.round() as i32, point.1.round() as i32));
-    memory.containment_waypoint_started_tick = Some(tick);
+    memory.containment.march_waypoint = Some((point.0.round() as i32, point.1.round() as i32));
+    memory.containment.waypoint_started_tick = Some(tick);
 }
 
 pub(super) fn stored_waypoint(memory: &AiDecisionMemory) -> Option<(f32, f32)> {
     memory
-        .containment_march_waypoint
+        .containment
+        .march_waypoint
         .map(|(x, y)| (x as f32, y as f32))
 }
 
@@ -351,11 +353,11 @@ pub(super) fn nearby_rifle_escort_count(
 }
 
 pub(super) fn reset_containment_route(memory: &mut AiDecisionMemory) {
-    memory.containment_march_waypoint = None;
-    memory.containment_route.clear();
-    memory.containment_route_index = 0;
-    memory.containment_route_objective = None;
-    memory.containment_waypoint_started_tick = None;
+    memory.containment.march_waypoint = None;
+    memory.containment.route.clear();
+    memory.containment.route_index = 0;
+    memory.containment.route_objective = None;
+    memory.containment.waypoint_started_tick = None;
 }
 
 pub(super) fn next_containment_route_waypoint(
@@ -366,8 +368,8 @@ pub(super) fn next_containment_route_waypoint(
     map: AiMapSummary,
 ) -> (f32, f32) {
     let objective = (destination.0.round() as i32, destination.1.round() as i32);
-    if memory.containment_route_objective != Some(objective)
-        || memory.containment_route_index >= memory.containment_route.len()
+    if memory.containment.route_objective != Some(objective)
+        || memory.containment.route_index >= memory.containment.route.len()
     {
         let route = analysis
             .map(|analysis| {
@@ -378,20 +380,21 @@ pub(super) fn next_containment_route_waypoint(
                 )
             })
             .unwrap_or_else(|| vec![short_march_waypoint(from, destination, map)]);
-        memory.containment_route = route
+        memory.containment.route = route
             .into_iter()
             .map(|point| (point.0.round() as i32, point.1.round() as i32))
             .collect();
-        memory.containment_route_index = 0;
-        memory.containment_route_objective = Some(objective);
+        memory.containment.route_index = 0;
+        memory.containment.route_objective = Some(objective);
     }
     let point = memory
-        .containment_route
-        .get(memory.containment_route_index)
+        .containment
+        .route
+        .get(memory.containment.route_index)
         .copied()
         .map(|(x, y)| (x as f32, y as f32))
         .unwrap_or(destination);
-    memory.containment_route_index = memory.containment_route_index.saturating_add(1);
+    memory.containment.route_index = memory.containment.route_index.saturating_add(1);
     point
 }
 
@@ -428,19 +431,20 @@ pub(super) fn issue_containment_recall(
     if !target_exists {
         return None;
     }
-    if !memory.containment_recall_active {
-        memory.containment_recall_active = true;
-        memory.containment_last_formation_command_tick = None;
+    if !memory.containment.recall_active {
+        memory.containment.recall_active = true;
+        memory.containment.last_formation_command_tick = None;
         reset_containment_route(memory);
     }
     let owned: BTreeSet<u32> = observation.owned.iter().map(|unit| unit.id).collect();
     let mut units = memory
-        .containment_active_tanks
+        .containment
+        .active_tanks
         .iter()
         .copied()
         .collect::<Vec<_>>();
-    units.extend(memory.containment_active_scout);
-    units.extend(memory.containment_active_riflemen.iter().copied());
+    units.extend(memory.containment.active_scout);
+    units.extend(memory.containment.active_riflemen.iter().copied());
     units.retain(|id| owned.contains(id));
     if units.is_empty() {
         return None;
