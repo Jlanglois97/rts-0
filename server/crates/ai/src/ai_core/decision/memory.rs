@@ -15,6 +15,12 @@ use super::geometry;
 const RESOURCE_DEPOT_RESUME_SAFE_TICKS: u32 = config::TICK_HZ * 3;
 /// Enemy Tanks not seen for this long are forgotten when judging whether Jeff is outnumbered.
 pub(super) const ENEMY_TANK_MEMORY_TICKS: u32 = config::TICK_HZ * 90;
+/// Enemy Tank attacks on Jeff's bases are remembered this long when sizing the home reserve.
+/// AI 2.1 attacks every minute or two, so this spans its last few waves.
+pub(super) const ENEMY_ATTACK_MEMORY_TICKS: u32 = config::TICK_HZ * 180;
+/// Tanks Jeff keeps home whatever it has seen, and at most.
+pub(super) const HOME_TANK_RESERVE_MIN: usize = 2;
+pub(super) const HOME_TANK_RESERVE_MAX: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DefensiveIncidentMemory {
@@ -98,6 +104,9 @@ pub(crate) struct AiDecisionMemory {
     /// `ENEMY_TANK_MEMORY_TICKS`. Counting every Tank seen instead also counted the ones Jeff had
     /// destroyed: AI 2.1 feeding Tanks into Jeff's defense read as 8-9 while it had 3.
     pub(super) enemy_tank_sightings: BTreeMap<u32, usize>,
+    /// How many enemy Tanks were in an attack on Jeff's bases, by tick, over the last
+    /// `ENEMY_ATTACK_MEMORY_TICKS`.
+    pub(super) enemy_attack_sightings: BTreeMap<u32, usize>,
     pub(super) containment_focus_target: Option<u32>,
     pub(super) containment_focus_stable_since: Option<u32>,
     pub(super) containment_smoke_target: Option<u32>,
@@ -155,6 +164,7 @@ impl AiDecisionMemory {
             containment_contact_last_tick: None,
             containment_held_tanks: BTreeSet::new(),
             enemy_tank_sightings: BTreeMap::new(),
+            enemy_attack_sightings: BTreeMap::new(),
             containment_focus_target: None,
             containment_focus_stable_since: None,
             containment_smoke_target: None,
@@ -388,6 +398,40 @@ impl AiDecisionMemory {
         }
         self.enemy_tank_sightings
             .retain(|seen, _| tick.saturating_sub(*seen) <= ENEMY_TANK_MEMORY_TICKS);
+        let attacking = super::defense::local_defense_contact(observation).map_or(0, |contact| {
+            observation
+                .visible_enemies
+                .iter()
+                .filter(|enemy| {
+                    enemy.kind == EntityKind::Tank && contact.target_ids.contains(&enemy.id)
+                })
+                .count()
+        });
+        if attacking > 0 {
+            self.enemy_attack_sightings.insert(tick, attacking);
+        }
+        self.enemy_attack_sightings
+            .retain(|seen, _| tick.saturating_sub(*seen) <= ENEMY_ATTACK_MEMORY_TICKS);
+    }
+
+    /// The most enemy Tanks seen together in one attack on Jeff's bases within the last
+    /// `ENEMY_ATTACK_MEMORY_TICKS`.
+    pub(super) fn largest_recent_attack(&self) -> usize {
+        self.enemy_attack_sightings
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// How many Tanks Jeff keeps home, the home Tank included: three for every four Tanks in the
+    /// largest recent attack, between `HOME_TANK_RESERVE_MIN` and `HOME_TANK_RESERVE_MAX`. Across
+    /// 86 AI 2.1 attacks, 2-4 Tanks with the entrenched infantry held attacks of 3-4 Tanks; bases
+    /// fell to 5 Tanks against none and 3 against 2.
+    pub(super) fn home_tank_reserve(&self) -> usize {
+        (self.largest_recent_attack() * 3)
+            .div_ceil(4)
+            .clamp(HOME_TANK_RESERVE_MIN, HOME_TANK_RESERVE_MAX)
     }
 
     /// The most enemy Tanks seen together within the last `ENEMY_TANK_MEMORY_TICKS`.

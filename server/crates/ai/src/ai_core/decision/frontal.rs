@@ -249,12 +249,14 @@ pub(super) fn issue_frontal_wave(
         }
     }
 
-    // On Crossroads, armor too few for the push stays staged at home: the plain attack wave would
-    // send the same two or three Tanks down the road the push is kept off.
+    // Armor too few for the push stays staged at home: the plain attack wave would send the same
+    // two or three Tanks, home reserve included, that the push is waiting to outgrow. This holds
+    // for the current Jeff everywhere and for any Jeff on Crossroads.
     let hold_for_push = profile.expansion_containment.is_some()
         && profile.id != JEFFS_AI_BETA_ID
         && attack.unit_kinds.contains(&EntityKind::Tank)
-        && defense::crossroads_wall_aware_approach_direction(observation).is_some();
+        && (uses_current_jeffs_ai_policy(profile.id)
+            || defense::crossroads_wall_aware_approach_direction(observation).is_some());
     if plan.should_attack() && !hold_for_push {
         let attack_units =
             if let Some(target) = visible_combat_target_for_wave(observation, &plan.ready_units) {
@@ -501,7 +503,11 @@ fn issue_expansion_containment_wave(
                 scouts.retain(|scout| plan.ready_units.contains(scout));
             }
             let push_size = if push_uses_available_armor {
-                push_tank_count(tanks.len(), required_tanks)
+                push_tank_count(
+                    tanks.len(),
+                    required_tanks,
+                    push_keep_home(observation, memory),
+                )?
             } else {
                 required_tanks
             };
@@ -537,7 +543,12 @@ fn issue_expansion_containment_wave(
                 newcomers.retain(|tank| plan.ready_units.contains(tank));
             }
             let pushing = memory.containment_active_tanks.len();
-            let wanted = push_tank_count(pushing + newcomers.len(), required_tanks);
+            let wanted = push_tank_count(
+                pushing + newcomers.len(),
+                required_tanks,
+                push_keep_home(observation, memory),
+            )
+            .unwrap_or(pushing);
             if wanted > pushing {
                 select_nearest_units(observation, &mut newcomers, rally, wanted - pushing);
                 memory
@@ -1637,15 +1648,25 @@ fn group_center(observation: &AiObservation, unit_ids: &[u32]) -> Option<(f32, f
 #[cfg(test)]
 mod tests;
 
-/// The push leaves at most this many ready Tanks at home.
-const PUSH_HOME_RESERVE_MAX_TANKS: usize = 5;
+/// How many of `ready` Tanks the push takes: all but `keep_home`, or none while that would be
+/// fewer than `minimum`. Jeff used to push with exactly two or three Tanks while twenty sat at
+/// home, and then with most of them while its main was left with one.
+fn push_tank_count(ready: usize, minimum: usize, keep_home: usize) -> Option<usize> {
+    let size = ready.saturating_sub(keep_home);
+    (size >= minimum).then_some(size)
+}
 
-/// How many of `ready` Tanks the push takes: all but a home reserve of a quarter of them, at most
-/// `PUSH_HOME_RESERVE_MAX_TANKS`, and never fewer than `minimum` (more than `ready` means the push
-/// cannot form yet). Jeff used to push with exactly two or three Tanks while twenty sat at home.
-fn push_tank_count(ready: usize, minimum: usize) -> usize {
-    let reserve = (ready / 4).min(PUSH_HOME_RESERVE_MAX_TANKS);
-    ready.saturating_sub(reserve).max(minimum)
+/// Ready Tanks the push leaves at home: the home reserve, less the home Tank already kept there.
+fn push_keep_home(observation: &AiObservation, memory: &AiDecisionMemory) -> usize {
+    let home_tank_alive = memory.home_defensive_tank.is_some_and(|id| {
+        observation
+            .owned
+            .iter()
+            .any(|unit| unit.id == id && unit.hp > 0)
+    });
+    memory
+        .home_tank_reserve()
+        .saturating_sub(usize::from(home_tank_alive))
 }
 
 /// Enemy Tanks this close to any push Tank count toward the push being outnumbered.

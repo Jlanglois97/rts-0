@@ -808,6 +808,8 @@ where
                     .max(if security_recruits { 6 } else { 0 }),
             ));
         }
+        let home_holds_tank_reserve = !uses_current_jeffs_ai_policy(profile.id)
+            || later_bases::main_tank_ids(observation, memory).len() >= memory.home_tank_reserve();
         let production_rally = is_jeffs_ai_profile(profile.id)
             .then(|| jeffs_production_rally(observation, &facts))
             .flatten();
@@ -828,11 +830,12 @@ where
                 balance_unit_priorities: production_policy.balance_unit_priorities,
             },
             |unit| {
-                // While a new base is being taken, fresh Tanks and Riflemen join its guards.
-                if let Some((x, y)) = later_base
-                    .rally
-                    .filter(|_| matches!(unit, EntityKind::Tank | EntityKind::Rifleman))
-                {
+                // While a new base is being taken, fresh Tanks and Riflemen join its guards, but
+                // Tanks only once the main holds its reserve.
+                if let Some((x, y)) = later_base.rally.filter(|_| {
+                    unit == EntityKind::Rifleman
+                        || (unit == EntityKind::Tank && home_holds_tank_reserve)
+                }) {
                     return Some((x, y, RallyKind::AttackMove));
                 }
                 if unit == EntityKind::Rifleman {
@@ -1209,6 +1212,18 @@ where
         );
         if !guard_units.is_empty() {
             intents.push(AiIntent::Move { units: guard_units });
+        }
+        if uses_current_jeffs_ai_policy(profile.id) {
+            let returning = later_bases::recall_tanks_to_main(
+                &mut actions,
+                observation,
+                memory,
+                &local_defense_assigned,
+                forward_defensive_tank,
+            );
+            if !returning.is_empty() {
+                intents.push(AiIntent::Move { units: returning });
+            }
         }
 
         let containment_needs_control = profile.id != JEFFS_AI_BETA_ID

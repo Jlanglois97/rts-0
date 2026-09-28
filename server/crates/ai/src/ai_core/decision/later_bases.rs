@@ -160,7 +160,10 @@ where
                 REQUIRED_TOTAL_TANKS
             };
         let ready = total_tanks >= required_total_tanks
-            && free_tanks.len() >= REQUIRED_FREE_TANKS
+            // The two guards leave, so the home reserve must still be there after they go.
+            && free_tanks.len()
+                >= REQUIRED_FREE_TANKS.max(GUARD_TANKS + memory.home_tank_reserve())
+            && main_tank_ids(observation, memory).len() >= memory.home_tank_reserve()
             && defense::local_defense_contact(observation).is_none()
             && observation.economy.steel >= steel
             && observation.economy.oil >= oil
@@ -299,6 +302,69 @@ where
     let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
     actions.holdback_resources(steel, oil);
     status
+}
+
+/// Tanks this close to the HQ count toward the main's reserve.
+const MAIN_GARRISON_RADIUS_TILES: f32 = 16.0;
+
+/// Tanks at the main: near the HQ and neither pushing nor guarding a new base. The home Tank
+/// counts. Tanks left at other bases do not: in one lost game nine Tanks were "home" by count,
+/// two of them at the main, and four AI 2.1 Tanks walked in to the HQ.
+pub(super) fn main_tank_ids(observation: &AiObservation, memory: &AiDecisionMemory) -> Vec<u32> {
+    let ts = observation.map.tile_size as f32;
+    let hq = geometry::tile_center(observation.own_start_tile, observation.map.tile_size);
+    let radius2 = squared(MAIN_GARRISON_RADIUS_TILES * ts);
+    free_tank_ids(observation, memory)
+        .into_iter()
+        .filter(|id| !memory.later_bases.guards.contains(id))
+        .filter(|id| {
+            observation
+                .owned
+                .iter()
+                .any(|unit| unit.id == *id && dist2(unit.x, unit.y, hq.0, hq.1) <= radius2)
+        })
+        .collect()
+}
+
+/// While the main is short of its Tank reserve, idle Tanks elsewhere that are not pushing,
+/// guarding a new base, covering the natural (`keep_out`) or answering a raid (`claimed`) head
+/// back to it, nearest first. Released guards and Tanks rallied to a new base otherwise stay there.
+pub(super) fn recall_tanks_to_main(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    memory: &AiDecisionMemory,
+    claimed: &BTreeSet<u32>,
+    keep_out: Option<u32>,
+) -> Vec<u32> {
+    let at_main = main_tank_ids(observation, memory);
+    let short = memory.home_tank_reserve().saturating_sub(at_main.len());
+    if short == 0 {
+        return Vec::new();
+    }
+    let hq = geometry::tile_center(observation.own_start_tile, observation.map.tile_size);
+    let mut away: Vec<&AiEntitySummary> = free_tank_ids(observation, memory)
+        .into_iter()
+        .filter(|id| {
+            !at_main.contains(id)
+                && !memory.later_bases.guards.contains(id)
+                && Some(*id) != keep_out
+                && !claimed.contains(id)
+        })
+        .filter_map(|id| observation.owned.iter().find(|unit| unit.id == id))
+        .filter(|unit| unit.is_complete && unit.hp > 0 && unit.state == AiEntityState::Idle)
+        .collect();
+    away.sort_by(|left, right| {
+        dist2(left.x, left.y, hq.0, hq.1)
+            .total_cmp(&dist2(right.x, right.y, hq.0, hq.1))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    actions::move_units(
+        actions,
+        away.iter().take(short).map(|unit| unit.id),
+        hq.0,
+        hq.1,
+    )
+    .unwrap_or_default()
 }
 
 /// Tanks that are not part of a push. The home Tank counts: it is at home, not pushing.

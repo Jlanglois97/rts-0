@@ -936,8 +936,8 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
     assert!(memory.containment_active_tanks.is_empty());
     assert!(!memory.containment_wave_launched);
 
-    // Six Tanks are enough to start forming the push; with four enemy Tanks seen recently it
-    // needs a three-Tank lead, so seven.
+    // Two Tanks stay home, so eight ready Tanks push six. With four enemy Tanks seen recently the
+    // push needs a three-Tank lead, seven, so nine must be ready.
     let form = |tanks: u32, seen_enemy_tanks: u32| {
         let (mut observation, plan, enemy_base) = crossroads_armor(tanks);
         let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
@@ -963,7 +963,7 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
         );
         (intent, memory.containment_active_tanks.len())
     };
-    let (intent, pushing) = form(CROSSROADS_PUSH_MIN_TANKS as u32, 0);
+    let (intent, pushing) = form(8, 0);
     assert!(
         matches!(intent, Some(AiIntent::Assemble { .. })),
         "{intent:?}"
@@ -975,7 +975,7 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
         "{intent:?}"
     );
     assert_eq!(pushing, 0, "six Tanks are no lead over four");
-    let (intent, pushing) = form(7, 4);
+    let (intent, pushing) = form(9, 4);
     assert!(
         matches!(intent, Some(AiIntent::Assemble { .. })),
         "{intent:?}"
@@ -984,15 +984,42 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
 }
 
 #[test]
-fn the_push_takes_most_ready_tanks_and_leaves_at_most_five_home() {
-    assert_eq!(push_tank_count(2, 2), 2);
-    assert_eq!(push_tank_count(3, 2), 3);
-    assert_eq!(push_tank_count(8, 2), 6);
-    assert_eq!(push_tank_count(12, 2), 9);
-    assert_eq!(push_tank_count(23, 2), 18);
-    assert_eq!(push_tank_count(40, 2), 35);
-    // Never below the minimum: more than are ready means the push cannot form yet.
-    assert_eq!(push_tank_count(5, 6), 6);
+fn the_push_takes_every_ready_tank_but_the_home_reserve() {
+    assert_eq!(push_tank_count(23, 2, 4), Some(19));
+    assert_eq!(push_tank_count(8, 2, 1), Some(7));
+    // Never below the minimum, and never out of the reserve: the push waits instead.
+    assert_eq!(push_tank_count(3, 2, 2), None);
+    assert_eq!(push_tank_count(8, 6, 3), None);
+}
+
+#[test]
+fn the_home_reserve_scales_with_the_largest_recent_attack() {
+    let ts = 32.0;
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    assert_eq!(memory.home_tank_reserve(), 2, "nothing seen yet");
+    let mut attacked = |tanks: u32, tick: u32| {
+        let mut depot = target_test_entity(1, EntityKind::ResourceDepot, 20.0 * ts, 20.0 * ts);
+        depot.owner = 1;
+        let mut observation = regroup_test_observation(vec![depot]);
+        observation.tick = tick;
+        observation.visible_enemies = (0..tanks)
+            .map(|index| {
+                target_test_entity(
+                    500 + index,
+                    EntityKind::Tank,
+                    (22.0 + 0.4 * index as f32) * ts,
+                    20.0 * ts,
+                )
+            })
+            .collect();
+        memory.note_enemy_tanks(&observation);
+        memory.home_tank_reserve()
+    };
+    assert_eq!(attacked(2, 1000), 2);
+    assert_eq!(attacked(4, 2000), 3);
+    assert_eq!(attacked(8, 3000), 5, "at most five");
+    // Forgotten once the attacks are more than three minutes old.
+    assert_eq!(attacked(0, 3000 + memory::ENEMY_ATTACK_MEMORY_TICKS + 1), 2);
 }
 
 #[test]
@@ -1019,11 +1046,11 @@ fn tanks_join_the_push_until_it_leaves_and_not_after() {
     issue(&observation, &plan, &mut memory);
     assert_eq!(
         memory.containment_active_tanks.len(),
-        15,
-        "20 ready, 5 stay home"
+        18,
+        "20 ready, 2 stay home"
     );
 
-    // Three Tanks finish while it forms up: 23 ready, so the push grows to 18.
+    // Three Tanks finish while it forms up: 23 ready, so the push grows to 21.
     let ts = observation.map.tile_size as f32;
     let add_tanks = |observation: &mut AiObservation, plan: &mut FrontalWavePlan, ids: [u32; 3]| {
         for id in ids {
@@ -1035,12 +1062,12 @@ fn tanks_join_the_push_until_it_leaves_and_not_after() {
     };
     add_tanks(&mut observation, &mut plan, [950, 951, 952]);
     issue(&observation, &plan, &mut memory);
-    assert_eq!(memory.containment_active_tanks.len(), 18);
+    assert_eq!(memory.containment_active_tanks.len(), 21);
 
     // Once it has left, Tanks built afterwards stay home.
     memory.containment_wave_launched = true;
     memory.containment_recovery_active = false;
-    memory.containment_launch_tanks = 18;
+    memory.containment_launch_tanks = 21;
     let left_with = memory.containment_active_tanks.clone();
     add_tanks(&mut observation, &mut plan, [960, 961, 962]);
     issue(&observation, &plan, &mut memory);

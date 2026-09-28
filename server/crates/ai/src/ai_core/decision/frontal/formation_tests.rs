@@ -91,7 +91,8 @@ fn issue_test_containment(
         JEFFS_AI.expansion_containment.unwrap(),
         true,
         true,
-        true,
+        // Formation mechanics are tested on a fixed two-Tank push, not the sized one.
+        false,
         None,
         memory,
     );
