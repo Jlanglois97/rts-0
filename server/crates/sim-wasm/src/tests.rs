@@ -61,6 +61,7 @@ fn snapshot() -> Snapshot {
         kind: "move".to_string(),
         x: 120.0,
         y: 100.0,
+        building_kind: None,
     }];
     let mut hidden_shape = EntityView::new(202, 2, "rifleman", 500.0, 500.0, 45, 45, "attack");
     hidden_shape.target_id = Some(101);
@@ -68,6 +69,7 @@ fn snapshot() -> Snapshot {
         kind: "attack".to_string(),
         x: 100.0,
         y: 100.0,
+        building_kind: None,
     }];
     let neutral_tank_trap = EntityView::new(303, 0, "tank_trap", 300.0, 300.0, 100, 100, "idle");
     Snapshot {
@@ -463,11 +465,13 @@ fn unsupported_active_order_plan_stage_discards_unreachable_supported_suffix() {
                 kind: unsupported_kind.to_string(),
                 x: 100.0,
                 y: 100.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: "move".to_string(),
                 x: 140.0,
                 y: 100.0,
+                building_kind: None,
             },
         ];
 
@@ -498,16 +502,19 @@ fn middle_authoritative_barrier_stops_retained_and_local_queued_moves() {
                 kind: "move".to_string(),
                 x: 102.0,
                 y: 100.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: barrier_kind.to_string(),
                 x: 102.0,
                 y: 100.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: "move".to_string(),
                 x: 140.0,
                 y: 100.0,
+                building_kind: None,
             },
         ];
         let baseline = OwnedPredictionBaseline::from_snapshot(1, &authoritative);
@@ -548,6 +555,7 @@ fn non_movement_authoritative_state_blocks_visible_move_marker() {
             kind: "move".to_string(),
             x: 140.0,
             y: 100.0,
+            building_kind: None,
         }];
         let baseline = OwnedPredictionBaseline::from_snapshot(1, &authoritative);
         assert_eq!(
@@ -848,11 +856,13 @@ fn authoritative_baseline_preserves_terminal_hold_position() {
             kind: "move".to_string(),
             x: 110.0,
             y: 100.0,
+            building_kind: None,
         },
         OrderPlanMarker {
             kind: "holdPosition".to_string(),
             x: 110.0,
             y: 100.0,
+            building_kind: None,
         },
     ];
     let baseline = OwnedPredictionBaseline::from_snapshot(1, &authoritative);
@@ -1008,6 +1018,7 @@ fn construction_followup_prediction_waits_for_authority_but_stop_releases_it() {
         kind: "build".into(),
         x: 120.0,
         y: 100.0,
+        building_kind: None,
     }];
     let baseline = OwnedPredictionBaseline::from_snapshot(1, &authoritative);
     assert!(baseline.owned_entities[0].active_construction);

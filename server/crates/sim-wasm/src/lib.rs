@@ -953,6 +953,7 @@ impl MoveOrder {
             },
             x: self.x,
             y: self.y,
+            building_kind: None,
         }
     }
 }
