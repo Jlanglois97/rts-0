@@ -318,6 +318,11 @@ pub(super) fn sync_containment_recovery(
     if tanks_intact && scout_intact {
         return;
     }
+    begin_containment_recovery(memory);
+}
+
+/// End the current push: the next one assembles at the regroup point, one Tank larger.
+fn begin_containment_recovery(memory: &mut AiDecisionMemory) {
     memory.containment_repush_count = memory.containment_repush_count.saturating_add(1);
     memory.containment_recovery_active = true;
     memory.containment_active_tanks.clear();
@@ -510,7 +515,10 @@ fn issue_expansion_containment_wave(
         let river_opening_guard = !memory.containment_wave_launched
             && expansion::has_jeff_river_expansion_site(observation)
             && river_opening_guard_active(observation, &tanks, assembly_started, memory);
-        let assembly_ready = assembled && !river_opening_guard;
+        // Do not send the push out while more enemy Tanks than it has were seen recently: it would
+        // only lose them one or two at a time outside the base. It waits at the regroup point.
+        let launch_outnumbered = memory.recent_enemy_tanks() > tanks.len();
+        let assembly_ready = assembled && !river_opening_guard && !launch_outnumbered;
         if !assembly_ready {
             if formation_command_due(memory, observation.tick) {
                 issue_containment_formation(actions, observation, &formation, false);
@@ -543,6 +551,18 @@ fn issue_expansion_containment_wave(
     let riflemen: Vec<u32> = memory.containment_active_riflemen.iter().copied().collect();
     if tanks.is_empty() || scouts.is_empty() {
         return None;
+    }
+
+    // Outnumbered in Tanks out in the field: fall back to the regroup point and rebuild one Tank
+    // larger, instead of losing the push a Tank at a time.
+    if !memory.enemy_main_destroyed && push_outnumbered(observation, &tanks) {
+        begin_containment_recovery(memory);
+        let rally = containment_regroup_point(own_base, enemy_base, observation.map)?;
+        let mut units = tanks;
+        units.extend(scouts);
+        units.extend(riflemen);
+        actions::move_units(actions, units.iter().copied(), rally.0, rally.1);
+        return Some(AiIntent::Assemble { units });
     }
 
     update_enemy_natural_state(observation, natural_objective, enemy_base, &scouts, memory);
@@ -1513,3 +1533,28 @@ fn group_center(observation: &AiObservation, unit_ids: &[u32]) -> Option<(f32, f
 
 #[cfg(test)]
 mod tests;
+
+/// Enemy Tanks this close to any push Tank count toward the push being outnumbered.
+const PUSH_OUTNUMBERED_RADIUS_TILES: f32 = 16.0;
+
+/// Whether more enemy Tanks than the push has are in sight around it.
+fn push_outnumbered(observation: &AiObservation, tanks: &[u32]) -> bool {
+    let radius2 = (PUSH_OUTNUMBERED_RADIUS_TILES * observation.map.tile_size as f32).powi(2);
+    let positions: Vec<(f32, f32)> = observation
+        .owned
+        .iter()
+        .filter(|unit| tanks.contains(&unit.id) && unit.hp > 0)
+        .map(|unit| (unit.x, unit.y))
+        .collect();
+    let enemy_tanks = observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| enemy.kind == EntityKind::Tank && enemy.hp > 0)
+        .filter(|enemy| {
+            positions
+                .iter()
+                .any(|tank| dist2(tank.0, tank.1, enemy.x, enemy.y) <= radius2)
+        })
+        .count();
+    enemy_tanks > positions.len()
+}

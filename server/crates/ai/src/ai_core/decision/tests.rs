@@ -490,6 +490,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
         policy,
         EntityKind::ResourceDepot,
         profile.id,
+        None,
         &mut |_, _, _| true,
     )
     .expect("natural site");
@@ -507,6 +508,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
             policy,
             EntityKind::ResourceDepot,
             profile.id,
+            None,
             &mut |_, _, _| true,
         )
         .is_none(),
@@ -530,6 +532,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
         policy,
         EntityKind::ResourceDepot,
         profile.id,
+        None,
         &mut |_, _, _| true,
     )
     .expect("next unoccupied resource site");
@@ -724,4 +727,92 @@ fn assert_classic_three_separate_bases(under_pressure: bool) {
             "player {player_id}: no completed third base by tick 15000"
         );
     }
+}
+
+fn crossroads_east_observation() -> AiObservation {
+    let mut obs = observation(
+        AiEconomy {
+            steel: 0,
+            oil: 0,
+            supply_used: 0,
+            supply_cap: 100,
+        },
+        Vec::new(),
+    );
+    obs.map.width = 126;
+    obs.map.height = 126;
+    obs.own_start_tile = (117, 78);
+    obs.players = [(1, (117, 78)), (2, (47, 8))]
+        .into_iter()
+        .map(
+            |(id, start_tile)| crate::ai_core::observation::AiPlayerSummary {
+                id,
+                team_id: id,
+                start_tile,
+                is_ai: true,
+                is_alive: true,
+            },
+        )
+        .collect();
+    obs
+}
+
+#[test]
+fn crossroads_tech_buildings_stay_off_the_side_raids_come_in_from() {
+    let obs = crossroads_east_observation();
+    // The east pocket opens to the south-west; the Factory the raids kept killing sat there.
+    assert!(jeff::tech_building_faces_way_in(
+        &obs,
+        EntityKind::Factory,
+        111,
+        85
+    ));
+    assert!(jeff::tech_building_faces_way_in(
+        &obs,
+        EntityKind::EngineeringComplex,
+        111,
+        85
+    ));
+    // Behind the Depot, and other kinds anywhere, are unaffected.
+    assert!(!jeff::tech_building_faces_way_in(
+        &obs,
+        EntityKind::Factory,
+        119,
+        70
+    ));
+    assert!(!jeff::tech_building_faces_way_in(
+        &obs,
+        EntityKind::Barracks,
+        111,
+        85
+    ));
+
+    let mut elsewhere = obs.clone();
+    elsewhere.map.width = 166;
+    elsewhere.map.height = 166;
+    assert!(!jeff::tech_building_faces_way_in(
+        &elsewhere,
+        EntityKind::Factory,
+        111,
+        85
+    ));
+}
+
+#[test]
+fn recently_seen_enemy_tanks_are_remembered_for_ninety_seconds() {
+    let mut obs = crossroads_east_observation();
+    let mut memory = AiDecisionMemory::for_profile(&crate::ai_core::profiles::JEFFS_AI);
+    for id in [500, 501] {
+        let mut tank = combat_at(id, EntityKind::Tank, 3200.0, 2400.0);
+        tank.owner = 2;
+        obs.visible_enemies.push(tank);
+    }
+    memory.note_enemy_tanks(&obs);
+    obs.visible_enemies.clear();
+    obs.tick += memory::ENEMY_TANK_MEMORY_TICKS;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(memory.recent_enemy_tanks(), 2, "still remembered");
+    obs.tick += 9;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(memory.recent_enemy_tanks(), 0);
 }

@@ -9,8 +9,15 @@ const TANK_FRONT_OFFSET_TILES: f32 = 2.75;
 const BUILD_START_TIMEOUT_TICKS: u32 = config::TICK_HZ * 3;
 /// A healthy natural is ordered roughly 35 seconds after the reserve begins. Past this bound the
 /// expansion has failed for some other reason, and holding Depot money any longer starves the
-/// whole tech and production plan for the rest of the match.
+/// whole tech and production plan. A failed attempt starts a new bounded reserve.
 const EXPANSION_RESERVE_LIMIT_TICKS: u32 = config::TICK_HZ * 60;
+/// Dropped orders tolerated at one natural site before it is abandoned for another. A builder
+/// that is shot on the way retreats and drops its order; that says little about the site.
+const MAX_NATURAL_SITE_FAILURES: u8 = 2;
+/// After a dropped order, wait this long before sending the builder again.
+const NATURAL_RETRY_COOLDOWN_TICKS: u32 = config::TICK_HZ * 20;
+/// The builder only leaves while no enemy is this close to it, the site or the base's way in.
+const NATURAL_ROUTE_QUIET_TILES: f32 = 12.0;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct ExpansionSecurity {
@@ -23,6 +30,10 @@ pub(super) struct ExpansionSecurity {
     retry_builder: Option<u32>,
     rejected_sites: BTreeSet<(u32, u32)>,
     reserve_since: Option<u32>,
+    /// Dropped orders per natural site.
+    site_failures: BTreeMap<(u32, u32), u8>,
+    /// No natural order before this tick, after a dropped one.
+    next_attempt_tick: u32,
 }
 
 impl ExpansionSecurity {
@@ -60,6 +71,74 @@ pub(super) fn expansion_is_next(
             }))
 }
 
+/// Whether Jeff may send the builder to the secured natural now: the site is secured, no order
+/// for it is out, the retry cooldown has passed, the Depot's full cost is banked, and nothing
+/// hostile is near the builder, the site or the base's way in. Without this the order goes out,
+/// the builder walks through a raid or the Oil is spent on a Tank on the way, and it is dropped.
+pub(super) fn natural_attempt_ready(
+    observation: &AiObservation,
+    analysis: Option<&AiMapAnalysis>,
+    memory: &AiDecisionMemory,
+    secured: bool,
+) -> bool {
+    let security = &memory.expansion_security;
+    let Some(site) = security.site else {
+        return false;
+    };
+    let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
+    secured
+        && !depot_order_pending(observation, site)
+        && observation.tick >= security.next_attempt_tick
+        && observation.economy.steel >= steel
+        && observation.economy.oil >= oil
+        && natural_route_quiet(observation, analysis, site)
+}
+
+/// Whether a natural Depot order is out and not yet placed. Its cost must stay banked until the
+/// foundation goes down, because the simulation only charges it then.
+pub(super) fn natural_order_pending(
+    observation: &AiObservation,
+    memory: &AiDecisionMemory,
+) -> bool {
+    memory
+        .expansion_security
+        .site
+        .is_some_and(|site| depot_order_pending(observation, site))
+}
+
+fn natural_route_quiet(
+    observation: &AiObservation,
+    analysis: Option<&AiMapAnalysis>,
+    site: (u32, u32),
+) -> bool {
+    if defense::local_defense_contact(observation).is_some() {
+        return false;
+    }
+    let ts = observation.map.tile_size as f32;
+    let mut watch: Vec<(f32, f32)> = observation
+        .owned
+        .iter()
+        .filter(|unit| unit.kind == EntityKind::Worker && unit.hp > 0)
+        .map(|unit| (unit.x, unit.y))
+        .collect();
+    watch.extend(building_center(
+        site,
+        EntityKind::ResourceDepot,
+        observation.map.tile_size,
+    ));
+    watch.extend(analysis.and_then(|analysis| analysis.base_route_entry(observation.player_id)));
+    let radius2 = squared(NATURAL_ROUTE_QUIET_TILES * ts);
+    !observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| enemy.hp > 0 && enemy.kind.is_unit() && enemy.kind != EntityKind::Worker)
+        .any(|enemy| {
+            watch
+                .iter()
+                .any(|point| dist2(enemy.x, enemy.y, point.0, point.1) <= radius2)
+        })
+}
+
 /// Whether Jeff should still bank Depot resources and defer tech for the natural. The reserve is
 /// bounded per expansion cycle; it restarts only after a second Depot exists and is later lost.
 pub(super) fn reserve_expansion(
@@ -93,6 +172,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
     facts: &AiFacts,
     profile: &AiProfile,
     memory: &mut AiDecisionMemory,
+    analysis: Option<&AiMapAnalysis>,
     placeable: &mut F,
 ) {
     if !uses_current_jeffs_ai_policy(profile.id) {
@@ -125,34 +205,53 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
                     .is_some_and(|site| depot_order_pending(observation, site))
         });
     if timed_out_site {
-        if let Some(site) = memory.expansion_security.site {
-            memory.expansion_security.rejected_sites.insert(site);
+        let security = &mut memory.expansion_security;
+        // A dropped order usually means the builder was shot on the way or the Oil went
+        // elsewhere, not that the site is bad: keep the site for a second try after a pause, and
+        // start a fresh bounded reserve so the next attempt has its cost banked.
+        let failures = security.site.map_or(MAX_NATURAL_SITE_FAILURES, |site| {
+            let failures = security.site_failures.entry(site).or_insert(0);
+            *failures = failures.saturating_add(1);
+            *failures
+        });
+        security.next_attempt_tick = observation
+            .tick
+            .saturating_add(NATURAL_RETRY_COOLDOWN_TICKS);
+        security.reserve_since = None;
+        security.build_attempt_tick = None;
+        security.secure_since = None;
+        security.retry_builder = security.build_attempt_worker.take();
+        if failures >= MAX_NATURAL_SITE_FAILURES {
+            if let Some(site) = security.site {
+                security.rejected_sites.insert(site);
+            }
+            security.site = None;
+            security.riflemen.clear();
+            security.slots.clear();
         }
-        memory.expansion_security.site = None;
-        memory.expansion_security.riflemen.clear();
-        memory.expansion_security.slots.clear();
-        memory.expansion_security.secure_since = None;
-        memory.expansion_security.build_attempt_tick = None;
-        memory.expansion_security.retry_builder =
-            memory.expansion_security.build_attempt_worker.take();
     }
     let security_wait_complete = memory
         .expansion_security
         .secure_since
         .is_some_and(|since| observation.tick.saturating_sub(since) >= SECURE_TICKS);
+    // While the natural's own order is out, the builder on the footprint can make the site read as
+    // unplaceable; resetting then would forget the attempt, so a dropped order was never retried.
     let site_became_blocked = memory.expansion_security.site.is_some_and(|site| {
         facts.building_count(EntityKind::ResourceDepot) < 2
+            && !depot_order_pending(observation, site)
             && (site_blocked_by_owned_building(observation, site)
                 || (security_wait_complete
                     && !placeable(EntityKind::ResourceDepot, site.0, site.1)))
     });
     if site_became_blocked {
-        let rejected_sites = std::mem::take(&mut memory.expansion_security.rejected_sites);
-        memory.expansion_security = ExpansionSecurity {
-            rejected_sites,
-            reserve_since: memory.expansion_security.reserve_since,
-            ..ExpansionSecurity::default()
-        };
+        let security = &mut memory.expansion_security;
+        security.site = None;
+        security.riflemen.clear();
+        security.slots.clear();
+        security.secure_since = None;
+        security.build_attempt_tick = None;
+        security.build_attempt_worker = None;
+        security.retry_builder = None;
     }
     if memory.expansion_security.site.is_none()
         && ((uses_current_jeffs_ai_policy(profile.id)
@@ -167,6 +266,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
                 policy,
                 EntityKind::ResourceDepot,
                 profile.id,
+                analysis,
                 &mut |kind, x, y| !rejected_sites.contains(&(x, y)) && placeable(kind, x, y),
             );
         }

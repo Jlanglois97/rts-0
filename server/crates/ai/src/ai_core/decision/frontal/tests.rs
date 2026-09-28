@@ -822,3 +822,33 @@ fn volley_leaves_already_holding_tanks_on_their_own_targets() {
     issue_hp_aware_tank_volley(&mut actions, &observation, &[1, 3], &[1], 100, 13.5, None);
     assert_eq!(held_units(&actions.into_commands()), vec![3]);
 }
+
+#[test]
+fn a_push_is_outnumbered_only_by_more_enemy_tanks_close_by() {
+    let ts = 32.0;
+    let push = |enemies: &[(f32, f32)]| {
+        let mut owned = vec![
+            target_test_entity(1, EntityKind::Tank, 20.0 * ts, 20.0 * ts),
+            target_test_entity(1, EntityKind::Tank, 21.0 * ts, 20.0 * ts),
+        ];
+        owned[1].id = 2;
+        let mut observation = regroup_test_observation(owned);
+        observation.visible_enemies = enemies
+            .iter()
+            .enumerate()
+            .map(|(index, (x, y))| {
+                target_test_entity(500 + index as u32, EntityKind::Tank, x * ts, y * ts)
+            })
+            .collect();
+        push_outnumbered(&observation, &[1, 2])
+    };
+    assert!(
+        !push(&[(30.0, 20.0), (31.0, 20.0)]),
+        "two against two is even"
+    );
+    assert!(push(&[(30.0, 20.0), (31.0, 20.0), (32.0, 21.0)]));
+    assert!(
+        !push(&[(50.0, 20.0), (51.0, 20.0), (52.0, 21.0)]),
+        "too far to matter"
+    );
+}

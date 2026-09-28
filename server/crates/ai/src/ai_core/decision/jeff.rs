@@ -82,3 +82,33 @@ pub(super) fn rifleman_home_rally(
         observation.map,
     ))
 }
+
+/// Buildings within this alignment (about 70 degrees) of the direction attacks come in from count
+/// as facing the way in.
+const WAY_IN_ALIGNMENT: f32 = 0.35;
+
+/// On Crossroads each main has one way in, and early raids kill the first building they reach:
+/// the Factory at the east pocket's entrance, the Engineering Complex by the north main's exit.
+/// Jeff keeps those two off that side of the main. Everything else, and every other map, is placed
+/// as before.
+pub(super) fn tech_building_faces_way_in(
+    observation: &AiObservation,
+    kind: EntityKind,
+    tile_x: u32,
+    tile_y: u32,
+) -> bool {
+    if !matches!(kind, EntityKind::Factory | EntityKind::EngineeringComplex) {
+        return false;
+    }
+    let Some(way_in) = defense::crossroads_wall_aware_approach_direction(observation) else {
+        return false;
+    };
+    let tile_size = observation.map.tile_size;
+    let anchor = geometry::tile_center(observation.own_start_tile, tile_size);
+    let Some(direction) = geometry::building_center((tile_x, tile_y), kind, tile_size)
+        .and_then(|center| geometry::normalized_direction(anchor, center))
+    else {
+        return false;
+    };
+    way_in.0 * direction.0 + way_in.1 * direction.1 > WAY_IN_ALIGNMENT
+}

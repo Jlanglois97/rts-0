@@ -197,6 +197,9 @@ where
 
     let facts = AiFacts::from_observation(observation);
     memory.sync_home_defensive_tank(observation, profile);
+    if uses_current_jeffs_ai_policy(profile.id) {
+        memory.note_enemy_tanks(observation);
+    }
     memory.sync_turtle_opening(profile, observation);
     let budget = SpendBudget::with_committed_steel(
         observation.economy.steel,
@@ -280,6 +283,7 @@ where
         &facts,
         profile,
         memory,
+        map_analysis,
         &mut expansion_placeable,
     );
     let expansion_footprint_blockers = if uses_current_jeffs_ai_policy(profile.id)
@@ -322,9 +326,25 @@ where
         gathering_builders.as_slice(),
     ];
 
-    if (should_build_expansion_from_economy_manager(&economy_manager_output)
-        || !retry_builder.is_empty())
-        && (!uses_current_jeffs_ai_policy(profile.id) || expansion_secured)
+    // Jeff owns the natural's timing: once it is next and the site is secured, it is ordered as soon
+    // as the builder can go safely with the full cost banked, and a dropped order is retried after
+    // a pause for the rest of the match, rather than waiting on the economy manager, whose Tank
+    // requirements kept a failed natural from ever being ordered again.
+    let jeff_natural = uses_current_jeffs_ai_policy(profile.id);
+    let natural_ready = jeff_natural
+        && expansion_security::expansion_is_next(observation, &facts, profile)
+        && expansion_security::natural_attempt_ready(
+            observation,
+            map_analysis,
+            memory,
+            expansion_secured,
+        );
+    let natural_pending =
+        jeff_natural && expansion_security::natural_order_pending(observation, memory);
+    if (jeff_natural && natural_ready)
+        || (!jeff_natural
+            && (should_build_expansion_from_economy_manager(&economy_manager_output)
+                || !retry_builder.is_empty()))
     {
         if let Some(build_action) = try_build_expansion_resource_depot(
             observation,
@@ -352,7 +372,9 @@ where
     }
     let save_for_unplanned_expansion = (save_for_expansion || reserve_expansion)
         && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0;
-    if reserve_expansion && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0 {
+    if (reserve_expansion || natural_pending)
+        && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0
+    {
         let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
         actions.holdback_resources(steel, oil);
     }
@@ -435,7 +457,7 @@ where
         if facts.building_count(*kind) + planned_in_intents(&intents, *kind) > 0 {
             continue;
         }
-        if let Some(build_action) = try_build_kind(
+        if let Some(build_action) = try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -515,7 +537,7 @@ where
         && !save_for_unplanned_expansion
         && planned_in_intents(&intents, EntityKind::Factory) == 0;
     if first_factory_needed {
-        if let Some(build_action) = try_build_kind(
+        if let Some(build_action) = try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -635,7 +657,7 @@ where
             profile,
             planned_in_intents(&intents, EntityKind::Factory),
         )
-        && try_build_kind(
+        && try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -1514,3 +1536,53 @@ fn can_train_pre_tank_defensive_machine_gunner(
 mod tests;
 #[cfg(test)]
 mod vehicle_worker_tests;
+
+/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff first looks for
+/// a Factory or Engineering Complex site away from the main's way in, and falls back to the usual
+/// site when none is free.
+#[allow(clippy::too_many_arguments)]
+fn try_build_production<F>(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    actions: &mut AiActionContext<'_>,
+    builder_pools: &[&[u32]],
+    profile: &AiProfile,
+    kind: EntityKind,
+    build_search: ai_shared::BuildSearch,
+    placeable: &mut F,
+) -> Option<actions::BuildAction>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    if uses_current_jeffs_ai_policy(profile.id)
+        && matches!(kind, EntityKind::Factory | EntityKind::EngineeringComplex)
+        && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+    {
+        let away = try_build_kind(
+            observation,
+            facts,
+            actions,
+            builder_pools,
+            profile,
+            kind,
+            build_search,
+            &mut |building, x, y| {
+                placeable(building, x, y)
+                    && !jeff::tech_building_faces_way_in(observation, building, x, y)
+            },
+        );
+        if away.is_some() {
+            return away;
+        }
+    }
+    try_build_kind(
+        observation,
+        facts,
+        actions,
+        builder_pools,
+        profile,
+        kind,
+        build_search,
+        placeable,
+    )
+}

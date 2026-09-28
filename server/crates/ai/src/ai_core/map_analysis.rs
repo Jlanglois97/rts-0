@@ -200,6 +200,9 @@ pub(crate) struct AiMapAnalysis {
     /// Per start, the shortest ground route from the nearest enemy start to it, one tile per step,
     /// starting at the enemy: the way an attack on that base actually arrives.
     base_routes: Vec<(u32, Vec<AiTile>)>,
+    /// Per start, the walking distance from it to every tile in tenths of a tile (`u32::MAX` where
+    /// ground from that start cannot reach).
+    start_ground_distances: Vec<(u32, Vec<u32>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -353,8 +356,17 @@ impl AiMapAnalysis {
             starts,
             resource_clusters,
             base_routes: Vec::new(),
+            start_ground_distances: Vec::new(),
         };
         analysis.base_routes = analysis.build_base_routes();
+        analysis.start_ground_distances = analysis
+            .starts
+            .iter()
+            .filter_map(|start| {
+                let from = tile_center_world(start.start_tile, analysis.tile_size);
+                Some((start.player_id, analysis.ground_distance_field(from)?))
+            })
+            .collect();
         analysis
     }
 
@@ -382,6 +394,20 @@ impl AiMapAnalysis {
                 let dy = point.1 - own.1;
                 dx * dx + dy * dy <= radius * radius
             })
+    }
+
+    /// How far `player_id`'s units walk from their start to `tile`, in tiles, around terrain.
+    pub(crate) fn ground_distance_from_start(
+        &self,
+        player_id: u32,
+        tile: (u32, u32),
+    ) -> Option<f32> {
+        let (_, field) = self
+            .start_ground_distances
+            .iter()
+            .find(|(id, _)| *id == player_id)?;
+        let distance = *field.get(tile_index(self.width, self.height, tile.0, tile.1)?)?;
+        (distance != u32::MAX).then(|| distance as f32 / 10.0)
     }
 
     fn build_base_routes(&self) -> Vec<(u32, Vec<AiTile>)> {

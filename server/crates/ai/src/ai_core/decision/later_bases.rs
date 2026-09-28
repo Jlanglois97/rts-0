@@ -158,8 +158,9 @@ where
         if ready {
             let resources = expansion::expansion_candidate_resources(observation);
             let rejected = memory.later_bases.rejected_sites.clone();
-            let site = expansion::generic_expansion_depot_site(
+            let site = expansion::defensible_expansion_depot_site(
                 observation,
+                map_analysis,
                 expansion,
                 EntityKind::ResourceDepot,
                 &resources,
@@ -242,6 +243,10 @@ where
             return status;
         }
         if order_pending {
+            // The simulation charges the Depot when its foundation goes down, not when it is
+            // ordered: keep the cost banked while the builder walks, or it is spent on the way.
+            let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
+            actions.holdback_resources(steel, oil);
             return status;
         }
     }

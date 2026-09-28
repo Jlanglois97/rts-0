@@ -20,6 +20,53 @@ impl AiMapAnalysis {
             .unwrap_or_else(|| vec![destination])
     }
 
+    /// Walking distance from `from` to every tile of its ground component, in tenths of a tile
+    /// (`u32::MAX` elsewhere). Diagonal steps may not cut blocked corners.
+    pub(super) fn ground_distance_field(&self, from: (f32, f32)) -> Option<Vec<u32>> {
+        let start = self.nearest_route_tile(from, 1, None)?;
+        let start_idx = tile_index(self.width, self.height, start.x, start.y)?;
+        let component = self.component_by_tile[start_idx];
+        let count = usize::try_from(self.width.checked_mul(self.height)?).ok()?;
+        let mut costs = vec![u32::MAX; count];
+        let mut open = BinaryHeap::new();
+        costs[start_idx] = 0;
+        open.push(Reverse((0_u32, start.x, start.y)));
+        while let Some(Reverse((cost, x, y))) = open.pop() {
+            let idx = tile_index(self.width, self.height, x, y)?;
+            if cost != costs[idx] {
+                continue;
+            }
+            for (dx, dy) in NEIGHBORS {
+                let (Ok(nx), Ok(ny)) = (
+                    u32::try_from(i64::from(x) + i64::from(dx)),
+                    u32::try_from(i64::from(y) + i64::from(dy)),
+                ) else {
+                    continue;
+                };
+                let Some(next_idx) = tile_index(self.width, self.height, nx, ny) else {
+                    continue;
+                };
+                if !self.passable[next_idx] || self.component_by_tile[next_idx] != component {
+                    continue;
+                }
+                if dx != 0 && dy != 0 && !self.diagonal_route_clear(x, y, dx, dy, 1) {
+                    continue;
+                }
+                let step = if dx == 0 || dy == 0 {
+                    CARDINAL_COST
+                } else {
+                    DIAGONAL_COST
+                };
+                let next_cost = cost.saturating_add(step);
+                if next_cost < costs[next_idx] {
+                    costs[next_idx] = next_cost;
+                    open.push(Reverse((next_cost, nx, ny)));
+                }
+            }
+        }
+        Some(costs)
+    }
+
     fn route_with_clearance(
         &self,
         from: (f32, f32),
@@ -233,6 +280,7 @@ mod tests {
             starts: Vec::new(),
             resource_clusters: Vec::new(),
             base_routes: Vec::new(),
+            start_ground_distances: Vec::new(),
         };
 
         let route = analysis.compact_group_route((48.0, 48.0), (240.0, 48.0), 1);
@@ -245,5 +293,12 @@ mod tests {
             (point.0 / tile_size as f32).floor() as u32,
             (point.1 / tile_size as f32).floor() as u32,
         )));
+
+        // Walking distance goes around the wall through its gap, not straight across it.
+        let field = analysis.ground_distance_field((48.0, 48.0)).unwrap();
+        let across = field[(width + 6) as usize];
+        assert_eq!(field[(width + 3) as usize], 20);
+        assert!((90..u32::MAX).contains(&across), "{across}");
+        assert_eq!(field[(width + 4) as usize], u32::MAX);
     }
 }
