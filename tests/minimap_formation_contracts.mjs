@@ -43,6 +43,27 @@ export function runMinimapFormationContracts({ minimapHarness, lockedEvent, poin
     if (native) assert(h.canvas.releasedPointers.includes(1), "native mouse capture is released");
     h.minimap.destroy();
   }
+  for (const native of [false, true]) {
+    const h = minimapHarness({ selected });
+    const event = (button) => native
+      ? pointerEvent(h.canvas, 150, 250, { pointerType: "mouse", button })
+      : lockedEvent(150, 250, button);
+    const send = (phase, button) => native
+      ? listenerFor(h.canvas, `pointer${phase}`)(event(button))
+      : h.router[`pointer${phase[0].toUpperCase()}${phase.slice(1)}`](event(button));
+    send("down", 2);
+    send("move", 2);
+    // Native pointerup reports the last released button in a chord; the locked
+    // router relinquishes capture on any mouseup, even for another button.
+    send("up", 0);
+    assert(h.minimap._formation.session === null, "chord release ends the formation session");
+    assert(h.clientIntent.formationMovePreview === null, "chord release clears the preview");
+    assert(h.net.sent.length === 0, "chord release never issues an accidental order");
+    send("down", 2);
+    send("up", 2);
+    assert(h.net.sent.length === 1 && h.net.sent[0].c === "move", "next minimap click works after chord release");
+    h.minimap.destroy();
+  }
   for (const cancel of ["blur", "escape", "pointercancel", "source", "disabled", "target", "destroy"]) {
     const h = minimapHarness({ selected, commandTarget: "attack" });
     h.router.pointerDown(lockedEvent(110, 210));

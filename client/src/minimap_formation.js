@@ -75,10 +75,11 @@ export class MinimapFormation {
 
   up(ev) {
     if (!this.session) return false;
-    if (ev.button !== this.session.button ||
-        (this.session.pointerId != null && ev.pointerId !== this.session.pointerId)) return true;
+    if (this.session.pointerId != null && ev.pointerId !== this.session.pointerId) return true;
     const p = this.point(ev);
-    if (this.valid() && p) this.gesture.finish(p, ev);
+    // A chord can release capture with a different button. End that session too,
+    // but only the initiating button may commit the order.
+    if (ev.button === this.session.button && this.valid() && p) this.gesture.finish(p, ev);
     else this.gesture.cancel();
     this.release();
     if (!this.minimap._containsClientPoint(ev.clientX, ev.clientY)) {
