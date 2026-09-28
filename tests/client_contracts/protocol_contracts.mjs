@@ -111,6 +111,7 @@ assert(
           [ORDER_STAGE_CODE[ORDER_STAGE.CHARGE], 176, 208],
           [ORDER_STAGE_CODE[ORDER_STAGE.SMOKE], 192, 224],
           [ORDER_STAGE_CODE[ORDER_STAGE.POINT_FIRE], 320, 352],
+          [ORDER_STAGE_CODE[ORDER_STAGE.BUILD], 384, 352, KIND_CODE[KIND.TRAINING_CENTRE]],
         ],
         87,
         [[ABILITY_CODE[ABILITY.CHARGE], 87, 2, null, 77, 45, null, 90, 45]],
@@ -311,7 +312,9 @@ assert(
   assert(decoded.entities[0].state === STATE.GATHER, "entity state code decodes");
   assert(decoded.entities[0].weaponFacing === 1.75, "entity optional weaponFacing decodes");
   assert(decoded.entities[0].latchedNode === 200, "entity optional latchedNode decodes");
-  assert(decoded.entities[0].orderPlan.length === 5, "entity order plan decodes");
+  assert(decoded.entities[0].orderPlan.length === 6, "entity order plan decodes");
+  assert(decoded.entities[0].orderPlan[5].buildingKind === KIND.TRAINING_CENTRE,
+    "compact queued build stage preserves its building kind");
   assert(decoded.entities[0].chargeCooldownLeft === 87, "legacy charge cooldown decodes");
   assert(
     decoded.entities[0].abilities[0].ability === ABILITY.CHARGE &&

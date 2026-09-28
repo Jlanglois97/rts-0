@@ -808,6 +808,8 @@ pub struct OrderPlanMarker {
     pub kind: String,
     pub x: f32,
     pub y: f32,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub building_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]

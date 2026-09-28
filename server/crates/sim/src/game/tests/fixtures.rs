@@ -177,6 +177,7 @@ fn legacy_view_of(game: &Game, e: &Entity, viewer: u32, fogged: bool) -> EntityV
                         kind: "attack".to_string(),
                         x: target.pos_x,
                         y: target.pos_y,
+                        building_kind: None,
                     });
                 }
             }

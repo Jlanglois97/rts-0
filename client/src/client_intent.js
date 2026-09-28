@@ -1,5 +1,6 @@
 import { CommandComposer } from "./command_composer.js";
 import { ABILITY, CMD, KIND, ORDER_STAGE } from "./protocol.js";
+import { STATS } from "./config.js";
 
 const ARTILLERY_TERMINAL_STAGES = new Set([
   ORDER_STAGE.POINT_FIRE,
@@ -284,6 +285,7 @@ export class ClientIntent {
     if (result && typeof result === "object" && result.sent === false) return;
     const units = normalizeUnitIds(command.units);
     if (units.length === 0) return;
+    if (command.c === CMD.BUILD && units.length !== 1) return;
     const clientSeq = normalizeClientSeq(result?.clientSeq);
     const stage = commandOrderStage(command, clientSeq, this._now());
     if (!stage) {
@@ -551,6 +553,16 @@ function commandOrderStage(command, clientSeq, createdAt) {
       return finiteFormationStage(command, base);
     case CMD.ATTACK_MOVE:
       return finitePointStage(ORDER_STAGE.ATTACK_MOVE, command, base);
+    case CMD.BUILD:
+      if (!Number.isInteger(command.tileX) || !Number.isInteger(command.tileY)) return null;
+      if (!STATS[command.building]) return null;
+      return {
+        kind: ORDER_STAGE.BUILD,
+        buildingKind: command.building,
+        x: command.tileX * 32 + STATS[command.building].footW * 16,
+        y: command.tileY * 32 + STATS[command.building].footH * 16,
+        ...base,
+      };
     case CMD.SETUP_ANTI_TANK_GUNS:
       return finitePointStage(ORDER_STAGE.SETUP_ANTI_TANK_GUNS, command, base);
     case CMD.HOLD_POSITION:
@@ -622,6 +634,7 @@ function stageConfirmedByAuthority(stage, authorityPlan) {
   if (!Array.isArray(authorityPlan)) return false;
   return authorityPlan.some((authority) => {
     if (authority?.kind !== stage.kind) return false;
+    if (stage.buildingKind && authority.buildingKind !== stage.buildingKind) return false;
     if (Number.isFinite(stage.x) && Number.isFinite(stage.y)) {
       return closePoint(authority, stage);
     }
@@ -644,6 +657,7 @@ function cloneStage(stage, extra = null) {
 
 function publicOrderStage(stage) {
   const out = { kind: stage.kind };
+  if (stage.buildingKind) out.buildingKind = stage.buildingKind;
   if (Number.isFinite(stage.x)) out.x = stage.x;
   if (Number.isFinite(stage.y)) out.y = stage.y;
   return out;

@@ -415,6 +415,7 @@ pub fn project_entity(
                 kind: stage.kind.to_protocol_str().to_string(),
                 x: stage.point.x,
                 y: stage.point.y,
+                building_kind: None,
             })
             .collect();
         view.order_plan = order_plan(
@@ -713,7 +714,10 @@ fn build_marker(kind: EntityKind, tile_x: u32, tile_y: u32) -> Option<OrderPlanM
     let tile_size = config::TILE_SIZE as f32;
     let x = tile_x as f32 * tile_size + stats.foot_w as f32 * tile_size * 0.5;
     let y = tile_y as f32 * tile_size + stats.foot_h as f32 * tile_size * 0.5;
-    point_marker("build", x, y)
+    point_marker("build", x, y).map(|mut marker| {
+        marker.building_kind = Some(kind.stable_id().to_string());
+        marker
+    })
 }
 
 fn point_marker(kind: &str, x: f32, y: f32) -> Option<OrderPlanMarker> {
@@ -724,6 +728,7 @@ fn point_marker(kind: &str, x: f32, y: f32) -> Option<OrderPlanMarker> {
         kind: kind.to_string(),
         x,
         y,
+        building_kind: None,
     })
 }
 
@@ -1172,21 +1177,25 @@ mod tests {
                     kind: "attackMove".to_string(),
                     x: 120.0,
                     y: 130.0,
+                    building_kind: None,
                 },
                 OrderPlanMarker {
                     kind: "move".to_string(),
                     x: 140.0,
                     y: 160.0,
+                    building_kind: None,
                 },
                 OrderPlanMarker {
                     kind: "gather".to_string(),
                     x: 720.0,
                     y: 720.0,
+                    building_kind: None,
                 },
                 OrderPlanMarker {
                     kind: "attackMove".to_string(),
                     x: 180.0,
                     y: 200.0,
+                    building_kind: None,
                 },
             ]
         );
@@ -1228,11 +1237,13 @@ mod tests {
                     kind: "build".to_string(),
                     x: 160.0,
                     y: 192.0,
+                    building_kind: Some("depot".to_string()),
                 },
                 OrderPlanMarker {
                     kind: "move".to_string(),
                     x: 320.0,
                     y: 352.0,
+                    building_kind: None,
                 },
             ]
         );
@@ -1275,16 +1286,19 @@ mod tests {
                     kind: "move".to_string(),
                     x: 120.0,
                     y: 130.0,
+                    building_kind: None,
                 },
                 OrderPlanMarker {
                     kind: "move".to_string(),
                     x: 180.0,
                     y: 200.0,
+                    building_kind: None,
                 },
                 OrderPlanMarker {
                     kind: "holdPosition".to_string(),
                     x: 180.0,
                     y: 200.0,
+                    building_kind: None,
                 },
             ]
         );

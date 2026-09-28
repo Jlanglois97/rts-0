@@ -729,17 +729,36 @@ function affordable(cost, resources) {
 function buildAvailability(ctx, kind, resources) {
   const st = STATS[kind];
   if (!st) return "locked";
-  if (requirementsOf(st).some((req) => !playerHasCompleteKind(ctx, req))) return "locked";
+  if (!buildRequirementsAvailable(ctx, kind)) return "locked";
   return affordable(st.cost, resources) ? "ready" : "unaffordable";
 }
 
 function buildDisabledReason(ctx, kind, resources) {
   const st = STATS[kind];
   if (!st) return "";
-  const missing = requirementsOf(st).find((req) => !playerHasCompleteKind(ctx, req));
+  const missing = buildRequirementsAvailable(ctx, kind)
+    ? null : requirementsOf(st).find((req) => !playerHasCompleteKind(ctx, req));
   if (missing) return `Requires ${STATS[missing]?.label || missing}`;
   if (!affordable(st.cost, resources)) return "Place now; construction waits for resources";
+  if (requirementsOf(st).some((req) => !playerHasCompleteKind(ctx, req))) {
+    return "Hold Shift when placing to queue after the prerequisite";
+  }
   return "";
+}
+
+function buildRequirementsAvailable(ctx, kind) {
+  const required = requirementsOf(STATS[kind]);
+  if (required.every((req) => playerHasCompleteKind(ctx, req))) return true;
+  return (ctx.selection || []).some((worker) => {
+    if (worker?.kind !== KIND.WORKER || worker.owner !== ctx.playerId) return false;
+    const available = new Set(required.filter((req) => playerHasCompleteKind(ctx, req)));
+    for (const stage of worker.orderPlan || []) {
+      if (stage?.kind === "build" && STATS[stage.buildingKind]) {
+        available.add(stage.buildingKind);
+      }
+    }
+    return required.every((req) => available.has(req));
+  });
 }
 
 function availableResearchesOf(ctx, kind) {

@@ -617,6 +617,23 @@ pub(in crate::game) fn apply_commands(
                 else {
                     continue;
                 };
+                let units: Vec<_> = if queued {
+                    units
+                        .into_iter()
+                        .filter(|unit| {
+                            queued_build_requirement_met(
+                                entities,
+                                player,
+                                *unit,
+                                &faction_id,
+                                building,
+                                false,
+                            )
+                        })
+                        .collect()
+                } else {
+                    units
+                };
                 let (target_x, target_y) = build_target_center(building, tile_x, tile_y);
                 let request = planner::OrderRequest {
                     units: units.clone(),
@@ -1100,6 +1117,18 @@ mod planned_actions {
                     }
                     if let Some(intent) = entity_order_intent_from_planner(intent) {
                         match &intent {
+                            OrderIntent::Build(build)
+                                if !queued_build_requirement_met(
+                                    entities,
+                                    player,
+                                    unit,
+                                    &faction_id,
+                                    build.kind,
+                                    replace_queued,
+                                ) =>
+                            {
+                                continue;
+                            }
                             OrderIntent::Attack(attack)
                                 if !attack_target_valid(
                                     attack_query(map, entities, teams, fog, smokes, player),
@@ -1756,6 +1785,39 @@ pub(in crate::game) fn artillery_point_fire_system(
             config::ARTILLERY_RELOAD_TICKS,
         );
     }
+}
+
+/// Check a future build against this worker's earlier build stages and completed structures.
+fn queued_build_requirement_met(
+    entities: &EntityStore,
+    player: u32,
+    worker: u32,
+    faction_id: &str,
+    building: EntityKind,
+    replace_queued: bool,
+) -> bool {
+    let Some(entity) = entities.get(worker).filter(|e| e.owner == player) else {
+        return false;
+    };
+    if !rules::economy::can_build_for_faction(faction_id, entity.kind, building) {
+        return false;
+    }
+    let mut available = world_query::completed_building_kinds(entities, player);
+    if let Order::Build(active) = entity.order() {
+        available.push(active.intent.kind);
+    }
+    if !replace_queued {
+        available.extend(
+            entity
+                .queued_orders()
+                .iter()
+                .filter_map(|order| match order {
+                    OrderIntent::Build(build) => Some(build.kind),
+                    _ => None,
+                }),
+        );
+    }
+    rules::economy::build_requirement_met_for_faction(faction_id, building, &available)
 }
 
 /// Issue a build order under the "reserve on arrival" model. Validates intent, emits
