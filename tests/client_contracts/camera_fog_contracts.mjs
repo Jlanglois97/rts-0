@@ -8,12 +8,14 @@ import {
 } from "./assertions.mjs";
 import { Camera } from "../../client/src/camera.js";
 import {
+  initializeCameraView,
   restoreInitialCameraView,
   selectInitialCameraView,
 } from "../../client/src/camera_view_selection.js";
 import { CAMERA } from "../../client/src/config.js";
 import { Fog } from "../../client/src/fog.js";
 import { KIND, TERRAIN } from "../../client/src/protocol.js";
+import { memoryStorage } from "./fakes.mjs";
 
 // Camera
 // ---------------------------------------------------------------------------
@@ -55,6 +57,22 @@ import { KIND, TERRAIN } from "../../client/src/protocol.js";
 
   const labCam = new Camera(800, 600, { maxZoom: CAMERA.labMaxZoom });
   labCam.setBounds(1000, 800, 800, 600);
+  const priorStorage = globalThis.localStorage;
+  globalThis.localStorage = memoryStorage({ "rts.camera.defaultZoom": String(CAMERA.maxZoom) });
+  try {
+    assert(!initializeCameraView(labCam, null), "camera: new Lab without a view uses the saved default");
+    assertApprox(labCam.zoom, CAMERA.maxZoom, 0.001,
+      "camera: maximum default zoom starts Lab at the regular match maximum");
+    initializeCameraView(labCam, { centerX: 500, centerY: 400 });
+    assertApprox(labCam.zoom, CAMERA.maxZoom, 0.001,
+      "camera: center-only Lab launch retains the saved default zoom");
+    initializeCameraView(labCam, { centerX: 500, centerY: 400, zoom: CAMERA.labMaxZoom });
+    assertApprox(labCam.zoom, CAMERA.labMaxZoom, 0.001,
+      "camera: explicit Lab launch zoom still uses its wider range");
+  } finally {
+    if (priorStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = priorStorage;
+  }
   labCam.setZoom(99, 400, 300);
   assertApprox(labCam.zoom, CAMERA.labMaxZoom, 0.001, "Camera accepts the higher lab zoom limit");
   labCam.setView({ x: 0, y: 0, zoom: 99 });

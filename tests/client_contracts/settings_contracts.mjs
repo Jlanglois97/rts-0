@@ -19,6 +19,8 @@ import {
   buildSettingsTabs,
 } from "../../client/src/settings_panels.js";
 import { SettingsContainer } from "../../client/src/settings_container.js";
+import { readDefaultZoom } from "../../client/src/default_zoom_control.js";
+import { CAMERA } from "../../client/src/config.js";
 import {
   readPredictionEnabled,
   writePredictionEnabled,
@@ -147,6 +149,23 @@ function hotkeyService() {
     const slider = findFakeById(root, "minimap-size-slider");
     assert(slider?.type === "range", "settings: game tab offers a minimap size slider");
     assert(slider.min === "0" && slider.max === "100", "settings: minimap slider spans default to maximum");
+    const zoom = findFakeById(root, "default-zoom-slider");
+    assert(zoom?.type === "range", "settings: game tab offers a default zoom slider");
+    assert(zoom.min === String(CAMERA.minZoom * 100) && zoom.max === String(CAMERA.maxZoom * 100),
+      "settings: default zoom range matches regular game zoom limits");
+    const priorStorage = globalThis.localStorage;
+    globalThis.localStorage = memoryStorage();
+    try {
+      assert(readDefaultZoom() === 1, "settings: default zoom starts at the current 1x framing");
+      zoom.value = zoom.max;
+      zoom.listeners.input();
+      assert(readDefaultZoom() === CAMERA.maxZoom, "settings: zoom slider saves the regular game maximum");
+      globalThis.localStorage.setItem("rts.camera.defaultZoom", String(CAMERA.labMaxZoom));
+      assert(readDefaultZoom() === 1, "settings: Lab-only zoom cannot become the starting zoom");
+    } finally {
+      if (priorStorage === undefined) delete globalThis.localStorage;
+      else globalThis.localStorage = priorStorage;
+    }
   });
 
   withFakeSettingsDocument(() => {

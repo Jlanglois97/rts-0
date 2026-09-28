@@ -1,3 +1,11 @@
+import { readDefaultZoom } from "./default_zoom_control.js";
+
+export function initializeCameraView(camera, initialCamera) {
+  const current = camera.snapshot();
+  camera.restore({ ...current, framingScale: readDefaultZoom() });
+  return initialCamera ? restoreInitialCameraView(camera, initialCamera) : false;
+}
+
 export function selectInitialCameraView({
   currentView = null,
   pendingView = null,

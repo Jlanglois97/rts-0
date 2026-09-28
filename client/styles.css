@@ -2640,6 +2640,21 @@ input[type="text"]:focus {
   accent-color: #d28a70;
   cursor: pointer;
 }
+.default-zoom-control {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+.default-zoom-control input[type="range"] {
+  width: 100%;
+}
+.default-zoom-endpoints {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--ink-dim);
+}
 #settings-menu button {
   appearance: none;
   min-height: 36px;
