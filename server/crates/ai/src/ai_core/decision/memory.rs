@@ -82,6 +82,8 @@ pub(crate) struct ContainmentPush {
     pub(super) smoke_target: Option<u32>,
     pub(super) smoke_focus_target: Option<u32>,
     pub(super) smoke_expires_tick: Option<u32>,
+    /// Whether the Tanks stood at the push's destination at the last decision.
+    pub(super) at_destination: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -112,6 +114,15 @@ pub(crate) struct AiDecisionMemory {
     launched_frontal_units: BTreeMap<u32, u32>,
     /// The push under way (or forming), its units, route and firing state.
     pub(super) containment: ContainmentPush,
+    /// The other group of a two-pronged push. While one group is being driven its state sits in
+    /// `containment` and the other's here, so "the partner" is always this field.
+    pub(super) partner_push: ContainmentPush,
+    /// The two-pronged push under way, if any.
+    pub(super) pincer: Option<super::frontal::pincer::Pincer>,
+    /// A two-pronged push is possible but waits for a second Scout Car.
+    pub(super) pincer_scout_wanted: bool,
+    /// Approach lanes last worked out for a target: the target, the tick, and the two sides.
+    pub(super) pincer_lanes: Option<super::frontal::pincer::PincerLanes>,
     /// How many enemy Tanks were in sight together, by tick, over the last
     /// `ENEMY_TANK_MEMORY_TICKS`. Counting every Tank seen instead also counted the ones Jeff had
     /// destroyed: AI 2.1 feeding Tanks into Jeff's defense read as 8-9 while it had 3.
@@ -152,6 +163,10 @@ impl AiDecisionMemory {
             pending_upgrades: BTreeSet::new(),
             launched_frontal_units: BTreeMap::new(),
             containment: ContainmentPush::default(),
+            partner_push: ContainmentPush::default(),
+            pincer: None,
+            pincer_scout_wanted: false,
+            pincer_lanes: None,
             enemy_tank_sightings: BTreeMap::new(),
             enemy_attack_sightings: BTreeMap::new(),
             home_defensive_tank: None,

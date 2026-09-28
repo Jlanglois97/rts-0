@@ -259,6 +259,7 @@ fn spare_home_riflemen(observation: &AiObservation, memory: &AiDecisionMemory) -
         .filter(|unit| unit.kind == EntityKind::Rifleman && unit.is_complete && unit.hp > 0)
         .filter(|unit| {
             !memory.containment.active_riflemen.contains(&unit.id)
+                && !memory.partner_push.active_riflemen.contains(&unit.id)
                 && !memory.expansion_security.riflemen.contains(&unit.id)
         })
         .map(|unit| unit.id)
