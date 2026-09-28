@@ -620,7 +620,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
   compatibility; it is the original 96×96 handcrafted map padded with 15 passable grass tiles on
   every edge. Both map JSON assets use terrain row strings, flat `startLocations`, and flat
   `baseSites`.
-- Start: `STARTING_STEEL = 75`, `STARTING_OIL = 0`, `STARTING_WORKERS = 1`, and
+- Start: `STARTING_STEEL = 25`, `STARTING_OIL = 0`, `STARTING_WORKERS = 1`, and
   `STARTING_RIFLEMEN = 4`: one Engineer, four Riflemen, one Resource Depot, one completed Pump Jack
   on a home Oil patch, and six completed Steel Mines at the player's start, with 12 steel patches
   holding 625 steel each split into two six-wide fields four tiles out on opposite sides of the
