@@ -559,6 +559,23 @@ import { textWithin } from "./dom_text.mjs";
       textWithin(root).includes("No active production"),
       "production tab handles empty production cleanly",
     );
+    overlay.applyObserverAnalysis({
+      tick: 2,
+      players: [{ id: 1, units: [], production: [{
+        buildingId: 12,
+        buildingKind: KIND.BARRACKS,
+        itemKind: KIND.BARRACKS,
+        itemType: "building",
+        progress: 0.3,
+        queueDepth: 0,
+      }] }],
+    });
+    const constructionText = textWithin(root);
+    assert(
+      constructionText.includes("Constructing Barracks") && constructionText.includes("30")
+        && !constructionText.includes("Q 0") && !constructionText.includes("No active production"),
+      "production tab renders construction progress without a queue depth",
+    );
 
     overlay.applyObserverAnalysis({
       tick: 12,

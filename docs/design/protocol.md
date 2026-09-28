@@ -1771,7 +1771,7 @@ must not receive this message.
           buildingId: u32,
           buildingKind: string,
           itemKind: string,
-          itemType: "unit" | "upgrade",
+          itemType: "building" | "unit" | "upgrade",
           progress: f32,
           queueDepth: u32
         }
@@ -1844,8 +1844,11 @@ must not receive this message.
 }
 ```
 `players` lists every active observed player. `units` is the current living unit inventory by kind.
-`production` has one row for each owned building with a non-empty unit or research queue; `progress`
-is the front item's completion fraction and `queueDepth` is that queue's total item count.
+`production` has one `building` row for each owned unfinished building, including extractor
+scaffolds, and one `unit` or `upgrade` row for each owned building with a non-empty queue. A building
+under construction can therefore have both a construction row and a queued research row. `progress`
+is the construction or front item's completion fraction; `queueDepth` is zero for construction and
+the total item count for a queue.
 `upgrades` lists that player's completed permanent research using protocol upgrade ids.
 `steelValue` and `oilValue` are aggregate row values (`count * configured cost`), not per-unit
 costs. `unitsLost` is the authoritative unit-death count by kind. `buildingsLost` is the

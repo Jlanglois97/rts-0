@@ -57,6 +57,17 @@ impl Game {
             if entity.owner != player_id || !entity.kind.is_building() || entity.hp == 0 {
                 continue;
             }
+            if let Some(progress) = entity.build_progress_fraction() {
+                let kind = crate::protocol::kind_to_wire(entity.kind).to_string();
+                rows.push(ObserverAnalysisProduction {
+                    building_id: entity.id,
+                    building_kind: kind.clone(),
+                    item_kind: kind,
+                    item_type: "building".to_string(),
+                    progress,
+                    queue_depth: 0,
+                });
+            }
             if let Some(item) = entity.prod_queue().first() {
                 rows.push(ObserverAnalysisProduction {
                     building_id: entity.id,

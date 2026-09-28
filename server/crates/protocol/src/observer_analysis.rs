@@ -49,9 +49,9 @@ pub struct ObserverAnalysisProduction {
     pub building_id: u32,
     pub building_kind: String,
     pub item_kind: String,
-    /// `"unit"` or `"upgrade"`.
+    /// `"building"`, `"unit"`, or `"upgrade"`.
     pub item_type: String,
-    /// 0.0..1.0 completion of the front queued item.
+    /// 0.0..1.0 completion of the construction or front queued item.
     pub progress: f32,
     pub queue_depth: u32,
 }
@@ -210,14 +210,24 @@ mod tests {
                     steel_value: 180,
                     oil_value: 0,
                 }],
-                production: vec![ObserverAnalysisProduction {
-                    building_id: 10,
-                    building_kind: kinds::BARRACKS.to_string(),
-                    item_kind: kinds::MACHINE_GUNNER.to_string(),
-                    item_type: "unit".to_string(),
-                    progress: 0.5,
-                    queue_depth: 2,
-                }],
+                production: vec![
+                    ObserverAnalysisProduction {
+                        building_id: 10,
+                        building_kind: kinds::BARRACKS.to_string(),
+                        item_kind: kinds::MACHINE_GUNNER.to_string(),
+                        item_type: "unit".to_string(),
+                        progress: 0.5,
+                        queue_depth: 2,
+                    },
+                    ObserverAnalysisProduction {
+                        building_id: 11,
+                        building_kind: kinds::BARRACKS.to_string(),
+                        item_kind: kinds::BARRACKS.to_string(),
+                        item_type: "building".to_string(),
+                        progress: 0.25,
+                        queue_depth: 0,
+                    },
+                ],
                 upgrades: vec!["tank_unlock".to_string()],
                 units_lost: vec![ObserverAnalysisKindCount {
                     kind: kinds::WORKER.to_string(),
@@ -283,6 +293,8 @@ mod tests {
         assert_eq!(json["players"][0]["production"][0]["buildingId"], 10);
         assert_eq!(json["players"][0]["production"][0]["itemType"], "unit");
         assert_eq!(json["players"][0]["production"][0]["queueDepth"], 2);
+        assert_eq!(json["players"][0]["production"][1]["itemType"], "building");
+        assert_eq!(json["players"][0]["production"][1]["progress"], 0.25);
         assert_eq!(json["players"][0]["upgrades"][0], "tank_unlock");
         assert_eq!(json["players"][0]["unitsLost"][0]["kind"], "worker");
         assert_eq!(json["players"][0]["buildingsLost"][0]["kind"], "steel_mine");
