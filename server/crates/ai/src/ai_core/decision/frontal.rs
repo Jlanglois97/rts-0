@@ -107,6 +107,16 @@ impl FrontalWavePlan {
     pub(super) fn should_stage(&self) -> bool {
         !self.ready_units.is_empty() && !self.should_attack()
     }
+
+    /// The same plan with no units free to attack or stage: only a push already under way is
+    /// commanded.
+    pub(super) fn push_only(&self) -> Self {
+        Self {
+            ready_units: Vec::new(),
+            blockers: vec![FrontalWaveBlocker::WaitingForUnits],
+            ..self.clone()
+        }
+    }
 }
 
 pub(super) fn plan_frontal_wave(
@@ -228,6 +238,7 @@ pub(super) fn issue_frontal_wave(
                 containment,
                 is_jeffs_ai_profile(profile.id),
                 profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
+                uses_current_jeffs_ai_policy(profile.id),
                 map_analysis,
                 memory,
             );
@@ -319,10 +330,21 @@ pub(super) fn sync_containment_recovery(
         return;
     }
     let owned: BTreeSet<u32> = observation.owned.iter().map(|entity| entity.id).collect();
-    let tanks_intact = memory
+    // The current Jeff's push, most of its Tanks, carries on through losses until half of it is gone
+    // or it drops below the policy minimum. Other profiles fall back on the first loss.
+    let tanks_left = memory
         .containment_active_tanks
         .iter()
-        .all(|tank| owned.contains(tank));
+        .filter(|tank| owned.contains(tank))
+        .count();
+    let tanks_intact = if uses_current_jeffs_ai_policy(profile.id) {
+        tanks_left * 2 >= memory.containment_launch_tanks
+            && profile
+                .expansion_containment
+                .is_some_and(|policy| tanks_left >= policy.minimum_tanks_to_continue)
+    } else {
+        tanks_left == memory.containment_active_tanks.len()
+    };
     let scout_intact = memory
         .containment_active_scout
         .is_some_and(|scout| owned.contains(&scout));
@@ -401,6 +423,7 @@ fn issue_expansion_containment_wave(
     policy: ExpansionContainmentPolicy,
     tight_formation: bool,
     lead_anchor_tank_catchup: bool,
+    push_uses_available_armor: bool,
     map_analysis: Option<&AiMapAnalysis>,
     memory: &mut AiDecisionMemory,
 ) -> Option<AiIntent> {
@@ -452,9 +475,15 @@ fn issue_expansion_containment_wave(
             required_tanks
         };
         let rally = containment_regroup_point(own_base, enemy_base, observation.map)?;
-        if memory.containment_active_tanks.len() != required_tanks
-            || memory.containment_active_scout.is_none()
-        {
+        // The current Jeff forms its push once from most of the Tanks ready now, and only forms it
+        // again if losses before the launch take it below its minimum. Other profiles keep a push
+        // of exactly the required size.
+        let reform = if push_uses_available_armor {
+            memory.containment_active_tanks.len() < required_tanks
+        } else {
+            memory.containment_active_tanks.len() != required_tanks
+        };
+        if reform || memory.containment_active_scout.is_none() {
             let tank_exclusions: BTreeSet<u32> = memory
                 .home_defensive_tank
                 .into_iter()
@@ -471,9 +500,14 @@ fn issue_expansion_containment_wave(
                 tanks.retain(|tank| plan.ready_units.contains(tank));
                 scouts.retain(|scout| plan.ready_units.contains(scout));
             }
-            select_nearest_units(observation, &mut tanks, rally, required_tanks);
+            let push_size = if push_uses_available_armor {
+                push_tank_count(tanks.len(), required_tanks)
+            } else {
+                required_tanks
+            };
+            select_nearest_units(observation, &mut tanks, rally, push_size);
             select_nearest_units(observation, &mut scouts, rally, 1);
-            if tanks.len() != required_tanks || scouts.is_empty() {
+            if tanks.len() != push_size || scouts.is_empty() {
                 return None;
             }
             memory.containment_active_tanks = tanks.iter().copied().collect();
@@ -484,6 +518,32 @@ fn issue_expansion_containment_wave(
             reset_containment_route(memory);
             memory.containment_last_formation_command_tick = None;
             memory.containment_assembly_started_tick = Some(observation.tick);
+        } else if push_uses_available_armor {
+            // Until it leaves, the push keeps taking in Tanks that become ready, so it stays most
+            // of the army. A push that formed with 3 Tanks otherwise waited all game while 20 more
+            // were built behind it.
+            let mut exclusions: BTreeSet<u32> = memory
+                .home_defensive_tank
+                .into_iter()
+                .chain(memory.later_bases.guards.iter().copied())
+                .collect();
+            exclusions.extend(memory.containment_active_tanks.iter().copied());
+            let mut newcomers = actions::select_ready_combat_units_excluding(
+                &observation.owned,
+                &[EntityKind::Tank],
+                &exclusions,
+            );
+            if !memory.containment_wave_launched {
+                newcomers.retain(|tank| plan.ready_units.contains(tank));
+            }
+            let pushing = memory.containment_active_tanks.len();
+            let wanted = push_tank_count(pushing + newcomers.len(), required_tanks);
+            if wanted > pushing {
+                select_nearest_units(observation, &mut newcomers, rally, wanted - pushing);
+                memory
+                    .containment_active_tanks
+                    .extend(newcomers.iter().copied());
+            }
         }
 
         let tanks: Vec<u32> = memory.containment_active_tanks.iter().copied().collect();
@@ -565,6 +625,7 @@ fn issue_expansion_containment_wave(
             memory.containment_opening_tanks = tanks.iter().copied().collect();
             memory.containment_wave_launched = true;
         }
+        memory.containment_launch_tanks = tanks.len();
         memory.containment_recovery_active = false;
         memory.containment_stationary_since = None;
         reset_containment_route(memory);
@@ -1189,37 +1250,50 @@ fn compact_tank_formation_assignments(
         .iter()
         .map(|unit| (unit.id, unit))
         .collect();
+    let along = |id: &u32, axis: (f32, f32)| {
+        by_id
+            .get(id)
+            .map(|unit| unit.x * axis.0 + unit.y * axis.1)
+            .unwrap_or(0.0)
+    };
+    // A large push forms ranks: the frontmost Tanks take the front rank, the next ones the rank
+    // behind. One line abreast of 18 Tanks would be 26 tiles wide.
     tank_ids.sort_by(|left, right| {
-        let lateral_position = |id: &u32| {
-            by_id
-                .get(id)
-                .map(|unit| unit.x * perpendicular.0 + unit.y * perpendicular.1)
-                .unwrap_or(0.0)
-        };
-        lateral_position(left)
-            .total_cmp(&lateral_position(right))
+        along(right, toward_objective)
+            .total_cmp(&along(left, toward_objective))
             .then_with(|| left.cmp(right))
     });
     let tile_size = map.tile_size as f32;
-    let middle = tank_ids.len().saturating_sub(1) as f32 / 2.0;
-    tank_ids
-        .into_iter()
-        .enumerate()
-        .map(|(index, tank_id)| {
+    let mut assignments = Vec::with_capacity(tank_ids.len());
+    for (rank, rank_ids) in tank_ids.chunks(TANK_FORMATION_RANK_WIDTH).enumerate() {
+        let mut rank_ids = rank_ids.to_vec();
+        rank_ids.sort_by(|left, right| {
+            along(left, perpendicular)
+                .total_cmp(&along(right, perpendicular))
+                .then_with(|| left.cmp(right))
+        });
+        let middle = rank_ids.len().saturating_sub(1) as f32 / 2.0;
+        let back = rank as f32 * TANK_FORMATION_RANK_DEPTH_TILES * tile_size;
+        for (index, tank_id) in rank_ids.into_iter().enumerate() {
             let offset = (index as f32 - middle) * spacing_tiles * tile_size;
-            (
+            assignments.push((
                 tank_id,
                 clamp_to_map(
                     (
-                        center.0 + perpendicular.0 * offset,
-                        center.1 + perpendicular.1 * offset,
+                        center.0 + perpendicular.0 * offset - toward_objective.0 * back,
+                        center.1 + perpendicular.1 * offset - toward_objective.1 * back,
                     ),
                     map,
                 ),
-            )
-        })
-        .collect()
+            ));
+        }
+    }
+    assignments
 }
+
+/// Tanks per rank of a push formation, and how far each rank sits behind the one in front.
+const TANK_FORMATION_RANK_WIDTH: usize = 6;
+const TANK_FORMATION_RANK_DEPTH_TILES: f32 = 2.0;
 
 fn frontmost_unit_position(
     observation: &AiObservation,
@@ -1562,6 +1636,17 @@ fn group_center(observation: &AiObservation, unit_ids: &[u32]) -> Option<(f32, f
 
 #[cfg(test)]
 mod tests;
+
+/// The push leaves at most this many ready Tanks at home.
+const PUSH_HOME_RESERVE_MAX_TANKS: usize = 5;
+
+/// How many of `ready` Tanks the push takes: all but a home reserve of a quarter of them, at most
+/// `PUSH_HOME_RESERVE_MAX_TANKS`, and never fewer than `minimum` (more than `ready` means the push
+/// cannot form yet). Jeff used to push with exactly two or three Tanks while twenty sat at home.
+fn push_tank_count(ready: usize, minimum: usize) -> usize {
+    let reserve = (ready / 4).min(PUSH_HOME_RESERVE_MAX_TANKS);
+    ready.saturating_sub(reserve).max(minimum)
+}
 
 /// Enemy Tanks this close to any push Tank count toward the push being outnumbered.
 const PUSH_OUTNUMBERED_RADIUS_TILES: f32 = 16.0;

@@ -858,6 +858,23 @@ where
         frontal_exclusions.insert(tank_id);
     }
     sync_containment_recovery(observation, profile, memory);
+    // The current Jeff's launched push keeps its units: home defense answers raids with what stayed
+    // home, and the push keeps its own orders meanwhile. It used to lose all but two Tanks to
+    // home defense within moments of leaving.
+    let push_units: BTreeSet<u32> = if uses_current_jeffs_ai_policy(profile.id)
+        && memory.containment_wave_launched
+        && !memory.containment_recovery_active
+    {
+        memory
+            .containment_active_tanks
+            .iter()
+            .copied()
+            .chain(memory.containment_active_scout)
+            .chain(memory.containment_active_riflemen.iter().copied())
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
     let forward_tank_position = uses_current_jeffs_ai_policy(profile.id)
         .then(|| expansion_security::tank_staging_center(observation, map_analysis))
         .flatten();
@@ -884,6 +901,7 @@ where
     let mut local_ready_units =
         actions::select_ready_combat_units(&observation.owned, &ALL_COMBAT_UNITS);
     local_ready_units.retain(|id| !expansion_footprint_blockers.contains(id));
+    local_ready_units.retain(|id| !push_units.contains(id));
     if profile.home_anti_tank.is_some() {
         local_ready_units.retain(|id| {
             Some(*id) != memory.home_defensive_tank
@@ -942,6 +960,7 @@ where
         }
         // The picket holds its trench on the route; it never runs back to answer a raid.
         local_defenders.retain(|id| Some(*id) != memory.route_line.picket());
+        local_defenders.retain(|id| !push_units.contains(id));
         local_defenders.sort_unstable();
         local_defenders.dedup();
         if new_jeff_defense {
@@ -1200,18 +1219,25 @@ where
         } else {
             None
         };
-        if (!handled_local_defense || containment_recall_target.is_some())
+        // During a raid at home only a launched push is still commanded here.
+        let push_only = handled_local_defense && containment_recall_target.is_none();
+        if (!push_only || !push_units.is_empty())
             && !turtle_defense_active
             && (!frontal_wave.ready_units.is_empty() || containment_needs_control)
         {
             if let Some(enemy_base) = facts.nearest_public_enemy_base {
                 let containment_was_launched = memory.containment_wave_launched;
+                let wave_plan = if push_only {
+                    frontal_wave.push_only()
+                } else {
+                    frontal_wave.clone()
+                };
                 if let Some(intent) = issue_frontal_wave(
                     &mut actions,
                     observation,
                     profile,
                     attack_policy,
-                    &frontal_wave,
+                    &wave_plan,
                     enemy_base,
                     map_analysis,
                     containment_recall_target,

@@ -982,3 +982,138 @@ fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
     );
     assert_eq!(pushing, 7);
 }
+
+#[test]
+fn the_push_takes_most_ready_tanks_and_leaves_at_most_five_home() {
+    assert_eq!(push_tank_count(2, 2), 2);
+    assert_eq!(push_tank_count(3, 2), 3);
+    assert_eq!(push_tank_count(8, 2), 6);
+    assert_eq!(push_tank_count(12, 2), 9);
+    assert_eq!(push_tank_count(23, 2), 18);
+    assert_eq!(push_tank_count(40, 2), 35);
+    // Never below the minimum: more than are ready means the push cannot form yet.
+    assert_eq!(push_tank_count(5, 6), 6);
+}
+
+#[test]
+fn tanks_join_the_push_until_it_leaves_and_not_after() {
+    let armored = JEFFS_AI.tech_transition.unwrap().attack;
+    let (mut observation, mut plan, enemy_base) = crossroads_armor(20);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let issue =
+        |observation: &AiObservation, plan: &FrontalWavePlan, memory: &mut AiDecisionMemory| {
+            let facts = AiFacts::from_observation(observation);
+            let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+            issue_frontal_wave(
+                &mut actions,
+                observation,
+                &JEFFS_AI,
+                armored,
+                plan,
+                enemy_base,
+                None,
+                None,
+                memory,
+            )
+        };
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(
+        memory.containment_active_tanks.len(),
+        15,
+        "20 ready, 5 stay home"
+    );
+
+    // Three Tanks finish while it forms up: 23 ready, so the push grows to 18.
+    let ts = observation.map.tile_size as f32;
+    let add_tanks = |observation: &mut AiObservation, plan: &mut FrontalWavePlan, ids: [u32; 3]| {
+        for id in ids {
+            let mut tank = target_test_entity(id, EntityKind::Tank, 112.0 * ts, 80.5 * ts);
+            tank.owner = 1;
+            observation.owned.push(tank);
+            plan.ready_units.push(id);
+        }
+    };
+    add_tanks(&mut observation, &mut plan, [950, 951, 952]);
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(memory.containment_active_tanks.len(), 18);
+
+    // Once it has left, Tanks built afterwards stay home.
+    memory.containment_wave_launched = true;
+    memory.containment_recovery_active = false;
+    memory.containment_launch_tanks = 18;
+    let left_with = memory.containment_active_tanks.clone();
+    add_tanks(&mut observation, &mut plan, [960, 961, 962]);
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(memory.containment_active_tanks, left_with);
+}
+
+#[test]
+fn a_large_push_carries_on_until_half_of_it_is_lost() {
+    let tanks: Vec<AiEntitySummary> = (1..=10)
+        .map(|id| {
+            let mut tank = target_test_entity(id, EntityKind::Tank, 20.0 * 32.0, 20.0 * 32.0);
+            tank.owner = 1;
+            tank
+        })
+        .collect();
+    let mut scout = target_test_entity(99, EntityKind::ScoutCar, 22.0 * 32.0, 20.0 * 32.0);
+    scout.owner = 1;
+    let pushed = |alive: u32| {
+        let mut owned: Vec<_> = tanks
+            .iter()
+            .filter(|tank| tank.id <= alive)
+            .cloned()
+            .collect();
+        owned.push(scout.clone());
+        let observation = regroup_test_observation(owned);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        memory.containment_wave_launched = true;
+        memory.containment_active_tanks = (1..=10).collect();
+        memory.containment_active_scout = Some(99);
+        memory.containment_launch_tanks = 10;
+        sync_containment_recovery(&observation, &JEFFS_AI, &mut memory);
+        !memory.containment_recovery_active
+    };
+    assert!(pushed(10));
+    assert!(pushed(6), "four of ten lost");
+    assert!(pushed(5), "half of it left");
+    assert!(!pushed(4), "more than half lost");
+}
+
+#[test]
+fn a_large_push_forms_ranks_of_six() {
+    let tanks: Vec<AiEntitySummary> = (1..=12)
+        .map(|id| {
+            let mut tank =
+                target_test_entity(id, EntityKind::Tank, (10.0 + id as f32) * 32.0, 30.0 * 32.0);
+            tank.owner = 1;
+            tank
+        })
+        .collect();
+    let observation = regroup_test_observation(tanks);
+    let ids: Vec<u32> = (1..=12).collect();
+    let center = (30.0 * 32.0, 30.0 * 32.0);
+    let assignments = compact_tank_formation_assignments(
+        &observation,
+        &ids,
+        center,
+        (0.0, -1.0),
+        observation.map,
+        CONTAINMENT_TANK_SPACING_TILES,
+    );
+    assert_eq!(assignments.len(), 12);
+    let front: Vec<_> = assignments
+        .iter()
+        .filter(|(_, point)| (point.1 - center.1).abs() < 1.0)
+        .collect();
+    let back: Vec<_> = assignments
+        .iter()
+        .filter(|(_, point)| (point.1 - (center.1 + 2.0 * 32.0)).abs() < 1.0)
+        .collect();
+    assert_eq!((front.len(), back.len()), (6, 6));
+    let width = |rank: &[&(u32, (f32, f32))]| {
+        let xs: Vec<f32> = rank.iter().map(|(_, point)| point.0).collect();
+        xs.iter().cloned().fold(f32::MIN, f32::max) - xs.iter().cloned().fold(f32::MAX, f32::min)
+    };
+    assert!(width(&front) <= 5.0 * CONTAINMENT_TANK_SPACING_TILES * 32.0 + 0.5);
+}

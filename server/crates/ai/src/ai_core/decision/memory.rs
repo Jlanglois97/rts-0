@@ -75,6 +75,8 @@ pub(crate) struct AiDecisionMemory {
     pub(super) containment_stationary_since: Option<u32>,
     pub(super) containment_wave_launched: bool,
     pub(super) containment_opening_tanks: BTreeSet<u32>,
+    /// How many Tanks the current push launched with. It falls back once half of them are lost.
+    pub(super) containment_launch_tanks: usize,
     pub(super) containment_recovery_active: bool,
     pub(super) containment_active_tanks: BTreeSet<u32>,
     pub(super) containment_active_scout: Option<u32>,
@@ -92,9 +94,10 @@ pub(crate) struct AiDecisionMemory {
     /// Push Tanks whose latest order was Hold Position. A holding Tank picks its own targets in
     /// range without moving; sending Hold again would clear that target.
     pub(super) containment_held_tanks: BTreeSet<u32>,
-    /// Enemy Tanks seen recently: id to the last tick seen. Tanks that die are only forgotten after
-    /// `ENEMY_TANK_MEMORY_TICKS`, so this errs toward counting too many.
-    pub(super) enemy_tanks_seen: BTreeMap<u32, u32>,
+    /// How many enemy Tanks were in sight together, by tick, over the last
+    /// `ENEMY_TANK_MEMORY_TICKS`. Counting every Tank seen instead also counted the ones Jeff had
+    /// destroyed: AI 2.1 feeding Tanks into Jeff's defense read as 8-9 while it had 3.
+    pub(super) enemy_tank_sightings: BTreeMap<u32, usize>,
     pub(super) containment_focus_target: Option<u32>,
     pub(super) containment_focus_stable_since: Option<u32>,
     pub(super) containment_smoke_target: Option<u32>,
@@ -135,6 +138,7 @@ impl AiDecisionMemory {
             containment_stationary_since: None,
             containment_wave_launched: false,
             containment_opening_tanks: BTreeSet::new(),
+            containment_launch_tanks: 0,
             containment_recovery_active: false,
             containment_active_tanks: BTreeSet::new(),
             containment_active_scout: None,
@@ -150,7 +154,7 @@ impl AiDecisionMemory {
             containment_recall_active: false,
             containment_contact_last_tick: None,
             containment_held_tanks: BTreeSet::new(),
-            enemy_tanks_seen: BTreeMap::new(),
+            enemy_tank_sightings: BTreeMap::new(),
             containment_focus_target: None,
             containment_focus_stable_since: None,
             containment_smoke_target: None,
@@ -374,20 +378,25 @@ impl AiDecisionMemory {
     /// Record the enemy Tanks in sight and forget those not seen for a while.
     pub(super) fn note_enemy_tanks(&mut self, observation: &AiObservation) {
         let tick = observation.tick;
-        for enemy in observation
+        let visible = observation
             .visible_enemies
             .iter()
             .filter(|enemy| enemy.kind == EntityKind::Tank && enemy.hp > 0)
-        {
-            self.enemy_tanks_seen.insert(enemy.id, tick);
+            .count();
+        if visible > 0 {
+            self.enemy_tank_sightings.insert(tick, visible);
         }
-        self.enemy_tanks_seen
-            .retain(|_, seen| tick.saturating_sub(*seen) <= ENEMY_TANK_MEMORY_TICKS);
+        self.enemy_tank_sightings
+            .retain(|seen, _| tick.saturating_sub(*seen) <= ENEMY_TANK_MEMORY_TICKS);
     }
 
-    /// Enemy Tanks seen within the last `ENEMY_TANK_MEMORY_TICKS`.
+    /// The most enemy Tanks seen together within the last `ENEMY_TANK_MEMORY_TICKS`.
     pub(super) fn recent_enemy_tanks(&self) -> usize {
-        self.enemy_tanks_seen.len()
+        self.enemy_tank_sightings
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
     }
 
     pub(super) fn sync_defender_posture(&mut self, observation: &AiObservation) {

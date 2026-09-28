@@ -91,6 +91,7 @@ fn issue_test_containment(
         JEFFS_AI.expansion_containment.unwrap(),
         true,
         true,
+        true,
         None,
         memory,
     );

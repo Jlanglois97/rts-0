@@ -822,7 +822,7 @@ fn crossroads_main_buildings_are_placed_by_how_far_behind_the_hq_they_are() {
 }
 
 #[test]
-fn recently_seen_enemy_tanks_are_remembered_for_ninety_seconds() {
+fn the_most_enemy_tanks_seen_together_are_remembered_for_ninety_seconds() {
     let mut obs = crossroads_east_observation();
     let mut memory = AiDecisionMemory::for_profile(&crate::ai_core::profiles::JEFFS_AI);
     for id in [500, 501] {
@@ -831,6 +831,17 @@ fn recently_seen_enemy_tanks_are_remembered_for_ninety_seconds() {
         obs.visible_enemies.push(tank);
     }
     memory.note_enemy_tanks(&obs);
+    // Two other Tanks later, perhaps replacements for two that were destroyed: still two.
+    for tank in &mut obs.visible_enemies {
+        tank.id += 100;
+    }
+    obs.tick += 90;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(
+        memory.recent_enemy_tanks(),
+        2,
+        "counted together, not one by one"
+    );
     obs.visible_enemies.clear();
     obs.tick += memory::ENEMY_TANK_MEMORY_TICKS;
     memory.note_enemy_tanks(&obs);
