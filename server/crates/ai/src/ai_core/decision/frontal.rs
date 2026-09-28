@@ -54,6 +54,11 @@ const CONTAINMENT_MARCH_STEP_TILES: f32 = 8.0;
 const CONTAINMENT_FORMATION_REISSUE_TICKS: u32 = config::TICK_HZ * 2;
 const CONTAINMENT_ASSEMBLY_TIMEOUT_TICKS: u32 = config::TICK_HZ * 8;
 const CONTAINMENT_ASSEMBLY_HARD_TIMEOUT_TICKS: u32 = config::TICK_HZ * 12;
+/// On Crossroads the push does not assemble with fewer Tanks than this.
+pub(super) const CROSSROADS_PUSH_MIN_TANKS: usize = 6;
+/// On Crossroads the push only leaves with this many more Tanks than the enemy Tanks seen in the
+/// last 90 seconds.
+const CROSSROADS_PUSH_TANK_LEAD: usize = 3;
 const RIVER_OPENING_GUARD_TICKS: u32 = config::TICK_HZ * 30;
 const RIVER_OPENING_CLEAR_TICKS: u32 = config::TICK_HZ * 5;
 const RIVER_OPENING_PRESSURE_RADIUS_TILES: f32 = 22.0;
@@ -233,7 +238,13 @@ pub(super) fn issue_frontal_wave(
         }
     }
 
-    if plan.should_attack() {
+    // On Crossroads, armor too few for the push stays staged at home: the plain attack wave would
+    // send the same two or three Tanks down the road the push is kept off.
+    let hold_for_push = profile.expansion_containment.is_some()
+        && profile.id != JEFFS_AI_BETA_ID
+        && attack.unit_kinds.contains(&EntityKind::Tank)
+        && defense::crossroads_wall_aware_approach_direction(observation).is_some();
+    if plan.should_attack() && !hold_for_push {
         let attack_units =
             if let Some(target) = visible_combat_target_for_wave(observation, &plan.ready_units) {
                 actions::attack_units(actions, plan.ready_units.clone(), target)
@@ -248,7 +259,7 @@ pub(super) fn issue_frontal_wave(
         return attack_units.map(|units| AiIntent::Attack { units });
     }
 
-    if !plan.should_stage() {
+    if !plan.should_stage() && !(hold_for_push && !plan.ready_units.is_empty()) {
         return None;
     }
 
@@ -422,11 +433,23 @@ fn issue_expansion_containment_wave(
         .retain(|tank| active_tanks.contains(tank) && still_standing.contains(tank));
 
     let assembling = !memory.containment_wave_launched || memory.containment_recovery_active;
+    // On Crossroads the push walks out along the enemy's own road; small pushes died there to
+    // AI 2.1's larger Tank groups, while Tanks held inside the exit traded 1 for 5.
+    let crossroads = defense::crossroads_wall_aware_approach_direction(observation).is_some();
     if assembling {
         let required_tanks = if memory.containment_recovery_active {
             containment_repush_tank_count(policy, memory.containment_repush_count)
         } else {
             policy.minimum_tanks_to_continue
+        };
+        // The Crossroads push also grows to keep its lead over the enemy Tanks seen recently;
+        // with a fixed size it could never show that lead and stayed home at 21 Tanks against 5.
+        let required_tanks = if crossroads {
+            required_tanks
+                .max(CROSSROADS_PUSH_MIN_TANKS)
+                .max(memory.recent_enemy_tanks() + CROSSROADS_PUSH_TANK_LEAD)
+        } else {
+            required_tanks
         };
         let rally = containment_regroup_point(own_base, enemy_base, observation.map)?;
         if memory.containment_active_tanks.len() != required_tanks
@@ -517,7 +540,13 @@ fn issue_expansion_containment_wave(
             && river_opening_guard_active(observation, &tanks, assembly_started, memory);
         // Do not send the push out while more enemy Tanks than it has were seen recently: it would
         // only lose them one or two at a time outside the base. It waits at the regroup point.
-        let launch_outnumbered = memory.recent_enemy_tanks() > tanks.len();
+        // Crossroads needs a clear lead, since Jeff sees only part of AI 2.1's army.
+        let lead_needed = if crossroads {
+            CROSSROADS_PUSH_TANK_LEAD
+        } else {
+            0
+        };
+        let launch_outnumbered = memory.recent_enemy_tanks() + lead_needed > tanks.len();
         let assembly_ready = assembled && !river_opening_guard && !launch_outnumbered;
         if !assembly_ready {
             if formation_command_due(memory, observation.tick) {

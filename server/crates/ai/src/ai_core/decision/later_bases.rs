@@ -22,6 +22,9 @@ const REQUIRED_FREE_TANKS: usize = 3;
 /// With fewer, the guards would be the push's Tanks, and a push that never leaves lets the
 /// enemy walk into a split army.
 const REQUIRED_TOTAL_TANKS: usize = 5;
+/// On Crossroads the push waits for six Tanks (see `frontal::CROSSROADS_PUSH_MIN_TANKS`), so a base
+/// only needs the home Tank, the two guards and one more Tank to hold the main.
+const CROSSROADS_REQUIRED_TOTAL_TANKS: usize = 4;
 /// Tanks reserved from the attack pool to cover a new base. The home Tank stays home.
 const GUARD_TANKS: usize = 2;
 /// How far in front of the new Depot, toward the enemy, the guard post sits. Close enough that the
@@ -149,7 +152,14 @@ where
             .filter(|unit| unit.kind == EntityKind::Tank && unit.is_complete && unit.hp > 0)
             .count();
         let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
-        let ready = total_tanks >= REQUIRED_TOTAL_TANKS
+        // The Crossroads push waits for six Tanks, so no push Tanks need covering first.
+        let required_total_tanks =
+            if defense::crossroads_wall_aware_approach_direction(observation).is_some() {
+                CROSSROADS_REQUIRED_TOTAL_TANKS
+            } else {
+                REQUIRED_TOTAL_TANKS
+            };
+        let ready = total_tanks >= required_total_tanks
             && free_tanks.len() >= REQUIRED_FREE_TANKS
             && defense::local_defense_contact(observation).is_none()
             && observation.economy.steel >= steel

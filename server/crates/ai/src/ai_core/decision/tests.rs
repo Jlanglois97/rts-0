@@ -758,44 +758,67 @@ fn crossroads_east_observation() -> AiObservation {
 }
 
 #[test]
-fn crossroads_tech_buildings_stay_off_the_side_raids_come_in_from() {
-    let obs = crossroads_east_observation();
-    // The east pocket opens to the south-west; the Factory the raids kept killing sat there.
-    assert!(jeff::tech_building_faces_way_in(
-        &obs,
-        EntityKind::Factory,
-        111,
-        85
-    ));
-    assert!(jeff::tech_building_faces_way_in(
-        &obs,
-        EntityKind::EngineeringComplex,
-        111,
-        85
-    ));
-    // Behind the Depot, and other kinds anywhere, are unaffected.
-    assert!(!jeff::tech_building_faces_way_in(
-        &obs,
-        EntityKind::Factory,
-        119,
-        70
-    ));
-    assert!(!jeff::tech_building_faces_way_in(
-        &obs,
-        EntityKind::Barracks,
-        111,
-        85
-    ));
-
-    let mut elsewhere = obs.clone();
-    elsewhere.map.width = 166;
-    elsewhere.map.height = 166;
-    assert!(!jeff::tech_building_faces_way_in(
-        &elsewhere,
-        EntityKind::Factory,
-        111,
-        85
-    ));
+fn crossroads_main_buildings_are_placed_by_how_far_behind_the_hq_they_are() {
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Crossroads", &[(1, 1), (2, 2)], 0x1234_5678).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0x1234_5678,
+        map,
+        Map::metadata_for_name("Crossroads").unwrap(),
+    );
+    let start = game.start_payload();
+    let analysis = AiMapAnalysis::analyze(&start);
+    for player in [1, 2] {
+        let obs = AiObservation::from_snapshot_with_alive(
+            &start,
+            &game.snapshot_for(player),
+            player,
+            [],
+            None,
+        )
+        .unwrap();
+        // A Factory site raids destroyed in the 120 test, and the walled-off ground behind the HQ.
+        let (destroyed, sheltered) = match obs.own_start_tile {
+            (117, 78) => ((110, 85), (120, 64)),
+            (47, 8) => ((47, 15), (63, 5)),
+            other => panic!("unexpected Crossroads start {other:?}"),
+        };
+        let depth = |kind, tile: (u32, u32), analysis| {
+            jeff::crossroads_site_depth(&obs, analysis, kind, tile.0, tile.1)
+        };
+        for kind in [
+            EntityKind::Barracks,
+            EntityKind::TrainingCentre,
+            EntityKind::EngineeringComplex,
+            EntityKind::Factory,
+        ] {
+            let ahead = depth(kind, destroyed, Some(&analysis)).unwrap();
+            assert!(ahead < 0.0, "{kind:?} at {destroyed:?}: {ahead}");
+            let behind = depth(kind, sheltered, Some(&analysis)).unwrap();
+            assert!(
+                behind >= CROSSROADS_SHELTERED_DEPTH_TILES,
+                "{kind:?} at {sheltered:?}: {behind}"
+            );
+        }
+        // Other buildings, and play without map analysis, are placed as before.
+        assert_eq!(
+            depth(EntityKind::ResourceDepot, destroyed, Some(&analysis)),
+            None
+        );
+        assert_eq!(depth(EntityKind::Factory, destroyed, None), None);
+    }
 }
 
 #[test]

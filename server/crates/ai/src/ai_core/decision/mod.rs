@@ -465,6 +465,7 @@ where
             profile,
             *kind,
             build_search,
+            map_analysis,
             &mut placeable,
         ) {
             if *kind == EntityKind::Factory {
@@ -512,7 +513,7 @@ where
         && !expansion_blocks_tech_path
         && !save_for_unplanned_expansion
         && planned_in_intents(&intents, EntityKind::Barracks) == 0
-        && try_build_kind(
+        && try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -520,6 +521,7 @@ where
             profile,
             EntityKind::Barracks,
             build_search,
+            map_analysis,
             &mut placeable,
         )
         .is_some()
@@ -545,6 +547,7 @@ where
             profile,
             EntityKind::Factory,
             build_search,
+            map_analysis,
             &mut placeable,
         ) {
             if let Some(enemy_base) = facts.nearest_public_enemy_base {
@@ -665,6 +668,7 @@ where
             profile,
             EntityKind::Factory,
             build_search,
+            map_analysis,
             &mut placeable,
         )
         .is_some()
@@ -785,11 +789,22 @@ where
                 actions.budget().steel().saturating_sub(policy.reserve) as usize
                     / unit_steel as usize
             };
+            // On Crossroads Jeff is short of Oil, not Steel: past a home garrison, more Riflemen
+            // only spend the Steel the third base and Factory rebuilds need.
+            let surplus_cap = if uses_current_jeffs_ai_policy(profile.id)
+                && policy.unit == EntityKind::Rifleman
+                && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+            {
+                CROSSROADS_MAX_SURPLUS_RIFLEMEN
+            } else {
+                usize::MAX
+            };
             building_max_counts.retain(|(kind, _)| *kind != policy.unit);
             building_max_counts.push((
                 policy.unit,
                 current
                     .saturating_add(affordable_above_reserve)
+                    .min(surplus_cap)
                     .max(if security_recruits { 6 } else { 0 }),
             ));
         }
@@ -1537,9 +1552,24 @@ mod tests;
 #[cfg(test)]
 mod vehicle_worker_tests;
 
-/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff first looks for
-/// a Factory or Engineering Complex site away from the main's way in, and falls back to the usual
-/// site when none is free.
+/// On Crossroads Jeff stops turning surplus Steel into Riflemen at this many. It fielded 30-40,
+/// most of them idle, while Oil held it to 2-4 Tanks and it never took a third base.
+const CROSSROADS_MAX_SURPLUS_RIFLEMEN: usize = 24;
+
+/// On Crossroads each main has ground behind the HQ, walled off by water, that the enemy can only
+/// reach by walking past the HQ. A main-base building goes first to the nearest site at least this
+/// many tiles deeper than the HQ on the enemy's walk.
+const CROSSROADS_SHELTERED_DEPTH_TILES: f32 = 6.0;
+
+/// How far from the HQ Jeff looks for a sheltered Crossroads site. The sheltered ground starts
+/// 11 tiles from the north HQ, and the east start's usual 6-8 tile Factory band lies almost
+/// entirely on the way-in side.
+const CROSSROADS_SHELTER_SEARCH_MAX_RADIUS: i32 = 18;
+
+/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff places its
+/// Barracks, Training Centre, Engineering Complex and Factory at the nearest sheltered site behind
+/// its HQ, else the nearest site no nearer the enemy on foot than the HQ, and only when neither
+/// exists at the usual site.
 #[allow(clippy::too_many_arguments)]
 fn try_build_production<F>(
     observation: &AiObservation,
@@ -1549,30 +1579,43 @@ fn try_build_production<F>(
     profile: &AiProfile,
     kind: EntityKind,
     build_search: ai_shared::BuildSearch,
+    map_analysis: Option<&AiMapAnalysis>,
     placeable: &mut F,
 ) -> Option<actions::BuildAction>
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
     if uses_current_jeffs_ai_policy(profile.id)
-        && matches!(kind, EntityKind::Factory | EntityKind::EngineeringComplex)
+        && jeff::crossroads_sheltered_kind(kind)
         && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+        && map_analysis.is_some()
     {
-        let away = try_build_kind(
-            observation,
-            facts,
-            actions,
-            builder_pools,
-            profile,
-            kind,
-            build_search,
-            &mut |building, x, y| {
-                placeable(building, x, y)
-                    && !jeff::tech_building_faces_way_in(observation, building, x, y)
-            },
-        );
-        if away.is_some() {
-            return away;
+        let usual = production::build_search_for_kind(build_search, profile, kind);
+        // Nearest first: the rings grow outward from the HQ with no pull toward the map centre.
+        let sheltered_search = ai_shared::BuildSearch {
+            max_radius: usual.max_radius.max(CROSSROADS_SHELTER_SEARCH_MAX_RADIUS),
+            prefer_away_from_center: false,
+            prefer_toward_center: false,
+            ..usual
+        };
+        for min_depth in [CROSSROADS_SHELTERED_DEPTH_TILES, 0.0] {
+            let built = production::try_build_kind_with_search(
+                observation,
+                facts,
+                actions,
+                builder_pools,
+                profile,
+                kind,
+                sheltered_search,
+                &mut |building, x, y| {
+                    placeable(building, x, y)
+                        && jeff::crossroads_site_depth(observation, map_analysis, building, x, y)
+                            .is_some_and(|depth| depth >= min_depth)
+                },
+            );
+            if built.is_some() {
+                return built;
+            }
         }
     }
     try_build_kind(

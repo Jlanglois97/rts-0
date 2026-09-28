@@ -71,6 +71,34 @@ pub(super) fn try_build_kind<F>(
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
+    let build_search = build_search_for_kind(build_search, profile, kind);
+    try_build_kind_with_search(
+        observation,
+        facts,
+        actions,
+        builder_pools,
+        profile,
+        kind,
+        build_search,
+        placeable,
+    )
+}
+
+/// `try_build_kind` with the search band already chosen for `kind`.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn try_build_kind_with_search<F>(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    actions: &mut AiActionContext<'_>,
+    builder_pools: &[&[u32]],
+    profile: &AiProfile,
+    kind: EntityKind,
+    build_search: ai_shared::BuildSearch,
+    placeable: &mut F,
+) -> Option<actions::BuildAction>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
     config::building_stats(kind)?;
     if !rts_rules::economy::build_requirement_met(kind, facts.complete_building_kinds()) {
         return None;
@@ -79,7 +107,6 @@ where
     if counts.incomplete + counts.intended >= profile.buildings.max_pending_per_kind {
         return None;
     }
-    let build_search = build_search_for_kind(build_search, profile, kind);
     let empty = BTreeSet::new();
     if uses_jeff_opposite_spawn_layout(observation, profile) {
         let mirrored = ai_shared::find_build_spot_mirrored_from_opposite_spawn_with(

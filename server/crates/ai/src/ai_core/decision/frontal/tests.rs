@@ -852,3 +852,133 @@ fn a_push_is_outnumbered_only_by_more_enemy_tanks_close_by() {
         "too far to matter"
     );
 }
+
+/// Jeff on the Crossroads east start with `tanks` Tanks and a Scout Car ready by the HQ, the
+/// armored attack due, and nothing else in the way.
+fn crossroads_armor(tanks: u32) -> (AiObservation, FrontalWavePlan, EnemyBaseFact) {
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Crossroads", &[(1, 1), (2, 2)], 0x1234_5678).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0x1234_5678,
+        map,
+        Map::metadata_for_name("Crossroads").unwrap(),
+    );
+    let start = game.start_payload();
+    let mut observation =
+        AiObservation::from_snapshot_with_alive(&start, &game.snapshot_for(1), 1, [], None)
+            .unwrap();
+    assert_eq!(observation.own_start_tile, (117, 78));
+    let ts = observation.map.tile_size as f32;
+    let mut ready = Vec::new();
+    for index in 0..=tanks {
+        let id = 900 + index;
+        let kind = if index == tanks {
+            EntityKind::ScoutCar
+        } else {
+            EntityKind::Tank
+        };
+        let mut unit = target_test_entity(id, kind, (110.0 + index as f32) * ts, 76.5 * ts);
+        unit.owner = 1;
+        observation.owned.push(unit);
+        ready.push(id);
+    }
+    let plan = FrontalWavePlan {
+        ready_units: ready,
+        desired_size: 3,
+        attack_due: true,
+        required_unit_ready: true,
+        methamphetamines_ready: true,
+        blockers: Vec::new(),
+    };
+    let enemy_base = EnemyBaseFact {
+        player_id: 2,
+        start_tile: (47, 8),
+        x: 47.5 * ts,
+        y: 8.5 * ts,
+    };
+    (observation, plan, enemy_base)
+}
+
+#[test]
+fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
+    let armored = JEFFS_AI.tech_transition.unwrap().attack;
+    let (observation, plan, enemy_base) = crossroads_armor(3);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    let intent = issue_frontal_wave(
+        &mut actions,
+        &observation,
+        &JEFFS_AI,
+        armored,
+        &plan,
+        enemy_base,
+        None,
+        None,
+        &mut memory,
+    );
+    assert!(
+        !matches!(intent, Some(AiIntent::Attack { .. })),
+        "{intent:?}"
+    );
+    assert!(memory.containment_active_tanks.is_empty());
+    assert!(!memory.containment_wave_launched);
+
+    // Six Tanks are enough to start forming the push; with four enemy Tanks seen recently it
+    // needs a three-Tank lead, so seven.
+    let form = |tanks: u32, seen_enemy_tanks: u32| {
+        let (mut observation, plan, enemy_base) = crossroads_armor(tanks);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        observation.visible_enemies = (0..seen_enemy_tanks)
+            .map(|index| {
+                target_test_entity(500 + index, EntityKind::Tank, 60.0 * 32.0, 60.0 * 32.0)
+            })
+            .collect();
+        memory.note_enemy_tanks(&observation);
+        observation.visible_enemies.clear();
+        let facts = AiFacts::from_observation(&observation);
+        let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+        let intent = issue_frontal_wave(
+            &mut actions,
+            &observation,
+            &JEFFS_AI,
+            armored,
+            &plan,
+            enemy_base,
+            None,
+            None,
+            &mut memory,
+        );
+        (intent, memory.containment_active_tanks.len())
+    };
+    let (intent, pushing) = form(CROSSROADS_PUSH_MIN_TANKS as u32, 0);
+    assert!(
+        matches!(intent, Some(AiIntent::Assemble { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, CROSSROADS_PUSH_MIN_TANKS);
+    let (intent, pushing) = form(6, 4);
+    assert!(
+        !matches!(intent, Some(AiIntent::Attack { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, 0, "six Tanks are no lead over four");
+    let (intent, pushing) = form(7, 4);
+    assert!(
+        matches!(intent, Some(AiIntent::Assemble { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, 7);
+}
