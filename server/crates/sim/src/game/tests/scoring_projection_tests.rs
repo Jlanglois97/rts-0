@@ -289,6 +289,40 @@ fn observer_analysis_reports_authoritative_inventory_production_and_losses() {
 }
 
 #[test]
+fn observer_analysis_includes_unfinished_buildings() {
+    let players = human_vs_ai_players();
+    let mut game = Game::new_for_replay(&players, 0xA11A_0002);
+    let site = game
+        .state
+        .entities
+        .spawn_building(1, EntityKind::Barracks, 320.0, 320.0, false)
+        .expect("construction site should spawn");
+    let progress = game
+        .state
+        .entities
+        .get_mut(site)
+        .expect("construction site should exist")
+        .advance_construction();
+    assert_eq!(progress, Some(false));
+
+    let player = game
+        .observer_analysis()
+        .players
+        .into_iter()
+        .find(|player| player.id == 1)
+        .expect("player analysis should exist");
+    let construction = player
+        .production
+        .iter()
+        .find(|row| row.building_id == site && row.item_type == "building")
+        .expect("unfinished building should appear in production");
+    assert_eq!(construction.building_kind, "barracks");
+    assert_eq!(construction.item_kind, "barracks");
+    assert_eq!(construction.queue_depth, 0);
+    assert!(construction.progress > 0.0 && construction.progress < 1.0);
+}
+
+#[test]
 fn phase4_projection_matches_legacy_snapshot_entities() {
     let players = human_vs_ai_players();
     let mut game = Game::new(&players, 0xCAFE_BABE);

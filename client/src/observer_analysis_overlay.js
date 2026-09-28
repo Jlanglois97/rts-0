@@ -353,7 +353,7 @@ export class ObserverAnalysisOverlay {
   }
 
   renderProduction(analysis) {
-    const wrap = this.renderAnalysisMetric("replay-production", "Current queues");
+    const wrap = this.renderAnalysisMetric("replay-production", "Current production");
     const rows = playerAnalysisRows({ analysis, players: this.getPlayers() });
     if (!analysis) {
       wrap.appendChild(renderEmptyMetric("Waiting for observer analysis"));
@@ -379,17 +379,21 @@ export class ObserverAnalysisOverlay {
         main.className = "replay-production-main";
         const itemLabel = itemLabelFor(item.itemKind, item.itemType, this.stats);
         const buildingLabel = kindLabel(item.buildingKind, this.stats);
-        main.textContent = `${itemLabel} at ${buildingLabel}`;
+        main.textContent = item.itemType === "building"
+          ? `Constructing ${itemLabel}`
+          : `${itemLabel} at ${buildingLabel}`;
 
         const progress = document.createElement("span");
         progress.className = "replay-production-progress";
         progress.textContent = `${formatPercent(item.progress)}%`;
-        progress.title = "Production progress";
+        progress.title = item.itemType === "building" ? "Construction progress" : "Production progress";
 
         const queue = document.createElement("span");
         queue.className = "replay-production-queue";
-        queue.textContent = `Q ${formatValue(item.queueDepth)}`;
-        queue.title = "Queue depth";
+        if (item.itemType !== "building") {
+          queue.textContent = `Q ${formatValue(item.queueDepth)}`;
+          queue.title = "Queue depth";
+        }
 
         row.append(icon, main, progress, queue);
         wrap.appendChild(row);
@@ -669,7 +673,7 @@ function normalizeProductionRows(rows) {
     buildingId: Math.max(0, Math.trunc(Number(row?.buildingId) || 0)),
     buildingKind: String(row?.buildingKind || ""),
     itemKind: String(row?.itemKind || ""),
-    itemType: row?.itemType === "upgrade" ? "upgrade" : "unit",
+    itemType: row?.itemType === "upgrade" ? "upgrade" : row?.itemType === "building" ? "building" : "unit",
     progress: clamp01(Number(row?.progress) || 0),
     queueDepth: Math.max(0, Math.trunc(Number(row?.queueDepth) || 0)),
   })).filter((row) => row.buildingKind && row.itemKind);
