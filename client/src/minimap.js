@@ -1,12 +1,4 @@
-// Minimap — the bottom-left overview canvas (`#minimap`, 220×220). Draws the terrain,
-// the fog overlay, entity blips colored by owner, and the current camera ground
-// footprint. Left-click/drag recenters the camera; right-click issues a context-sensitive
-// order for the current own-unit selection. See docs/design/client-ui.md §4.1 (Minimap) and §4.2 (look).
-//
-// The minimap is a plain 2D canvas (not Pixi). World↔canvas conversion is a uniform
-// scale derived from the map's pixel size and the (square) canvas size, letterboxed so
-// non-square maps stay centered and undistorted.
-
+import { MinimapFormation } from "./minimap_formation.js";
 import { cmd } from "./protocol.js";
 import {
   ABILITY,
@@ -235,6 +227,7 @@ export class Minimap {
     this._onCanvasPointerCancel = this._handleCanvasPointerCancel.bind(this);
     this._onWindowBlur = this._handleWindowBlur.bind(this);
 
+    this._formation = new MinimapFormation(this, options.createFormationGesture);
     this._installInput();
   }
 
@@ -361,6 +354,7 @@ export class Minimap {
     if (!capturePresentation) this._drawArtilleryFiringMarkers(now);
     if (!capturePresentation) this._drawViewport();
     if (!capturePresentation) this._drawPings(now);
+    if (!capturePresentation) this._formation.draw();
   }
 
   /**
@@ -991,6 +985,7 @@ export class Minimap {
    * minimaps stop driving an old camera. Mirrors Input.destroy().
    */
   destroy() {
+    this._formation.destroy();
     this.canvas.width = this._basePresentationSize;
     this.canvas.height = this._originalCanvasHeight;
     this._unitIcons.destroy();
@@ -1063,8 +1058,8 @@ export class Minimap {
       pointerDown: (ev) => this._handlePointerDown(ev),
       pointerMove: (ev) => this._handlePointerMove(ev),
       pointerLeave: () => this._clearSetupPreviewHover(),
-      pointerUp: () => this._handlePointerUp(),
-      pointerCancel: () => this._handlePointerUp(),
+      pointerUp: (ev) => this._formation.up(ev) || this._handlePointerUp(),
+      pointerCancel: () => { this._formation.reset(); return this._handlePointerUp(); },
     };
   }
 
@@ -1096,6 +1091,7 @@ export class Minimap {
   }
 
   _handleCanvasPointerDown(ev) {
+    if (this._formation.down(ev)) return;
     this.inputRouter?.pointerMove(this._routerEvent(ev, "dom"));
     if (this._activePointerGesture) {
       // A second contact is a pinch or multi-touch inspection, never a target tap.
@@ -1140,6 +1136,7 @@ export class Minimap {
   }
 
   _handlePointerDown(ev) {
+    if (this._formation.down(ev)) return true;
     if (!this._ensureTransform()) return;
     const cp = this._eventToCanvas(ev);
     const w = this._canvasToWorld(cp.x, cp.y);
@@ -1174,6 +1171,7 @@ export class Minimap {
   }
 
   _handleCanvasPointerMove(ev) {
+    if (this._formation.move(ev)) return;
     const gesture = this._activePointerGesture;
     if (!gesture) {
       const routedEvent = this._routerEvent(ev, "dom");
@@ -1196,6 +1194,7 @@ export class Minimap {
   }
 
   _handlePointerMove(ev) {
+    if (this._formation.move(ev)) return true;
     const hovering = this._updateHoverFromEvent(ev);
     if (!this._dragging) return hovering;
     const cp = this._eventToCanvas(ev);
@@ -1206,6 +1205,7 @@ export class Minimap {
   }
 
   _handleCanvasPointerUp(ev) {
+    if (this._formation.up(ev)) return;
     const gesture = this._activePointerGesture;
     if (!gesture || gesture.pointerId !== ev.pointerId) return;
     const releasedInside = this._containsClientPoint(ev.clientX, ev.clientY);
@@ -1251,6 +1251,7 @@ export class Minimap {
   }
 
   _handleCanvasPointerCancel(ev) {
+    this._formation.reset();
     if (!this._activePointerGesture || this._activePointerGesture.pointerId !== ev.pointerId) return;
     this._cancelActivePointerGesture();
     ev.preventDefault();
@@ -1283,6 +1284,7 @@ export class Minimap {
   }
 
   _cancelActivePointerGesture() {
+    this._formation.reset();
     const gesture = this._activePointerGesture;
     if (gesture) this._releasePointer(gesture.pointerId);
     if (gesture?.artilleryRadiusSelection) {

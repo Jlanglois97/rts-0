@@ -1,3 +1,4 @@
+import { createFormationGesture } from "./input/formation_gesture.js";
 import { createMinimapUnitIconLoader } from "./minimap_icon_image.js";
 import { initializeCameraView } from "./camera_view_selection.js";
 import { autoSpectatorCameraMinZoom, createMatchAutoSpectator } from "./match_auto_spectator.js";
@@ -329,6 +330,7 @@ export class Match {
       "match.minimap",
       () => new Minimap(dom.minimap, this.state, this.camera, this.fog, this.commandInteraction, this.inputRouter, {
         commandsEnabled: !!this.capabilities.commands.gameplay,
+        createFormationGesture,
         clientIntent: this.clientIntent,
         controlPolicy: this.controlPolicy,
         loadUnitIcon: createMinimapUnitIconLoader(liveUnitIconMarkupFor, dom.minimap),

@@ -145,6 +145,7 @@ const AREA_BY_FILE = new Map(Object.entries({
   "minimap_terrain.js": "ui",
   "minimap_alerts.js": "ui",
   "minimap_targeting.js": "ui",
+  "minimap_formation.js": "ui",
   "branch_staging.js": "ui",
   "lab_catalog.js": "ui",
   "lab_spawn_catalog.js": "ui",
@@ -262,7 +263,7 @@ const LARGE_FILE_BASELINES = new Map(Object.entries({
   // Perspective decal swaps add only a narrow empty-repair completion callback; hydration and
   // surface ownership remain isolated in the renderer and decal sync modules.
   // Replay resource history adds one injected diagnostic listener and symmetric teardown.
-  "match.js": 50793,
+  "match.js": 50855, // Inject the shared formation gesture into Minimap.
   // Artillery minimap markers add a compact visual-only firing event.
   "protocol.js": 45366,
   // Protocol cleanup split compact snapshot decoding behind protocol.js.

@@ -1,7 +1,6 @@
+import { createFormationGesture } from "../client/src/input/formation_gesture.js";
+import { runMinimapFormationContracts } from "./minimap_formation_contracts.mjs";
 import { runMinimapPresentationContracts } from "./minimap_presentation_contracts.mjs";
-// Dependency-free checks for minimap input routed through MatchInputRouter.
-// These cover the pointer-lock virtual-cursor path without launching a browser.
-
 import { MatchInputRouter } from "../client/src/input/router.js";
 import { ClientIntent } from "../client/src/client_intent.js";
 import { CommandInteraction } from "../client/src/command_interaction.js";
@@ -289,6 +288,7 @@ function minimapHarness({
   });
   const minimap = new Minimap(canvas, state, camera, null, commandInteraction, router, {
     commandsEnabled,
+    createFormationGesture,
     clientIntent,
     controlPolicy,
   });
@@ -514,6 +514,7 @@ function pointerEvent(canvas, clientX, clientY, {
   });
   down(rightClick);
   assert(rightClick.defaultPrevented && rightClick.propagationStopped, "desktop minimap right-click still suppresses the browser menu");
+  listenerFor(h.canvas, "pointerup")(pointerEvent(h.canvas, 180, 280, { pointerId: 31, pointerType: "mouse", button: 2, shiftKey: true }));
   assert(h.net.sent.length === 1 && h.net.sent[0].c === "move", "desktop minimap right-click still issues move");
   assert(h.net.sent[0].queued === true, "desktop Shift-right-click still queues move");
   h.minimap.destroy();
@@ -548,6 +549,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 7, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected });
   assert(h.router.pointerDown(lockedEvent(180, 280, 2, { shiftKey: true })), "locked minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2, { shiftKey: true }));
   assert(h.net.sent.length === 1, "minimap right-click sends one command");
   assert(h.net.sent[0].c === "move", "minimap right-click sends move");
   assert(h.net.sent[0].queued === true, "shift minimap right-click queues move");
@@ -562,6 +564,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 7, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected, legacySender: true });
   assert(h.router.pointerDown(lockedEvent(180, 280, 2)), "legacy minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2));
   assert(h.net.sent.length === 1 && h.net.sent[0].c === "move", "legacy minimap right-click sends move");
   h.minimap.destroy();
 }
@@ -570,6 +573,7 @@ function pointerEvent(canvas, clientX, clientY, {
 {
   const h = minimapHarness();
   assert(h.router.pointerDown(lockedEvent(180, 280, 2)), "empty-selection minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2));
   assert(h.net.sent.length === 0, "empty-selection minimap right-click sends no command");
   h.minimap.destroy();
 }
@@ -579,6 +583,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 7, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected, commandsEnabled: false });
   assert(h.router.pointerDown(lockedEvent(180, 280, 2)), "replay minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2));
   assert(h.net.sent.length === 0, "replay minimap right-click sends no command");
   assert(h.router.pointerDown(lockedEvent(221, 321, 0)), "replay minimap left-click still recenters camera");
   assert(h.centers.length === 1, "replay minimap keeps local camera controls");
@@ -596,6 +601,7 @@ function pointerEvent(canvas, clientX, clientY, {
     commandsEnabled: false,
   });
   assert(h.router.pointerDown(lockedEvent(180, 280, 2)), "lab operator minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2));
   assert(h.net.sent.length === 1, "lab operator minimap right-click sends one command through the lab command issuer");
   assert(h.net.sent[0].c === "move", "lab operator minimap command routes selected units");
   assert(h.net.sent[0].units.length === 1 && h.net.sent[0].units[0] === 17, "lab minimap command uses selected owner units");
@@ -612,6 +618,7 @@ function pointerEvent(canvas, clientX, clientY, {
     commandsEnabled: false,
   });
   assert(h.router.pointerDown(lockedEvent(180, 280, 2)), "read-only lab minimap right-click is consumed");
+  h.router.pointerUp(lockedEvent(180, 280, 2));
   assert(h.net.sent.length === 0, "read-only lab minimap right-click sends no command");
   assert(h.router.pointerDown(lockedEvent(221, 321, 0)), "read-only lab minimap left-click still recenters camera");
   assert(h.centers.length === 1, "read-only lab keeps minimap camera controls");
@@ -623,6 +630,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 9, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected, commandTarget: "attack" });
   assert(h.router.pointerDown(lockedEvent(150, 250, 0)), "attack-move minimap left-click is consumed");
+  h.router.pointerUp(lockedEvent(150, 250, 0));
   assert(h.net.sent.length === 1, "attack-move minimap click sends one command");
   assert(h.net.sent[0].c === "attackMove", "attack command-target sends attack-move");
   assert(h.net.sent[0].queued !== true, "plain minimap attack target does not queue attack-move");
@@ -988,6 +996,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 9, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected, commandTarget: "attack", explicitClientIntent: true });
   assert(h.router.pointerDown(lockedEvent(150, 250, 0)), "facade attack-move minimap click is consumed");
+  h.router.pointerUp(lockedEvent(150, 250, 0));
   assert(h.net.sent.length === 1 && h.net.sent[0].c === "attackMove", "facade minimap targeting sends attack-move");
   assert(h.clientIntent.commandTarget === null, "facade minimap targeting exits through ClientIntent");
   h.minimap.destroy();
@@ -998,6 +1007,7 @@ function pointerEvent(canvas, clientX, clientY, {
   const selected = [{ id: 9, owner: 1, kind: KIND.RIFLEMAN }];
   const h = minimapHarness({ selected, commandTarget: "attack", legacySender: true });
   assert(h.router.pointerDown(lockedEvent(150, 250, 0)), "legacy attack-move minimap click is consumed");
+  h.router.pointerUp(lockedEvent(150, 250, 0));
   assert(h.net.sent.length === 1 && h.net.sent[0].c === "attackMove", "legacy minimap attack target sends attack-move");
   h.minimap.destroy();
 }
@@ -1008,7 +1018,9 @@ function pointerEvent(canvas, clientX, clientY, {
   const h = minimapHarness({ selected, commandTarget: "attack" });
   h.clientIntent.holdCommandTarget("attack", "KeyA", true);
   assert(h.router.pointerDown(lockedEvent(150, 250, 0, { shiftKey: true })), "first held-A minimap attack click is consumed");
+  h.router.pointerUp(lockedEvent(150, 250, 0, { shiftKey: true }));
   assert(h.router.pointerDown(lockedEvent(160, 260, 0, { shiftKey: true })), "second held-A minimap attack click is consumed");
+  h.router.pointerUp(lockedEvent(160, 260, 0, { shiftKey: true }));
   assert(h.net.sent.length === 2, "held-A minimap targeting sends multiple commands");
   assert(h.net.sent.every((command) => command.c === "attackMove" && command.queued === true), "held-A minimap targeting queues attack-move commands");
   assert(h.clientIntent.commandTarget === "attack", "held-A minimap targeting stays armed after queued clicks");
@@ -1530,3 +1542,4 @@ runMinimapRoadContracts();
 runMinimapPresentationContracts({ installWindowStub, fakeRenderableCanvas });
 
 console.log("minimap_input_contracts: ok");
+runMinimapFormationContracts({ minimapHarness, lockedEvent, pointerEvent, listenerFor, recordingContext, assert });

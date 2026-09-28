@@ -1775,6 +1775,13 @@ targeting is armed, the same three-tile gesture is available on left-drag: its p
 body-aware provisional slots render red, and release issues one atomic `formationMove` command with
 attack-move semantics so the server assigns and admits the full group together. Shorter gestures retain the existing contextual right-click or targeted
 left-click behavior, including command-composer Shift/held-key lifetime.
+The minimap supports the same freehand line orders with mouse right-drag and attack-targeted
+left-drag, including the locked cursor. `Match` injects the shared formation gesture factory;
+minimap points are converted to world coordinates before sampling and the same three-tile
+threshold applies. The minimap shows the stroke and provisional slots while dragging.
+Mouse point orders wait until release; Shift queues either form. Pointer cancellation, blur,
+Escape, and lost command eligibility discard the gesture. Touch/pen retain clean-tap targeting
+and inspection panning.
 Selection, hover, and entity targeting use the last successfully presented detached
 `SelectionSceneV1`; move/ground abilities/placement use its nullable ground query. Screen clicks and
 marquees project plain mirrored proxies rather than reading current state or renderer geometry.
