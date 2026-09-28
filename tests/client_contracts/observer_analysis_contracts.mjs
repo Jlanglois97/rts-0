@@ -572,9 +572,12 @@ import { textWithin } from "./dom_text.mjs";
     });
     const constructionText = textWithin(root);
     assert(
-      constructionText.includes("Constructing Barracks") && constructionText.includes("30")
-        && !constructionText.includes("Q 0") && !constructionText.includes("No active production"),
-      "production tab renders construction progress without a queue depth",
+      constructionText.includes("Current production")
+        && constructionText.includes("Constructing Barracks")
+        && constructionText.includes("30")
+        && !constructionText.includes("Q 0")
+        && !constructionText.includes("No active production"),
+      "production tab labels and renders construction progress without a queue depth",
     );
 
     overlay.applyObserverAnalysis({

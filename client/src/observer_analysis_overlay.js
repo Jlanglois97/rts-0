@@ -353,7 +353,7 @@ export class ObserverAnalysisOverlay {
   }
 
   renderProduction(analysis) {
-    const wrap = this.renderAnalysisMetric("replay-production", "Current queues");
+    const wrap = this.renderAnalysisMetric("replay-production", "Current production");
     const rows = playerAnalysisRows({ analysis, players: this.getPlayers() });
     if (!analysis) {
       wrap.appendChild(renderEmptyMetric("Waiting for observer analysis"));
