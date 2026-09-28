@@ -74,7 +74,7 @@ async function soloStart(room) {
     const visibleTiles = (snap.visibleTiles || []).filter(Boolean).length;
     ok(start.playerId === c.playerId && start.spectator === false,
        `SOLO START: start is stamped as host player (start=${start.playerId}, welcome=${c.playerId}, spectator=${start.spectator})`);
-    ok(snap.steel === 75 && snap.oil === 0,
+    ok(snap.steel === 25 && snap.oil === 0,
        `SOLO START: snapshot carries normal starting resources (steel=${snap.steel}, oil=${snap.oil})`);
     ok(snap.supplyCap > 0 && snap.supplyUsed > 0,
        `SOLO START: snapshot carries host supply (${snap.supplyUsed}/${snap.supplyCap})`);

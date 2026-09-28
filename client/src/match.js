@@ -1,5 +1,5 @@
 import { createMinimapUnitIconLoader } from "./minimap_icon_image.js";
-import { restoreInitialCameraView } from "./camera_view_selection.js";
+import { initializeCameraView } from "./camera_view_selection.js";
 import { autoSpectatorCameraMinZoom, createMatchAutoSpectator } from "./match_auto_spectator.js";
 import {
   createSnapshotProcessingReport,
@@ -376,8 +376,7 @@ export class Match {
     // Size the camera to the map and the current viewport, then restore a carried view or center on home.
     this._timeInit("match.bounds", () => {
       this.applyBounds();
-      if (options.initialCamera) restoreInitialCameraView(this.camera, options.initialCamera);
-      else this.centerOnHome();
+      if (!initializeCameraView(this.camera, options.initialCamera)) this.centerOnHome();
     });
 
     // --- Render loop state. ---

@@ -1448,7 +1448,10 @@ not issue accidental commands, while desktop right-click and queued-order behavi
 Camera instances own a
 per-session maximum zoom with fallback handling for invalid options. Lab live and replay sessions
 use an 8x maximum zoom, while non-Lab sessions retain the 2x cap; Lab initial-camera views are
-restored under that limit during normal match initialization. Room-time controls de-duplicate matching touch and pen activation while preserving unrelated click
+restored under that limit during normal match initialization. The Game settings default zoom slider
+stores a starting scale within the regular 0.4x–2x range; new matches and Labs begin at that scale
+unless an explicit initial-camera scale overrides it. Lab's 8x range remains available after launch.
+Room-time controls de-duplicate matching touch and pen activation while preserving unrelated click
 sources, retain server-confirmed state while requests are pending, and confirm time movement against
 the authoritative baseline and controller identity. Blocked, failed, or unconfirmed sends are
 exposed instead of applying optimistic selection. Read-only Lab viewers keep these
