@@ -1025,10 +1025,14 @@ impl Serialize for CompactOrderPlanMarker<'_> {
         S: Serializer,
     {
         let marker = self.0;
-        let mut seq = serializer.serialize_seq(Some(3))?;
+        let mut seq =
+            serializer.serialize_seq(Some(if marker.building_kind.is_some() { 4 } else { 3 }))?;
         seq.serialize_element(&order_stage_code(&marker.kind))?;
         seq.serialize_element(&marker.x)?;
         seq.serialize_element(&marker.y)?;
+        if let Some(kind) = &marker.building_kind {
+            seq.serialize_element(&kind_code(kind))?;
+        }
         seq.end()
     }
 }
@@ -1480,6 +1484,10 @@ mod tests {
         assert!(value.get("gd").is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "compact_snapshot_build_tests.rs"]
+mod build_tests;
 
 #[cfg(test)]
 #[path = "compact_snapshot_rocket_tests.rs"]

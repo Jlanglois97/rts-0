@@ -989,7 +989,8 @@ selected radius is server-owned order state but is not projected in this compact
 move/setup/fire stages for preview continuity while waiting for command acknowledgement, but the
 snapshot `orderPlan` is the only authoritative queued-plan contract and stale local previews must
 reconcile to it. Each compact stage is `[kind, x, y]`, where `kind` uses the `orderStage` compact
-code table above.
+code table above. Build stages append a fourth `buildingKind` kind code, forming
+`[kind, x, y, buildingKind]`; other stages retain three fields.
 Stages carry safe world points only, never target ids; hidden attack target stages may be omitted
 rather than leaking enemy positions through fog. Production building rally points are exposed
 separately through `rally` and `rallyPlan` and are not part of `orderPlan`. `rallyPlan` is appended
@@ -1170,7 +1171,7 @@ events, and positioned notices remain fog-gated and are withheld when smoke hide
   // compact slot 19 remains null after retirement of movement-oil telemetry
   setupFacing?: f32,             // anti_tank_gun/artillery only: owner/allied deployed arc center; compact slot 20
   orderPlan?: [                  // current + queued order stages; owner-private except full-world diagnostics
-    { kind: "move"|"attackMove"|"holdPosition"|"attack"|"gather"|"build"|"deconstruct"|"smoke"|"mortarFire"|"pointFire"|"blanketFire"|"breakthrough"|"scoutPlane"|"dismissScoutPlane"|"ekatTeleport"|"ekatLineShot"|"ekatMagicAnchor"|"ekatConsumeGolem"|"barrage"|"setupAntiTankGuns", x: f32, y: f32 }
+    { kind: "move"|"attackMove"|"holdPosition"|"attack"|"gather"|"build"|"deconstruct"|"smoke"|"mortarFire"|"pointFire"|"blanketFire"|"breakthrough"|"scoutPlane"|"dismissScoutPlane"|"ekatTeleport"|"ekatLineShot"|"ekatMagicAnchor"|"ekatConsumeGolem"|"barrage"|"setupAntiTankGuns", x: f32, y: f32, buildingKind?: string }
   ],
   chargeCooldownLeft?: u16,      // legacy; no longer projected by current server
   abilities?: [                  // owner-only ability affordance/cooldown data

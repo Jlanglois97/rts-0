@@ -595,6 +595,9 @@ mod client_message_tests;
 mod contract_tests;
 
 #[cfg(test)]
+mod branch_message_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -981,33 +984,6 @@ mod tests {
     }
 
     #[test]
-    fn branch_from_tick_created_serializes_contract_shape() {
-        let msg = ServerMessage::BranchFromTickCreated {
-            branch_room: "__replay_branch__:00000001".to_string(),
-            source_tick: 123,
-            seats: vec![ReplayBranchSeat {
-                player_id: 7,
-                team_id: 7,
-                faction_id: DEFAULT_FACTION_ID.to_string(),
-                name: "Player 7".to_string(),
-                color: "#4878c8".to_string(),
-                claimable: true,
-            }],
-        };
-        let json = serde_json::to_value(msg).expect("branch message should serialize");
-
-        assert_eq!(json["t"], "branchFromTickCreated");
-        assert_eq!(json["branchRoom"], "__replay_branch__:00000001");
-        assert_eq!(json["sourceTick"], 123);
-        assert_eq!(json["seats"][0]["playerId"], 7);
-        assert_eq!(json["seats"][0]["teamId"], 7);
-        assert_eq!(json["seats"][0]["factionId"], DEFAULT_FACTION_ID);
-        assert_eq!(json["seats"][0]["name"], "Player 7");
-        assert_eq!(json["seats"][0]["color"], "#4878c8");
-        assert_eq!(json["seats"][0]["claimable"], true);
-    }
-
-    #[test]
     fn branch_staging_serializes_contract_shape() {
         let msg = ServerMessage::BranchStaging {
             room: "__replay_branch__:00000001".to_string(),
@@ -1055,26 +1031,31 @@ mod tests {
                 kind: "move".to_string(),
                 x: 96.0,
                 y: 112.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: "setupAntiTankGuns".to_string(),
                 x: 128.0,
                 y: 160.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: abilities::CHARGE.to_string(),
                 x: 176.0,
                 y: 208.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: abilities::SMOKE.to_string(),
                 x: 192.0,
                 y: 224.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: abilities::POINT_FIRE.to_string(),
                 x: 320.0,
                 y: 352.0,
+                building_kind: None,
             },
         ];
         worker.charge_cooldown_left = Some(87);
@@ -1129,11 +1110,13 @@ mod tests {
                 kind: "move".to_string(),
                 x: 256.0,
                 y: 512.0,
+                building_kind: None,
             },
             OrderPlanMarker {
                 kind: "attackMove".to_string(),
                 x: 320.0,
                 y: 544.0,
+                building_kind: None,
             },
         ];
 

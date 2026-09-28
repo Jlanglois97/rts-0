@@ -494,6 +494,30 @@ import { CommandInteraction } from "../../client/src/command_interaction.js";
     playerHasCompletedKind(completedTrainingCentre, playerId, KIND.TRAINING_CENTRE),
     "Vehicle Works should unlock once the Training Centre is complete",
   );
+  const queuedBuildCard = (selection) => buildCommandCardDescriptors({
+    playerId,
+    factionId: "kriegsia",
+    selection,
+    commandCardMode: "workerBuild",
+    resources: { steel: 1000, oil: 1000 },
+    playerHasCompleteKind: (kind) => kind === KIND.RESOURCE_DEPOT,
+  });
+  const queuedWorker = { id: 10, owner: playerId, kind: KIND.WORKER, orderPlan: [
+    { kind: ORDER_STAGE.BUILD, buildingKind: KIND.BARRACKS },
+    { kind: ORDER_STAGE.BUILD, buildingKind: KIND.TRAINING_CENTRE },
+  ] };
+  const buildEnabled = (card, kind) => card.slots.find((slot) => slot?.id === `build:${kind}`)?.enabled;
+  assert(buildEnabled(queuedBuildCard([queuedWorker]), KIND.TRAINING_CENTRE),
+    "a selected worker building Barracks unlocks its queued Training Centre build button");
+  assert(buildEnabled(queuedBuildCard([queuedWorker]), KIND.ENGINEERING_COMPLEX),
+    "a selected worker's Barracks and Training Centre chain unlocks Engineering Complex");
+  assert(!buildEnabled(queuedBuildCard([{ ...queuedWorker, orderPlan: [] }]), KIND.TRAINING_CENTRE),
+    "an unrelated worker cannot use another worker's planned Barracks");
+  const pendingBuild = new ClientIntent();
+  pendingBuild.recordPlannedCommand({ c: "build", units: [queuedWorker.id], building: KIND.ENGINEERING_COMPLEX,
+    tileX: 22, tileY: 10, queued: true }, [queuedWorker], { clientSeq: 41 });
+  assert(pendingBuild.plannedOrderPlanForEntity(queuedWorker).at(-1)?.buildingKind === KIND.ENGINEERING_COMPLEX,
+    "a newly queued building remains visible in the selected worker's pending plan");
   const genericCooldownTicks = TICK_HZ * 5;
   const groupedNearlySameCooldowns = groupCooldownClocks([150, 149, 146], genericCooldownTicks);
   assert(groupedNearlySameCooldowns.length === 1, "nearby cooldowns share one clock arm");

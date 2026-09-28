@@ -1375,6 +1375,12 @@ Workers travelling to a build site or waiting there remain interruptible. When c
 for a build/deconstruct command, prefer an interruptible selected worker before an active constructor.
 When construction completes, its single active builder clears the active Build order, preserving
 follow-ups for normal queue promotion and authoritative order-plan feedback.
+Build intents may be appended when the same worker's active and earlier queued Build orders,
+together with the player's completed buildings, satisfy the new building's tech requirements.
+The admission check is worker-local and respects queue replacement; another worker's plan cannot
+unlock a build. The owner-private order plan projects each Build stage's building kind so the
+client build card can expose this chain. Promotion and build arrival still require completed live
+prerequisites, so a destroyed or interrupted prerequisite causes dependent stages to be skipped.
 `services::order_planner` is the pure
 reference implementation of this planning policy. The planner has no `EntityStore`, fog, pathing,
 economy, or cooldown mutation dependency; it accepts plain facts and emits one of four effects:

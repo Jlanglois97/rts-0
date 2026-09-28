@@ -146,6 +146,165 @@ fn construction_followup_training_centre_starts_after_barracks() {
 }
 
 #[test]
+fn queued_build_chain_uses_only_earlier_orders_on_the_same_worker() {
+    let (mut game, worker, site) = fixture();
+    let second_worker = game
+        .state
+        .entities
+        .spawn_unit(1, EntityKind::Worker, 500.0, 320.0)
+        .unwrap();
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![worker],
+            building: EntityKind::EngineeringComplex,
+            tile_x: 22,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![second_worker],
+            building: EntityKind::TrainingCentre,
+            tile_x: 16,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![worker],
+            building: EntityKind::TrainingCentre,
+            tile_x: 16,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![second_worker, worker],
+            building: EntityKind::Factory,
+            tile_x: 27,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![worker],
+            building: EntityKind::EngineeringComplex,
+            tile_x: 22,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.tick();
+    assert!(game
+        .state
+        .entities
+        .get(second_worker)
+        .unwrap()
+        .queued_orders()
+        .is_empty());
+    assert_eq!(
+        game.state.entities.get(worker).unwrap().queued_orders(),
+        &[
+            OrderIntent::build(EntityKind::TrainingCentre, 16, 10),
+            OrderIntent::build(EntityKind::Factory, 27, 10),
+            OrderIntent::build(EntityKind::EngineeringComplex, 22, 10),
+        ]
+    );
+    let plan = game
+        .snapshot_for(1)
+        .entities
+        .into_iter()
+        .find(|e| e.id == worker)
+        .unwrap()
+        .order_plan;
+    assert_eq!(
+        plan.iter()
+            .map(|stage| stage.building_kind.as_deref())
+            .collect::<Vec<_>>(),
+        [
+            Some("barracks"),
+            Some("training_centre"),
+            Some("factory"),
+            Some("engineering_complex")
+        ]
+    );
+    finish(&mut game, site);
+    for _ in 0..1000 {
+        game.tick();
+        if game
+            .state
+            .entities
+            .iter()
+            .any(|e| e.kind == EntityKind::TrainingCentre && !e.under_construction())
+        {
+            break;
+        }
+    }
+    for _ in 0..1000 {
+        game.tick();
+        if game
+            .state
+            .entities
+            .iter()
+            .any(|e| e.kind == EntityKind::EngineeringComplex)
+        {
+            return;
+        }
+    }
+    panic!("queued engineering complex should start after training centre");
+}
+
+#[test]
+fn queued_build_prerequisite_destroyed_before_promotion_is_skipped() {
+    let (mut game, worker, site) = fixture();
+    game.enqueue(
+        1,
+        Command::Build {
+            units: vec![worker],
+            building: EntityKind::TrainingCentre,
+            tile_x: 16,
+            tile_y: 10,
+            queued: true,
+        },
+    );
+    game.tick();
+    assert_eq!(
+        game.state
+            .entities
+            .get(worker)
+            .unwrap()
+            .queued_orders()
+            .len(),
+        1
+    );
+    game.state.entities.remove(site);
+    for _ in 0..5 {
+        game.tick();
+    }
+    assert!(game
+        .state
+        .entities
+        .get(worker)
+        .unwrap()
+        .queued_orders()
+        .is_empty());
+    assert!(!game
+        .state
+        .entities
+        .iter()
+        .any(|e| e.kind == EntityKind::TrainingCentre));
+}
+
+#[test]
 fn construction_followup_hold_replaces_full_queue_and_shift_still_appends() {
     let (mut game, worker, site) = fixture();
     for index in 0..8 {

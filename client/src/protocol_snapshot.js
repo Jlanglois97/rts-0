@@ -424,14 +424,15 @@ function assignScoutPlane(target, fields, index) {
 }
 
 function readOrderPlanMarker(record, label) {
-  const marker = readArray(record, label, 3);
-  if (marker.length !== 3) {
+  const marker = readArray(record, label, 4);
+  if (marker.length !== 3 && marker.length !== 4) {
     throw new Error(`${label} field count mismatch`);
   }
   return {
     kind: readCode(marker[0], ORDER_STAGE_BY_CODE, `${label}.kind`),
     x: readNumber(marker[1], `${label}.x`),
     y: readNumber(marker[2], `${label}.y`),
+    ...(marker.length === 4 ? { buildingKind: readCode(marker[3], KIND_BY_CODE, `${label}.buildingKind`) } : {}),
   };
 }
 

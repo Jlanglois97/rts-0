@@ -874,11 +874,13 @@ fn normal_move_then_queued_move_snapshot_shows_active_and_future_waypoints() {
                 kind: "move".to_string(),
                 x: first.0,
                 y: first.1,
+                building_kind: None,
             },
             crate::protocol::OrderPlanMarker {
                 kind: "move".to_string(),
                 x: second.0,
                 y: second.1,
+                building_kind: None,
             },
         ]
     );

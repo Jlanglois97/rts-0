@@ -480,7 +480,8 @@ export class HUD {
   }
 
   _commandDescriptorContext(frameViews = null) {
-    const selection = frameSelectedEntities(this.state, frameViews);
+    const selection = frameSelectedEntities(this.state, frameViews).map((entity) =>
+      this.clientIntent?.entityWithPlannedOrder?.(entity) ?? entity);
     const currentEntities = frameCurrentEntities(this.state, frameViews);
     const commandOwner = this._commandOwnerForSelection(selection);
     this._recordHudDiagnostic(
