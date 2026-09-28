@@ -392,6 +392,43 @@ try {
     return true;
   });
   ok(engineerSelected, "selected the starting Engineer");
+  // Exercise native capture and the live frame loop without moving the build-test unit.
+  const minimapBox = await (await page.$("#minimap")).boundingBox();
+  await page.evaluate(() => {
+    const interaction = window.__rts.match.commandInteraction;
+    window.__minimapCommands = [];
+    window.__minimapIssue = interaction.issueCommand;
+    interaction.issueCommand = (command) => window.__minimapCommands.push(command);
+  });
+  for (const attack of [false, true]) {
+    await page.evaluate((armed) => {
+      const intent = window.__rts.match.clientIntent;
+      if (armed) intent.beginCommandTarget("attack");
+      else intent.endCommandTarget();
+    }, attack);
+    const button = attack ? "left" : "right";
+    const x = minimapBox.x + minimapBox.width * 0.25;
+    const y = minimapBox.y + minimapBox.height * 0.25;
+    await page.mouse.move(x, y);
+    await page.mouse.down({ button });
+    await page.mouse.move(x + minimapBox.width * 0.4, y, { steps: 5 });
+    await page.mouse.move(x + minimapBox.width * 0.4, y + minimapBox.height * 0.3, { steps: 5 });
+    await sleep(100);
+    ok(await page.evaluate(() => window.__rts.match.clientIntent.formationMovePreview?.points.length >= 3),
+      `MINIMAP: ${attack ? "attack" : "move"} polyline preview survives live frames`);
+    await page.mouse.up({ button });
+    ok(await page.evaluate((expectedAttack) => {
+      const command = window.__minimapCommands.at(-1);
+      return command?.c === "formationMove" && !!command.attackMove === expectedAttack && command.points.length >= 3;
+    }, attack), `MINIMAP: native ${button} drag issues its formation command`);
+  }
+  await page.evaluate(() => {
+    window.__rts.match.commandInteraction.issueCommand = window.__minimapIssue;
+    window.__rts.match.clientIntent.endCommandTarget();
+    delete window.__minimapIssue;
+    delete window.__minimapCommands;
+  });
+
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press("z");
   ok(

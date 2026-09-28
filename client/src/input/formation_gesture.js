@@ -84,7 +84,7 @@ export function _finishFormationGesture(p, ev = {}) {
 export function _cancelFormationGesture() {
   const hadGesture = !!this._formationGesture;
   this._formationGesture = null;
-  this._intent?.()?.clearFormationMovePreview?.();
+  if (hadGesture) this._intent?.()?.clearFormationMovePreview?.();
   return hadGesture;
 }
 
@@ -131,4 +131,14 @@ function updatePromotion(input, gesture, world) {
   );
   const tileSize = input.state?.map?.tileSize || DEFAULT_TILE_SIZE;
   if (gesture.maxExtentWorld >= tileSize * FORMATION_LINE_MIN_TILES) gesture.promoted = true;
+}
+
+/** Bind the shared world-space gesture to another command surface through shell DI. */
+export function createFormationGesture(input) {
+  return {
+    begin: (point, event, kind) => _beginFormationGesture.call(input, point, event, kind),
+    update: (point, event) => _updateFormationGesture.call(input, point, event),
+    finish: (point, event) => _finishFormationGesture.call(input, point, event),
+    cancel: () => _cancelFormationGesture.call(input),
+  };
 }
