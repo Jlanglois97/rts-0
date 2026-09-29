@@ -31,7 +31,9 @@ mod expansion_security;
 mod frontal;
 mod geometry;
 mod jeff;
+mod later_bases;
 mod memory;
+mod obstacles;
 mod policies;
 mod production;
 mod resources;
@@ -196,6 +198,9 @@ where
 
     let facts = AiFacts::from_observation(observation);
     memory.sync_home_defensive_tank(observation, profile);
+    if uses_current_jeffs_ai_policy(profile.id) {
+        memory.note_enemy_tanks(observation);
+    }
     memory.sync_turtle_opening(profile, observation);
     let budget = SpendBudget::with_committed_steel(
         observation.economy.steel,
@@ -279,6 +284,7 @@ where
         &facts,
         profile,
         memory,
+        map_analysis,
         &mut expansion_placeable,
     );
     let expansion_footprint_blockers = if uses_current_jeffs_ai_policy(profile.id)
@@ -321,9 +327,25 @@ where
         gathering_builders.as_slice(),
     ];
 
-    if (should_build_expansion_from_economy_manager(&economy_manager_output)
-        || !retry_builder.is_empty())
-        && (!uses_current_jeffs_ai_policy(profile.id) || expansion_secured)
+    // Jeff owns the natural's timing: once it is next and the site is secured, it is ordered as soon
+    // as the builder can go safely with the full cost banked, and a dropped order is retried after
+    // a pause for the rest of the match, rather than waiting on the economy manager, whose Tank
+    // requirements kept a failed natural from ever being ordered again.
+    let jeff_natural = uses_current_jeffs_ai_policy(profile.id);
+    let natural_ready = jeff_natural
+        && expansion_security::expansion_is_next(observation, &facts, profile)
+        && expansion_security::natural_attempt_ready(
+            observation,
+            map_analysis,
+            memory,
+            expansion_secured,
+        );
+    let natural_pending =
+        jeff_natural && expansion_security::natural_order_pending(observation, memory);
+    if (jeff_natural && natural_ready)
+        || (!jeff_natural
+            && (should_build_expansion_from_economy_manager(&economy_manager_output)
+                || !retry_builder.is_empty()))
     {
         if let Some(build_action) = try_build_expansion_resource_depot(
             observation,
@@ -351,10 +373,51 @@ where
     }
     let save_for_unplanned_expansion = (save_for_expansion || reserve_expansion)
         && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0;
-    if reserve_expansion && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0 {
+    if (reserve_expansion || natural_pending)
+        && planned_in_intents(&intents, EntityKind::ResourceDepot) == 0
+    {
         let (steel, oil) = rts_rules::economy::cost(EntityKind::ResourceDepot);
         actions.holdback_resources(steel, oil);
     }
+    // Jeff's bases beyond the natural. A second Factory that is due takes priority this decision.
+    let factory_due = uses_current_jeffs_ai_policy(profile.id)
+        && should_build_extra_factory(
+            observation,
+            &facts,
+            profile,
+            planned_in_intents(&intents, EntityKind::Factory),
+        );
+    let later_base = later_bases::plan(
+        observation,
+        &facts,
+        profile,
+        memory,
+        map_analysis,
+        &mut actions,
+        &builder_pools,
+        factory_due,
+        &mut expansion_placeable,
+    );
+    intents.extend(later_base.intents.iter().cloned());
+
+    // Jeff's picket on the enemy's route and warned sealing of the home line. Its units are
+    // reserved from every other system for this decision.
+    if uses_current_jeffs_ai_policy(profile.id) {
+        let route_line = defense::plan_route_line(&mut actions, observation, memory, map_analysis);
+        if !route_line.ordered.is_empty() {
+            intents.push(AiIntent::Move {
+                units: route_line.ordered,
+            });
+        }
+        if !route_line.released.is_empty() {
+            // Released sealers still carry the live adapter's cached staging; assembling clears it
+            // so their normal posts are sent again.
+            intents.push(AiIntent::Assemble {
+                units: route_line.released,
+            });
+        }
+    }
+    let route_line_reserved: BTreeSet<u32> = memory.route_line.reserved().collect();
 
     let economy_plan = economy_manager_output.plan.clone();
     let save_worker_training_for_tech = defer_economy_for_panic;
@@ -395,7 +458,7 @@ where
         if facts.building_count(*kind) + planned_in_intents(&intents, *kind) > 0 {
             continue;
         }
-        if let Some(build_action) = try_build_kind(
+        if let Some(build_action) = try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -403,6 +466,7 @@ where
             profile,
             *kind,
             build_search,
+            map_analysis,
             &mut placeable,
         ) {
             if *kind == EntityKind::Factory {
@@ -450,7 +514,7 @@ where
         && !expansion_blocks_tech_path
         && !save_for_unplanned_expansion
         && planned_in_intents(&intents, EntityKind::Barracks) == 0
-        && try_build_kind(
+        && try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -458,6 +522,7 @@ where
             profile,
             EntityKind::Barracks,
             build_search,
+            map_analysis,
             &mut placeable,
         )
         .is_some()
@@ -475,7 +540,7 @@ where
         && !save_for_unplanned_expansion
         && planned_in_intents(&intents, EntityKind::Factory) == 0;
     if first_factory_needed {
-        if let Some(build_action) = try_build_kind(
+        if let Some(build_action) = try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -483,6 +548,7 @@ where
             profile,
             EntityKind::Factory,
             build_search,
+            map_analysis,
             &mut placeable,
         ) {
             if let Some(enemy_base) = facts.nearest_public_enemy_base {
@@ -595,7 +661,7 @@ where
             profile,
             planned_in_intents(&intents, EntityKind::Factory),
         )
-        && try_build_kind(
+        && try_build_production(
             observation,
             &facts,
             &mut actions,
@@ -603,6 +669,7 @@ where
             profile,
             EntityKind::Factory,
             build_search,
+            map_analysis,
             &mut placeable,
         )
         .is_some()
@@ -639,8 +706,12 @@ where
         production_policy.unit_priorities,
         facts.completed_upgrades(),
     );
-    let effective_unit_priorities =
-        effective_unit_priorities_for_fast_tank_timing(profile, &facts, &effective_unit_priorities);
+    let effective_unit_priorities = effective_unit_priorities_for_fast_tank_timing(
+        profile,
+        &facts,
+        &effective_unit_priorities,
+        pincer_scouts(profile, memory),
+    );
     let effective_unit_priorities = effective_unit_priorities_for_turtle(
         profile,
         memory,
@@ -672,7 +743,7 @@ where
     if profile
         .home_anti_tank
         .is_some_and(|policy| policy.target_guns > 0)
-        && memory.containment_wave_launched
+        && memory.containment.wave_launched
         && !effective_unit_priorities.contains(&EntityKind::AntiTankGun)
     {
         effective_unit_priorities.push(EntityKind::AntiTankGun);
@@ -687,7 +758,12 @@ where
     );
     let production_unit_counts =
         unit_counts_for_priorities(observation, &facts, profile, &effective_unit_priorities);
-    let production_max_counts = production_max_counts(profile, observation, map_analysis);
+    let production_max_counts = production_max_counts(
+        profile,
+        observation,
+        map_analysis,
+        pincer_scouts(profile, memory),
+    );
     for building_kind in production_building_order(&effective_unit_priorities) {
         let buildings = facts.production_buildings(building_kind);
         if buildings.is_empty() {
@@ -723,14 +799,27 @@ where
                 actions.budget().steel().saturating_sub(policy.reserve) as usize
                     / unit_steel as usize
             };
+            // On Crossroads Jeff is short of Oil, not Steel: past a home garrison, more Riflemen
+            // only spend the Steel the third base and Factory rebuilds need.
+            let surplus_cap = if uses_current_jeffs_ai_policy(profile.id)
+                && policy.unit == EntityKind::Rifleman
+                && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+            {
+                CROSSROADS_MAX_SURPLUS_RIFLEMEN
+            } else {
+                usize::MAX
+            };
             building_max_counts.retain(|(kind, _)| *kind != policy.unit);
             building_max_counts.push((
                 policy.unit,
                 current
                     .saturating_add(affordable_above_reserve)
+                    .min(surplus_cap)
                     .max(if security_recruits { 6 } else { 0 }),
             ));
         }
+        let home_holds_tank_reserve = !uses_current_jeffs_ai_policy(profile.id)
+            || later_bases::main_tank_ids(observation, memory).len() >= memory.home_tank_reserve();
         let production_rally = is_jeffs_ai_profile(profile.id)
             .then(|| jeffs_production_rally(observation, &facts))
             .flatten();
@@ -751,6 +840,14 @@ where
                 balance_unit_priorities: production_policy.balance_unit_priorities,
             },
             |unit| {
+                // While a new base is being taken, fresh Tanks and Riflemen join its guards, but
+                // Tanks only once the main holds its reserve.
+                if let Some((x, y)) = later_base.rally.filter(|_| {
+                    unit == EntityKind::Rifleman
+                        || (unit == EntityKind::Tank && home_holds_tank_reserve)
+                }) {
+                    return Some((x, y, RallyKind::AttackMove));
+                }
                 if unit == EntityKind::Rifleman {
                     rifleman_rally
                         .map(|(x, y)| (x, y, RallyKind::Move))
@@ -774,6 +871,25 @@ where
         frontal_exclusions.insert(tank_id);
     }
     sync_containment_recovery(observation, profile, memory);
+    // The current Jeff's launched push keeps its units: home defense answers raids with what stayed
+    // home, and the push keeps its own orders meanwhile. It used to lose all but two Tanks to
+    // home defense within moments of leaving.
+    let push_units: BTreeSet<u32> = if uses_current_jeffs_ai_policy(profile.id) {
+        [&memory.containment, &memory.partner_push]
+            .into_iter()
+            .filter(|push| push.wave_launched && !push.recovery_active)
+            .flat_map(|push| {
+                push.active_tanks
+                    .iter()
+                    .copied()
+                    .chain(push.active_scout)
+                    .chain(push.active_riflemen.iter().copied())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
     let forward_tank_position = uses_current_jeffs_ai_policy(profile.id)
         .then(|| expansion_security::tank_staging_center(observation, map_analysis))
         .flatten();
@@ -784,6 +900,9 @@ where
     }
     frontal_exclusions.extend(memory.expansion_security.riflemen.iter().copied());
     frontal_exclusions.extend(expansion_footprint_blockers.iter().copied());
+    // New-base guards stay out of the push until the base is covered.
+    frontal_exclusions.extend(memory.later_bases.guards.iter().copied());
+    frontal_exclusions.extend(route_line_reserved.iter().copied());
     let frontal_wave = plan_frontal_wave(
         observation,
         attack_policy,
@@ -797,6 +916,7 @@ where
     let mut local_ready_units =
         actions::select_ready_combat_units(&observation.owned, &ALL_COMBAT_UNITS);
     local_ready_units.retain(|id| !expansion_footprint_blockers.contains(id));
+    local_ready_units.retain(|id| !push_units.contains(id));
     if profile.home_anti_tank.is_some() {
         local_ready_units.retain(|id| {
             Some(*id) != memory.home_defensive_tank
@@ -853,6 +973,9 @@ where
                     .map(|unit| unit.id),
             );
         }
+        // The picket holds its trench on the route; it never runs back to answer a raid.
+        local_defenders.retain(|id| Some(*id) != memory.route_line.picket());
+        local_defenders.retain(|id| !push_units.contains(id));
         local_defenders.sort_unstable();
         local_defenders.dedup();
         if new_jeff_defense {
@@ -931,8 +1054,10 @@ where
                             && unit.is_complete
                             && unit.hp > 0
                             && !local_defense_assigned.contains(&unit.id)
-                            && !memory.containment_active_riflemen.contains(&unit.id)
+                            && !memory.containment.active_riflemen.contains(&unit.id)
+                            && !memory.partner_push.active_riflemen.contains(&unit.id)
                             && !memory.expansion_security.riflemen.contains(&unit.id)
+                            && !route_line_reserved.contains(&unit.id)
                     })
                     .map(|unit| unit.id)
                     .collect()
@@ -950,8 +1075,10 @@ where
                 .filter(|entity| {
                     entity.is_complete
                         && matches!(entity.kind, EntityKind::Tank | EntityKind::ScoutCar)
-                        && !memory.containment_active_tanks.contains(&entity.id)
-                        && memory.containment_active_scout != Some(entity.id)
+                        && !memory.containment.active_tanks.contains(&entity.id)
+                        && memory.containment.active_scout != Some(entity.id)
+                        && !memory.partner_push.active_tanks.contains(&entity.id)
+                        && memory.partner_push.active_scout != Some(entity.id)
                 })
                 .min_by(|left, right| {
                     geometry::dist2(left.x, left.y, own_base.0, own_base.1)
@@ -1091,6 +1218,38 @@ where
             }
         }
 
+        let guard_units = later_bases::issue_guard_orders(
+            &mut actions,
+            observation,
+            memory,
+            &later_base.guard_posts,
+            &local_defense_assigned,
+        );
+        if !guard_units.is_empty() {
+            intents.push(AiIntent::Move { units: guard_units });
+        }
+        if uses_current_jeffs_ai_policy(profile.id) {
+            let returning = later_bases::recall_tanks_to_main(
+                &mut actions,
+                observation,
+                memory,
+                &local_defense_assigned,
+                forward_defensive_tank,
+            );
+            if !returning.is_empty() {
+                intents.push(AiIntent::Move { units: returning });
+            }
+            if let Some(clearing) = obstacles::clear_route_traps(
+                &mut actions,
+                observation,
+                memory,
+                map_analysis,
+                &local_defense_assigned,
+            ) {
+                intents.push(AiIntent::Attack { units: clearing });
+            }
+        }
+
         let containment_needs_control = profile.id != JEFFS_AI_BETA_ID
             && profile.expansion_containment.is_some()
             && frontal::containment_wave_needs_control(memory);
@@ -1099,18 +1258,25 @@ where
         } else {
             None
         };
-        if (!handled_local_defense || containment_recall_target.is_some())
+        // During a raid at home only a launched push is still commanded here.
+        let push_only = handled_local_defense && containment_recall_target.is_none();
+        if (!push_only || !push_units.is_empty())
             && !turtle_defense_active
             && (!frontal_wave.ready_units.is_empty() || containment_needs_control)
         {
             if let Some(enemy_base) = facts.nearest_public_enemy_base {
-                let containment_was_launched = memory.containment_wave_launched;
+                let containment_was_launched = memory.containment.wave_launched;
+                let wave_plan = if push_only {
+                    frontal_wave.push_only()
+                } else {
+                    frontal_wave.clone()
+                };
                 if let Some(intent) = issue_frontal_wave(
                     &mut actions,
                     observation,
                     profile,
                     attack_policy,
-                    &frontal_wave,
+                    &wave_plan,
                     enemy_base,
                     map_analysis,
                     containment_recall_target,
@@ -1311,14 +1477,21 @@ fn effective_unit_priorities_for_upgrades(
         .collect()
 }
 
+/// One more Scout Car while a two-pronged push waits for its second.
+fn pincer_scouts(profile: &AiProfile, memory: &AiDecisionMemory) -> usize {
+    usize::from(uses_current_jeffs_ai_policy(profile.id) && memory.pincer_scout_wanted)
+}
+
 fn effective_unit_priorities_for_fast_tank_timing(
     profile: &AiProfile,
     facts: &AiFacts,
     unit_priorities: &[EntityKind],
+    extra_scouts: usize,
 ) -> Vec<EntityKind> {
     let Some(timing) = profile.fast_tank_timing else {
         return unit_priorities.to_vec();
     };
+    let scout_car_target = timing.scout_car_target + extra_scouts;
     let mut priorities: Vec<EntityKind> = unit_priorities
         .iter()
         .copied()
@@ -1328,7 +1501,7 @@ fn effective_unit_priorities_for_fast_tank_timing(
         })
         .collect();
     if facts.unit_count(EntityKind::Tank) >= timing.tanks_before_scout_car
-        && facts.unit_count(EntityKind::ScoutCar) < timing.scout_car_target
+        && facts.unit_count(EntityKind::ScoutCar) < scout_car_target
     {
         priorities.sort_by_key(|unit| (*unit != EntityKind::ScoutCar) as u8);
     }
@@ -1399,6 +1572,7 @@ fn production_max_counts(
     profile: &AiProfile,
     observation: &AiObservation,
     map_analysis: Option<&AiMapAnalysis>,
+    extra_scouts: usize,
 ) -> Vec<(EntityKind, usize)> {
     let mut counts = profile
         .defensive_machine_gunners
@@ -1420,7 +1594,7 @@ fn production_max_counts(
         ));
     }
     if let Some(timing) = profile.fast_tank_timing {
-        counts.push((EntityKind::ScoutCar, timing.scout_car_target));
+        counts.push((EntityKind::ScoutCar, timing.scout_car_target + extra_scouts));
     }
     if let Some(policy) = profile.home_anti_tank {
         counts.push((EntityKind::AntiTankGun, policy.target_guns));
@@ -1450,3 +1624,81 @@ fn can_train_pre_tank_defensive_machine_gunner(
 mod tests;
 #[cfg(test)]
 mod vehicle_worker_tests;
+
+/// On Crossroads Jeff stops turning surplus Steel into Riflemen at this many. It fielded 30-40,
+/// most of them idle, while Oil held it to 2-4 Tanks and it never took a third base.
+const CROSSROADS_MAX_SURPLUS_RIFLEMEN: usize = 24;
+
+/// On Crossroads each main has ground behind the HQ, walled off by water, that the enemy can only
+/// reach by walking past the HQ. A main-base building goes first to the nearest site at least this
+/// many tiles deeper than the HQ on the enemy's walk.
+const CROSSROADS_SHELTERED_DEPTH_TILES: f32 = 6.0;
+
+/// How far from the HQ Jeff looks for a sheltered Crossroads site. The sheltered ground starts
+/// 11 tiles from the north HQ, and the east start's usual 6-8 tile Factory band lies almost
+/// entirely on the way-in side.
+const CROSSROADS_SHELTER_SEARCH_MAX_RADIUS: i32 = 18;
+
+/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff places its
+/// Barracks, Training Centre, Engineering Complex and Factory at the nearest sheltered site behind
+/// its HQ, else the nearest site no nearer the enemy on foot than the HQ, and only when neither
+/// exists at the usual site.
+#[allow(clippy::too_many_arguments)]
+fn try_build_production<F>(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    actions: &mut AiActionContext<'_>,
+    builder_pools: &[&[u32]],
+    profile: &AiProfile,
+    kind: EntityKind,
+    build_search: ai_shared::BuildSearch,
+    map_analysis: Option<&AiMapAnalysis>,
+    placeable: &mut F,
+) -> Option<actions::BuildAction>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    if uses_current_jeffs_ai_policy(profile.id)
+        && jeff::crossroads_sheltered_kind(kind)
+        && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+        && map_analysis.is_some()
+    {
+        let usual = production::build_search_for_kind(build_search, profile, kind);
+        // Nearest first: the rings grow outward from the HQ with no pull toward the map centre.
+        let sheltered_search = ai_shared::BuildSearch {
+            max_radius: usual.max_radius.max(CROSSROADS_SHELTER_SEARCH_MAX_RADIUS),
+            prefer_away_from_center: false,
+            prefer_toward_center: false,
+            ..usual
+        };
+        for min_depth in [CROSSROADS_SHELTERED_DEPTH_TILES, 0.0] {
+            let built = production::try_build_kind_with_search(
+                observation,
+                facts,
+                actions,
+                builder_pools,
+                profile,
+                kind,
+                sheltered_search,
+                &mut |building, x, y| {
+                    placeable(building, x, y)
+                        && jeff::crossroads_site_depth(observation, map_analysis, building, x, y)
+                            .is_some_and(|depth| depth >= min_depth)
+                },
+            );
+            if built.is_some() {
+                return built;
+            }
+        }
+    }
+    try_build_kind(
+        observation,
+        facts,
+        actions,
+        builder_pools,
+        profile,
+        kind,
+        build_search,
+        placeable,
+    )
+}

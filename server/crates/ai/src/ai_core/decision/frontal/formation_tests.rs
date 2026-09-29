@@ -50,6 +50,7 @@ fn test_observation(owned: Vec<AiEntitySummary>, tick: u32) -> AiObservation {
         visible_enemies: Vec::new(),
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     }
@@ -91,6 +92,9 @@ fn issue_test_containment(
         JEFFS_AI.expansion_containment.unwrap(),
         true,
         true,
+        // Formation mechanics are tested on a fixed two-Tank push, not the sized one.
+        false,
+        None,
         None,
         memory,
     );
@@ -147,9 +151,9 @@ fn containment_waits_for_tanks_scout_and_rifle_screen_to_assemble() {
     let (intent, assembly_commands) = issue_test_containment(&observation, &mut memory);
 
     assert!(matches!(intent, Some(AiIntent::Assemble { .. })));
-    assert!(!memory.containment_wave_launched);
-    assert_eq!(memory.containment_active_tanks.len(), 2);
-    assert_eq!(memory.containment_active_riflemen.len(), 2);
+    assert!(!memory.containment.wave_launched);
+    assert_eq!(memory.containment.active_tanks.len(), 2);
+    assert_eq!(memory.containment.active_riflemen.len(), 2);
     assert!(assembly_commands
         .iter()
         .any(|command| matches!(command, Command::Move { units, .. } if units == &[1])));
@@ -157,7 +161,7 @@ fn containment_waits_for_tanks_scout_and_rifle_screen_to_assemble() {
         .iter()
         .any(|command| matches!(command, Command::Move { units, .. } if units == &[3])));
     assert!(assembly_commands.iter().any(|command| {
-        matches!(command, Command::AttackMove { units, .. } if memory.containment_active_riflemen.contains(&units[0]))
+        matches!(command, Command::AttackMove { units, .. } if memory.containment.active_riflemen.contains(&units[0]))
     }));
 
     apply_command_destinations(&mut observation, &assembly_commands, |_| true);
@@ -165,7 +169,7 @@ fn containment_waits_for_tanks_scout_and_rifle_screen_to_assemble() {
     let (intent, launch_commands) = issue_test_containment(&observation, &mut memory);
 
     assert!(matches!(intent, Some(AiIntent::Attack { .. })));
-    assert!(memory.containment_wave_launched);
+    assert!(memory.containment.wave_launched);
     let waypoint = stored_waypoint(&memory).expect("short first march waypoint");
     let tank_center = group_center(&observation, &[1, 2]).unwrap();
     let step_tiles = dist2(tank_center.0, tank_center.1, waypoint.0, waypoint.1).sqrt()
@@ -188,9 +192,9 @@ fn containment_launches_after_assembly_timeout_when_core_is_grouped() {
     let (intent, commands) = issue_test_containment(&observation, &mut memory);
 
     assert!(matches!(intent, Some(AiIntent::Attack { .. })));
-    assert!(memory.containment_wave_launched);
+    assert!(memory.containment.wave_launched);
     assert!(commands.iter().any(|command| {
-        matches!(command, Command::AttackMove { units, .. } if memory.containment_active_tanks.contains(&units[0]))
+        matches!(command, Command::AttackMove { units, .. } if memory.containment.active_tanks.contains(&units[0]))
     }));
 }
 
@@ -200,7 +204,7 @@ fn containment_timeout_does_not_launch_split_tanks() {
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
 
     let _ = issue_test_containment(&observation, &mut memory);
-    let split_tank = *memory.containment_active_tanks.iter().next().unwrap();
+    let split_tank = *memory.containment.active_tanks.iter().next().unwrap();
     let tank = observation
         .owned
         .iter_mut()
@@ -212,7 +216,7 @@ fn containment_timeout_does_not_launch_split_tanks() {
     let (intent, _) = issue_test_containment(&observation, &mut memory);
 
     assert!(matches!(intent, Some(AiIntent::Assemble { .. })));
-    assert!(!memory.containment_wave_launched);
+    assert!(!memory.containment.wave_launched);
 }
 
 #[test]
@@ -229,7 +233,7 @@ fn containment_hard_timeout_departs_with_vehicle_core_when_no_screen_is_availabl
     let (intent, _) = issue_test_containment(&observation, &mut memory);
 
     assert!(matches!(intent, Some(AiIntent::Attack { .. })));
-    assert!(memory.containment_wave_launched);
+    assert!(memory.containment.wave_launched);
 }
 
 #[test]
@@ -317,15 +321,15 @@ fn emergency_recall_redirects_the_whole_active_group() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_active_tanks.extend([1, 2]);
-    memory.containment_active_scout = Some(3);
-    memory.containment_active_riflemen.extend([4, 5]);
+    memory.containment.active_tanks.extend([1, 2]);
+    memory.containment.active_scout = Some(3);
+    memory.containment.active_riflemen.extend([4, 5]);
 
     let intent = issue_containment_recall(&mut actions, &observation, &mut memory, 99);
     let commands = actions.into_commands();
 
     assert!(matches!(intent, Some(AiIntent::Attack { .. })));
-    assert!(memory.containment_recall_active);
+    assert!(memory.containment.recall_active);
     assert!(matches!(
         commands.as_slice(),
         [Command::Attack { units, target: 99, .. }] if units == &[1, 2, 3, 4, 5]
@@ -397,7 +401,7 @@ fn beta_snapshot_preserves_the_immediate_containment_launch() {
     );
 
     assert!(matches!(intent, Some(AiIntent::Attack { .. })));
-    assert!(memory.containment_wave_launched);
+    assert!(memory.containment.wave_launched);
 }
 
 #[test]
@@ -409,7 +413,7 @@ fn containment_does_not_advance_past_a_slow_rifle_screen() {
     observation.tick += CONTAINMENT_FORMATION_REISSUE_TICKS;
     let (_, first_step_commands) = issue_test_containment(&observation, &mut memory);
     let first_waypoint = stored_waypoint(&memory).unwrap();
-    let escorts = memory.containment_active_riflemen.clone();
+    let escorts = memory.containment.active_riflemen.clone();
 
     apply_command_destinations(&mut observation, &first_step_commands, |unit_id| {
         !escorts.contains(&unit_id)
@@ -419,7 +423,7 @@ fn containment_does_not_advance_past_a_slow_rifle_screen() {
 
     assert_eq!(stored_waypoint(&memory), Some(first_waypoint));
     assert!(catch_up_commands.iter().all(|command| {
-        !matches!(command, Command::AttackMove { units, .. } if units.iter().any(|unit| memory.containment_active_tanks.contains(unit)))
+        !matches!(command, Command::AttackMove { units, .. } if units.iter().any(|unit| memory.containment.active_tanks.contains(unit)))
     }));
     assert!(catch_up_commands.iter().any(|command| {
         matches!(command, Command::AttackMove { units, .. } if escorts.contains(&units[0]))
@@ -450,7 +454,7 @@ fn containment_advances_when_one_screen_rifleman_is_late() {
     observation.tick += CONTAINMENT_FORMATION_REISSUE_TICKS;
     let (_, first_step_commands) = issue_test_containment(&observation, &mut memory);
     let first_waypoint = stored_waypoint(&memory).unwrap();
-    let laggard = *memory.containment_active_riflemen.iter().next().unwrap();
+    let laggard = *memory.containment.active_riflemen.iter().next().unwrap();
 
     apply_command_destinations(&mut observation, &first_step_commands, |unit_id| {
         unit_id != laggard
@@ -507,8 +511,8 @@ fn containment_orders_only_the_rear_tank_forward_to_catch_up() {
         unit.x = position.0;
         unit.y = position.1;
     }
-    memory.containment_march_waypoint = None;
-    memory.containment_last_formation_command_tick = None;
+    memory.containment.march_waypoint = None;
+    memory.containment.last_formation_command_tick = None;
     observation.tick += CONTAINMENT_FORMATION_REISSUE_TICKS;
 
     let (_, commands) = issue_test_containment(&observation, &mut memory);

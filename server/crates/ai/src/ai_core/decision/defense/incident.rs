@@ -1,3 +1,4 @@
+use super::envelope::LocalDefenseContact;
 use super::*;
 
 pub(super) const SEARCH_TICKS: u32 = config::TICK_HZ * 2;
@@ -14,6 +15,8 @@ const SPOTTER_STANDOFF_TILES: f32 = 8.0;
 const MAX_SPOTTERS: usize = 2;
 /// With nobody spotting, a Tank parks inside its own 10-tile sight so it can see what it shoots.
 const UNSPOTTED_TANK_PARK_TILES: f32 = 9.0;
+/// A completed building that lost HP this recently means the base is being raided.
+const BUILDINGS_UNDER_FIRE_TICKS: u32 = config::TICK_HZ * 4;
 
 /// `stationary_tanks` keeps defending Tanks parked for their stationary range bonus and sends
 /// infantry forward to provide the vision for those long shots, instead of ordering the Tanks to
@@ -29,6 +32,13 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
     let damaged_building = stationary_tanks
         .then(|| note_building_damage(observation, memory))
         .flatten();
+    if damaged_building.is_some() {
+        memory.local_defense_building_hit_tick = Some(observation.tick);
+    }
+    let buildings_under_fire = stationary_tanks
+        && memory
+            .local_defense_building_hit_tick
+            .is_some_and(|hit| observation.tick.saturating_sub(hit) <= BUILDINGS_UNDER_FIRE_TICKS);
     if let Some(contact) = local_defense_contact(observation) {
         memory.note_defensive_contact(
             observation.tick,
@@ -36,10 +46,22 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
             contact.threat_value,
             contact.armored_threat,
         );
+        let eligible = eligible_local_defenders(observation, local_defenders);
+        if buildings_under_fire && !contact.armored_threat {
+            return respond_to_raid(
+                actions,
+                observation,
+                memory,
+                eligible,
+                local_defenders,
+                map_analysis,
+                &contact,
+            );
+        }
         let mut interceptors = select_defensive_interceptors(
             observation,
             memory,
-            eligible_local_defenders(observation, local_defenders),
+            eligible,
             contact.intercept,
             contact.threat_value,
             contact.armored_threat,
@@ -79,6 +101,7 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
                     map_analysis,
                     &attack_targets,
                     target,
+                    true,
                 );
             }
         }
@@ -108,14 +131,26 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         memory.local_defense_held_tanks.clear();
         return None;
     }
-    let interceptors = select_defensive_interceptors(
-        observation,
-        memory,
-        candidates,
-        incident.position,
-        incident.threat_value,
-        incident.armored_threat,
-    );
+    let interceptors = if buildings_under_fire && !incident.armored_threat {
+        // Raiders shooting from fog: whoever is not dug in goes to the damaged building, with no
+        // two-to-one minimum. Trenches stay, since nothing can tell whether they reach the raid.
+        candidates
+            .into_iter()
+            .filter(|id| {
+                memory.estimated_entrenchment_ticks(observation, *id)
+                    < rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS
+            })
+            .collect()
+    } else {
+        select_defensive_interceptors(
+            observation,
+            memory,
+            candidates,
+            incident.position,
+            incident.threat_value,
+            incident.armored_threat,
+        )
+    };
     // Contact is lost: a parked Tank can no longer see anything to shoot, so it joins the search
     // and is parked again once the threat is back in sight.
     memory.local_defense_held_tanks.clear();
@@ -125,6 +160,134 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         incident.position.0,
         incident.position.1,
     )
+}
+
+/// Infantry already within this much of its reach of a raider counts as covering the raid.
+const RAID_REACH_MARGIN_TILES: f32 = 0.5;
+/// Dug-in infantry only leaves its trenches for a raid at least this big that nobody reaches.
+const RAID_COLLAPSE_MIN_RAIDERS: usize = 3;
+/// Out-of-reach infantry sent to a raid: this many per raider, and never fewer than the minimum,
+/// since a raid is often seen one unit at a time as it arrives.
+const RAID_SHIFT_PER_RAIDER: usize = 2;
+const RAID_MIN_SHIFT: usize = 4;
+
+/// Infantry is killing buildings. The usual two-to-one response sends nobody when it cannot reach
+/// that value, and ordering units to attack a raider makes them chase it out of the base. Instead:
+/// - infantry that already reaches a raider stays where it is and fights;
+/// - dug-in infantry keeps its trench as long as anyone else reaches the raid, because a trench
+///   is worth more than one more rifle in the open;
+/// - other infantry attack-moves to the defensive point beside the building under attack, in
+///   proportion to the raid (two per raider, at least four, nearest first). It fights on the way and stops
+///   there, so it never follows a retreating raider out of the base;
+/// - the trenches join only when a raid of three or more reaches nobody at all, so a single
+///   raider shooting from range cannot empty them.
+///
+/// Tanks keep the parked stationary-range defense, without sending spotters forward.
+fn respond_to_raid(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    memory: &mut AiDecisionMemory,
+    eligible: Vec<u32>,
+    local_defenders: &[u32],
+    map_analysis: Option<&AiMapAnalysis>,
+    contact: &LocalDefenseContact,
+) -> Option<Vec<u32>> {
+    let ts = observation.map.tile_size as f32;
+    let owned = |id: u32| observation.owned.iter().find(|unit| unit.id == id);
+    let raiders: Vec<&AiEntitySummary> = observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| contact.target_ids.contains(&enemy.id) && enemy.hp > 0)
+        .collect();
+    let (tanks, infantry): (Vec<u32>, Vec<u32>) = eligible
+        .into_iter()
+        .partition(|id| owned(*id).is_some_and(|unit| unit.kind == EntityKind::Tank));
+
+    let mut assigned = Vec::new();
+    if let Some(target) = primary_defense_target(observation, &contact.target_ids) {
+        if !tanks.is_empty() {
+            if let Some(units) = stationary_tank_defense(
+                actions,
+                observation,
+                memory,
+                tanks,
+                local_defenders,
+                map_analysis,
+                &contact.target_ids,
+                target,
+                false,
+            ) {
+                assigned.extend(units);
+            }
+        }
+    }
+
+    let reaches = |unit: &AiEntitySummary, entrenched: bool| {
+        let range = config::unit_stats(unit.kind).map_or(0.0, |stats| stats.range_tiles);
+        let bonus = if entrenched {
+            rts_rules::balance::ENTRENCHMENT_RANGE_BONUS_TILES as f32
+        } else {
+            0.0
+        };
+        let reach = (range + bonus + RAID_REACH_MARGIN_TILES) * ts;
+        raiders
+            .iter()
+            .any(|raider| dist2(unit.x, unit.y, raider.x, raider.y) <= reach * reach)
+    };
+    let mut staying = Vec::new();
+    let mut hold = Vec::new();
+    let mut entrenched_out_of_reach = Vec::new();
+    let mut shifting = Vec::new();
+    for id in infantry {
+        let Some(unit) = owned(id) else {
+            continue;
+        };
+        let entrenched = memory.estimated_entrenchment_ticks(observation, id)
+            >= rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS;
+        if reaches(unit, entrenched) {
+            // In reach: fight from here. Only a unit still walking somewhere is stopped.
+            if unit.state == AiEntityState::Move {
+                hold.push(id);
+            }
+            staying.push(id);
+        } else if entrenched {
+            entrenched_out_of_reach.push(id);
+        } else {
+            shifting.push(id);
+        }
+    }
+    if staying.is_empty() && raiders.len() >= RAID_COLLAPSE_MIN_RAIDERS {
+        // Nobody reaches a real raid: the trenches cannot help where they are.
+        shifting.append(&mut entrenched_out_of_reach);
+    } else {
+        staying.append(&mut entrenched_out_of_reach);
+    }
+    // Answer in proportion to the raid, nearest the building first: a lone raider does not pull
+    // the whole base out of position.
+    let intercept = contact.intercept;
+    shifting.sort_by(|left, right| {
+        let distance = |id: &u32| {
+            owned(*id).map_or(f32::INFINITY, |unit| {
+                dist2(unit.x, unit.y, intercept.0, intercept.1)
+            })
+        };
+        distance(left)
+            .total_cmp(&distance(right))
+            .then_with(|| left.cmp(right))
+    });
+    shifting.truncate(RAID_MIN_SHIFT.max(RAID_SHIFT_PER_RAIDER * raiders.len()));
+    if let Some(units) = actions::hold_position_units(actions, hold) {
+        assigned.extend(units);
+    }
+    if let Some(units) =
+        actions::attack_move_units(actions, shifting, contact.intercept.0, contact.intercept.1)
+    {
+        assigned.extend(units);
+    }
+    assigned.extend(staying);
+    assigned.sort_unstable();
+    assigned.dedup();
+    (!assigned.is_empty()).then_some(assigned)
 }
 
 /// Records completed building HP and returns the position of the building that lost the most
@@ -223,6 +386,7 @@ fn stationary_tank_defense(
     map_analysis: Option<&AiMapAnalysis>,
     attack_targets: &[u32],
     target: u32,
+    allow_spotters: bool,
 ) -> Option<Vec<u32>> {
     let ts = observation.map.tile_size as f32;
     let target_position = observation
@@ -245,16 +409,16 @@ fn stationary_tank_defense(
         .retain(|id| tanks.contains(id));
 
     // Parked Tanks outrange their own 10-tile sight: without infantry ahead of them, the long
-    // shots have no vision. Add spotters when the response selected only armor.
+    // shots have no vision. Add spotters when the response selected only armor. Machine Gunners
+    // never spot: they must stop and set up to fire, and one moved out as a spotter on one
+    // decision and ordered to attack on the next never gets to shoot.
     let mut spotters = Vec::new();
-    if infantry.is_empty() && !tanks.is_empty() {
+    if allow_spotters && infantry.is_empty() && !tanks.is_empty() {
         let mut candidates: Vec<&AiEntitySummary> =
             eligible_local_defenders(observation, local_defenders)
                 .into_iter()
                 .filter_map(owned)
-                .filter(|unit| {
-                    matches!(unit.kind, EntityKind::Rifleman | EntityKind::MachineGunner)
-                })
+                .filter(|unit| unit.kind == EntityKind::Rifleman)
                 .filter(|unit| {
                     memory.estimated_entrenchment_ticks(observation, unit.id)
                         < rts_rules::balance::ENTRENCHMENT_DIG_IN_TICKS

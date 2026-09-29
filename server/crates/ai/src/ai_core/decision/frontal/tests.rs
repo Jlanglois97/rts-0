@@ -43,6 +43,7 @@ fn regroup_test_observation(owned: Vec<AiEntitySummary>) -> AiObservation {
         visible_enemies: Vec::new(),
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     }
@@ -293,6 +294,7 @@ fn main_resource_depot_is_acquired_outside_nominal_standoff_radius() {
         visible_enemies: vec![resource_depot],
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     };
@@ -367,8 +369,8 @@ fn smoke_is_applied_to_healthy_rear_tank_and_focus_is_preserved() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -384,13 +386,14 @@ fn smoke_is_applied_to_healthy_rear_tank_and_focus_is_preserved() {
         &mut actions,
         &observation,
         &[1, 3],
+        &[],
         100,
         13.5,
-        memory.containment_smoke_target,
+        memory.containment.smoke_target,
     );
     let commands = actions.into_commands();
 
-    assert_eq!(memory.containment_smoke_target, Some(101));
+    assert_eq!(memory.containment.smoke_target, Some(101));
     assert!(matches!(
         commands.first(),
         Some(Command::UseAbility { units, ability: AbilityKind::Smoke, x: Some(_), y: Some(_), .. }) if units == &[4]
@@ -412,8 +415,8 @@ fn rear_focus_switches_the_smoke_candidate_to_the_forward_tank() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(101);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(101);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 101;
 
     let _ = maybe_issue_isolation_smoke(
@@ -426,7 +429,7 @@ fn rear_focus_switches_the_smoke_candidate_to_the_forward_tank() {
         true,
     );
 
-    assert_eq!(memory.containment_smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_target, Some(100));
 }
 
 #[test]
@@ -444,8 +447,8 @@ fn stale_split_tank_orders_do_not_suppress_a_coordinated_smoke_volley() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -458,7 +461,7 @@ fn stale_split_tank_orders_do_not_suppress_a_coordinated_smoke_volley() {
         true,
     );
 
-    assert_eq!(memory.containment_smoke_target, Some(101));
+    assert_eq!(memory.containment.smoke_target, Some(101));
     assert!(matches!(
         actions.into_commands().first(),
         Some(Command::UseAbility {
@@ -544,8 +547,8 @@ fn lone_local_tank_is_smoked_only_when_an_exposed_target_can_be_engaged() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -559,8 +562,8 @@ fn lone_local_tank_is_smoked_only_when_an_exposed_target_can_be_engaged() {
     );
 
     assert_eq!(focus, 102);
-    assert_eq!(memory.containment_smoke_target, Some(100));
-    assert_eq!(memory.containment_smoke_focus_target, Some(102));
+    assert_eq!(memory.containment.smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_focus_target, Some(102));
     assert!(matches!(
         actions.into_commands().first(),
         Some(Command::UseAbility {
@@ -579,8 +582,8 @@ fn lone_local_tank_is_suppressed_while_grouped_tanks_hold_fire() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(80);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(80);
     let mut focus = 100;
 
     let _ = maybe_issue_isolation_smoke(
@@ -596,14 +599,15 @@ fn lone_local_tank_is_suppressed_while_grouped_tanks_hold_fire() {
         &mut actions,
         &observation,
         &[1, 3],
+        &[],
         focus,
         13.5,
-        memory.containment_smoke_target,
+        memory.containment.smoke_target,
     );
     let commands = actions.into_commands();
 
-    assert_eq!(memory.containment_smoke_target, Some(100));
-    assert_eq!(memory.containment_smoke_focus_target, None);
+    assert_eq!(memory.containment.smoke_target, Some(100));
+    assert_eq!(memory.containment.smoke_focus_target, None);
     assert!(matches!(
         commands.first(),
         Some(Command::UseAbility {
@@ -634,8 +638,8 @@ fn distant_second_tank_requests_a_bounded_scout_launch_position() {
     let facts = AiFacts::from_observation(&observation);
     let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_focus_target = Some(100);
-    memory.containment_focus_stable_since = Some(90);
+    memory.containment.focus_target = Some(100);
+    memory.containment.focus_stable_since = Some(90);
     let mut focus = 100;
 
     let launch = maybe_issue_isolation_smoke(
@@ -748,4 +752,397 @@ fn endgame_search_ring_rotates_with_the_players() {
         );
         assert_eq!(rotated, (world_size - original.0, world_size - original.1));
     }
+}
+
+fn held_tank_observation(tank_state: AiEntityState) -> AiObservation {
+    let mut tank = target_test_entity(1, EntityKind::Tank, 20.0 * 32.0, 20.0 * 32.0);
+    tank.state = tank_state;
+    tank.target_id = Some(100);
+    let mut other = target_test_entity(3, EntityKind::Tank, 22.0 * 32.0, 20.0 * 32.0);
+    other.owner = 1;
+    regroup_test_observation(vec![tank, other])
+}
+
+fn held_units(commands: &[Command]) -> Vec<u32> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::HoldPosition { units, .. } => Some(units.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn a_tank_the_push_already_holds_is_not_held_again() {
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    memory.containment.held_tanks.insert(1);
+
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    hold_containment_tanks(&mut actions, &observation, &memory, [1, 3]);
+    // Tank 1 keeps the target it picked while holding; tank 3 was never held by the push.
+    assert_eq!(held_units(&actions.into_commands()), vec![3]);
+}
+
+#[test]
+fn a_held_tank_seen_moving_or_attacking_is_held_again() {
+    for state in [AiEntityState::Move, AiEntityState::Attack] {
+        let observation = held_tank_observation(state);
+        let facts = AiFacts::from_observation(&observation);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        memory.containment.held_tanks.insert(1);
+
+        let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+        hold_containment_tanks(&mut actions, &observation, &memory, [1]);
+        assert_eq!(held_units(&actions.into_commands()), vec![1], "{state:?}");
+    }
+}
+
+#[test]
+fn any_order_other_than_hold_releases_a_held_tank() {
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+
+    let start = actions.emitted_len();
+    actions::hold_position_units(&mut actions, [1, 3]);
+    actions::attack_units(&mut actions, [3], 100);
+    note_containment_holds(&actions, &mut memory, start);
+    assert_eq!(memory.containment.held_tanks, BTreeSet::from([1]));
+}
+
+#[test]
+fn volley_leaves_already_holding_tanks_on_their_own_targets() {
+    // Both tanks are out of reach of every target, so neither is assigned a volley shot.
+    let observation = held_tank_observation(AiEntityState::Idle);
+    let facts = AiFacts::from_observation(&observation);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    issue_hp_aware_tank_volley(&mut actions, &observation, &[1, 3], &[1], 100, 13.5, None);
+    assert_eq!(held_units(&actions.into_commands()), vec![3]);
+}
+
+#[test]
+fn a_push_is_outnumbered_only_by_more_enemy_tanks_close_by() {
+    let ts = 32.0;
+    let push = |enemies: &[(f32, f32)]| {
+        let mut owned = vec![
+            target_test_entity(1, EntityKind::Tank, 20.0 * ts, 20.0 * ts),
+            target_test_entity(1, EntityKind::Tank, 21.0 * ts, 20.0 * ts),
+        ];
+        owned[1].id = 2;
+        let mut observation = regroup_test_observation(owned);
+        observation.visible_enemies = enemies
+            .iter()
+            .enumerate()
+            .map(|(index, (x, y))| {
+                target_test_entity(500 + index as u32, EntityKind::Tank, x * ts, y * ts)
+            })
+            .collect();
+        push_outnumbered(&observation, &[1, 2])
+    };
+    assert!(
+        !push(&[(30.0, 20.0), (31.0, 20.0)]),
+        "two against two is even"
+    );
+    assert!(push(&[(30.0, 20.0), (31.0, 20.0), (32.0, 21.0)]));
+    assert!(
+        !push(&[(50.0, 20.0), (51.0, 20.0), (52.0, 21.0)]),
+        "too far to matter"
+    );
+}
+
+/// Jeff on the Crossroads east start with `tanks` Tanks and a Scout Car ready by the HQ, the
+/// armored attack due, and nothing else in the way.
+fn crossroads_armor(tanks: u32) -> (AiObservation, FrontalWavePlan, EnemyBaseFact) {
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Crossroads", &[(1, 1), (2, 2)], 0x1234_5678).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0x1234_5678,
+        map,
+        Map::metadata_for_name("Crossroads").unwrap(),
+    );
+    let start = game.start_payload();
+    let mut observation =
+        AiObservation::from_snapshot_with_alive(&start, &game.snapshot_for(1), 1, [], None)
+            .unwrap();
+    assert_eq!(observation.own_start_tile, (117, 78));
+    let ts = observation.map.tile_size as f32;
+    let mut ready = Vec::new();
+    for index in 0..=tanks {
+        let id = 900 + index;
+        let kind = if index == tanks {
+            EntityKind::ScoutCar
+        } else {
+            EntityKind::Tank
+        };
+        let mut unit = target_test_entity(id, kind, (110.0 + index as f32) * ts, 76.5 * ts);
+        unit.owner = 1;
+        observation.owned.push(unit);
+        ready.push(id);
+    }
+    let plan = FrontalWavePlan {
+        ready_units: ready,
+        desired_size: 3,
+        attack_due: true,
+        required_unit_ready: true,
+        methamphetamines_ready: true,
+        blockers: Vec::new(),
+    };
+    let enemy_base = EnemyBaseFact {
+        player_id: 2,
+        start_tile: (47, 8),
+        x: 47.5 * ts,
+        y: 8.5 * ts,
+    };
+    (observation, plan, enemy_base)
+}
+
+#[test]
+fn crossroads_armor_too_small_for_the_push_stays_home_instead_of_attacking() {
+    let armored = JEFFS_AI.tech_transition.unwrap().attack;
+    let (observation, plan, enemy_base) = crossroads_armor(3);
+    let facts = AiFacts::from_observation(&observation);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+    let intent = issue_frontal_wave(
+        &mut actions,
+        &observation,
+        &JEFFS_AI,
+        armored,
+        &plan,
+        enemy_base,
+        None,
+        None,
+        &mut memory,
+    );
+    assert!(
+        !matches!(intent, Some(AiIntent::Attack { .. })),
+        "{intent:?}"
+    );
+    assert!(memory.containment.active_tanks.is_empty());
+    assert!(!memory.containment.wave_launched);
+
+    // Two Tanks stay home, so eight ready Tanks push six. With four enemy Tanks seen recently the
+    // push needs a three-Tank lead, seven, so nine must be ready.
+    let form = |tanks: u32, seen_enemy_tanks: u32| {
+        let (mut observation, plan, enemy_base) = crossroads_armor(tanks);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        observation.visible_enemies = (0..seen_enemy_tanks)
+            .map(|index| {
+                target_test_entity(500 + index, EntityKind::Tank, 60.0 * 32.0, 60.0 * 32.0)
+            })
+            .collect();
+        memory.note_enemy_tanks(&observation);
+        observation.visible_enemies.clear();
+        let facts = AiFacts::from_observation(&observation);
+        let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+        let intent = issue_frontal_wave(
+            &mut actions,
+            &observation,
+            &JEFFS_AI,
+            armored,
+            &plan,
+            enemy_base,
+            None,
+            None,
+            &mut memory,
+        );
+        (intent, memory.containment.active_tanks.len())
+    };
+    let (intent, pushing) = form(8, 0);
+    assert!(
+        matches!(intent, Some(AiIntent::Assemble { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, CROSSROADS_PUSH_MIN_TANKS);
+    let (intent, pushing) = form(6, 4);
+    assert!(
+        !matches!(intent, Some(AiIntent::Attack { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, 0, "six Tanks are no lead over four");
+    let (intent, pushing) = form(9, 4);
+    assert!(
+        matches!(intent, Some(AiIntent::Assemble { .. })),
+        "{intent:?}"
+    );
+    assert_eq!(pushing, 7);
+}
+
+#[test]
+fn the_push_takes_every_ready_tank_but_the_home_reserve() {
+    assert_eq!(push_tank_count(23, 2, 4), Some(19));
+    assert_eq!(push_tank_count(8, 2, 1), Some(7));
+    // Never below the minimum, and never out of the reserve: the push waits instead.
+    assert_eq!(push_tank_count(3, 2, 2), None);
+    assert_eq!(push_tank_count(8, 6, 3), None);
+}
+
+#[test]
+fn the_home_reserve_scales_with_the_largest_recent_attack() {
+    let ts = 32.0;
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    assert_eq!(memory.home_tank_reserve(), 2, "nothing seen yet");
+    let mut attacked = |tanks: u32, tick: u32| {
+        let mut depot = target_test_entity(1, EntityKind::ResourceDepot, 20.0 * ts, 20.0 * ts);
+        depot.owner = 1;
+        let mut observation = regroup_test_observation(vec![depot]);
+        observation.tick = tick;
+        observation.visible_enemies = (0..tanks)
+            .map(|index| {
+                target_test_entity(
+                    500 + index,
+                    EntityKind::Tank,
+                    (22.0 + 0.4 * index as f32) * ts,
+                    20.0 * ts,
+                )
+            })
+            .collect();
+        memory.note_enemy_tanks(&observation);
+        memory.home_tank_reserve()
+    };
+    assert_eq!(attacked(2, 1000), 2);
+    assert_eq!(attacked(4, 2000), 3);
+    assert_eq!(attacked(8, 3000), 5, "at most five");
+    // Forgotten once the attacks are more than three minutes old.
+    assert_eq!(attacked(0, 3000 + memory::ENEMY_ATTACK_MEMORY_TICKS + 1), 2);
+}
+
+#[test]
+fn tanks_join_the_push_until_it_leaves_and_not_after() {
+    let armored = JEFFS_AI.tech_transition.unwrap().attack;
+    let (mut observation, mut plan, enemy_base) = crossroads_armor(20);
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    let issue =
+        |observation: &AiObservation, plan: &FrontalWavePlan, memory: &mut AiDecisionMemory| {
+            let facts = AiFacts::from_observation(observation);
+            let mut actions = AiActionContext::new(&facts, SpendBudget::new(0, 0, 0, 100));
+            issue_frontal_wave(
+                &mut actions,
+                observation,
+                &JEFFS_AI,
+                armored,
+                plan,
+                enemy_base,
+                None,
+                None,
+                memory,
+            )
+        };
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(
+        memory.containment.active_tanks.len(),
+        18,
+        "20 ready, 2 stay home"
+    );
+
+    // Three Tanks finish while it forms up: 23 ready, so the push grows to 21.
+    let ts = observation.map.tile_size as f32;
+    let add_tanks = |observation: &mut AiObservation, plan: &mut FrontalWavePlan, ids: [u32; 3]| {
+        for id in ids {
+            let mut tank = target_test_entity(id, EntityKind::Tank, 112.0 * ts, 80.5 * ts);
+            tank.owner = 1;
+            observation.owned.push(tank);
+            plan.ready_units.push(id);
+        }
+    };
+    add_tanks(&mut observation, &mut plan, [950, 951, 952]);
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(memory.containment.active_tanks.len(), 21);
+
+    // Once it has left, Tanks built afterwards stay home.
+    memory.containment.wave_launched = true;
+    memory.containment.recovery_active = false;
+    memory.containment.launch_tanks = 21;
+    let left_with = memory.containment.active_tanks.clone();
+    add_tanks(&mut observation, &mut plan, [960, 961, 962]);
+    issue(&observation, &plan, &mut memory);
+    assert_eq!(memory.containment.active_tanks, left_with);
+}
+
+#[test]
+fn a_large_push_carries_on_until_half_of_it_is_lost() {
+    let tanks: Vec<AiEntitySummary> = (1..=10)
+        .map(|id| {
+            let mut tank = target_test_entity(id, EntityKind::Tank, 20.0 * 32.0, 20.0 * 32.0);
+            tank.owner = 1;
+            tank
+        })
+        .collect();
+    let mut scout = target_test_entity(99, EntityKind::ScoutCar, 22.0 * 32.0, 20.0 * 32.0);
+    scout.owner = 1;
+    let pushed = |alive: u32| {
+        let mut owned: Vec<_> = tanks
+            .iter()
+            .filter(|tank| tank.id <= alive)
+            .cloned()
+            .collect();
+        owned.push(scout.clone());
+        let observation = regroup_test_observation(owned);
+        let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+        memory.containment.wave_launched = true;
+        memory.containment.active_tanks = (1..=10).collect();
+        memory.containment.active_scout = Some(99);
+        memory.containment.launch_tanks = 10;
+        sync_containment_recovery(&observation, &JEFFS_AI, &mut memory);
+        !memory.containment.recovery_active
+    };
+    assert!(pushed(10));
+    assert!(pushed(6), "four of ten lost");
+    assert!(pushed(5), "half of it left");
+    assert!(!pushed(4), "more than half lost");
+}
+
+#[test]
+fn a_large_push_forms_ranks_of_six() {
+    let tanks: Vec<AiEntitySummary> = (1..=12)
+        .map(|id| {
+            let mut tank =
+                target_test_entity(id, EntityKind::Tank, (10.0 + id as f32) * 32.0, 30.0 * 32.0);
+            tank.owner = 1;
+            tank
+        })
+        .collect();
+    let observation = regroup_test_observation(tanks);
+    let ids: Vec<u32> = (1..=12).collect();
+    let center = (30.0 * 32.0, 30.0 * 32.0);
+    let assignments = compact_tank_formation_assignments(
+        &observation,
+        &ids,
+        center,
+        (0.0, -1.0),
+        observation.map,
+        CONTAINMENT_TANK_SPACING_TILES,
+    );
+    assert_eq!(assignments.len(), 12);
+    let front: Vec<_> = assignments
+        .iter()
+        .filter(|(_, point)| (point.1 - center.1).abs() < 1.0)
+        .collect();
+    let back: Vec<_> = assignments
+        .iter()
+        .filter(|(_, point)| (point.1 - (center.1 + 2.0 * 32.0)).abs() < 1.0)
+        .collect();
+    assert_eq!((front.len(), back.len()), (6, 6));
+    let width = |rank: &[&(u32, (f32, f32))]| {
+        let xs: Vec<f32> = rank.iter().map(|(_, point)| point.0).collect();
+        xs.iter().cloned().fold(f32::MIN, f32::max) - xs.iter().cloned().fold(f32::MAX, f32::min)
+    };
+    assert!(width(&front) <= 5.0 * CONTAINMENT_TANK_SPACING_TILES * 32.0 + 0.5);
 }

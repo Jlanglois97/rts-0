@@ -219,6 +219,9 @@ pub struct AiFrame {
     submitted_builds: Vec<AiBuildObservation>,
     completed_upgrades: Vec<UpgradeKind>,
     smokes: Vec<AiSmokeCloud>,
+    /// Completed Tank Traps in sight. They are neutral once built, so they are neither allies nor
+    /// enemies.
+    tank_traps: Vec<AiEntity>,
 }
 
 impl AiFrame {
@@ -266,6 +269,9 @@ impl AiFrame {
     }
     pub fn smokes(&self) -> &[AiSmokeCloud] {
         &self.smokes
+    }
+    pub fn tank_traps(&self) -> &[AiEntity] {
+        &self.tank_traps
     }
 
     pub(crate) fn from_host(
@@ -321,6 +327,14 @@ impl AiFrame {
             .filter(gameplay_entity)
             .collect::<Vec<_>>();
         visible_enemies.sort_by_key(|entity| entity.id);
+        let mut tank_traps = snapshot
+            .entities
+            .iter()
+            .filter(|entity| entity.owner == NEUTRAL && !entity.vision_only)
+            .filter_map(|entity| normalize_entity(entity, false, false))
+            .filter(|entity| entity.kind == EntityKind::TankTrap)
+            .collect::<Vec<_>>();
+        tank_traps.sort_by_key(|entity| entity.id);
 
         let mut resources = start
             .map
@@ -461,6 +475,7 @@ impl AiFrame {
             submitted_builds,
             completed_upgrades,
             smokes,
+            tank_traps,
         })
     }
 }

@@ -13,6 +13,8 @@ fn security_observation() -> AiObservation {
     ];
     units.last_mut().unwrap().production_kind = Some(EntityKind::Tank);
     units.extend((10..16).map(|id| combat_at(id, EntityKind::Rifleman, 14.0 * ts, 14.0 * ts)));
+    // The two opening Machine Gunners hold home; the natural waits for them.
+    units.extend((20..22).map(|id| combat_at(id, EntityKind::MachineGunner, 10.0 * ts, 10.0 * ts)));
     let mut obs = observation(
         AiEconomy {
             steel: 40,
@@ -65,6 +67,7 @@ fn expansion_footprint_is_predicted_before_the_expansion_opening() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     assert!(memory.expansion_security.site.is_some());
@@ -83,6 +86,7 @@ fn predicted_expansion_footprint_evicts_friendly_combat_units() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     let center = building_center(
@@ -112,6 +116,7 @@ fn successful_expansion_attempt_does_not_time_out_after_later_depot_loss() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     memory.expansion_security.note_build_attempt(obs.tick, 1);
@@ -129,6 +134,7 @@ fn successful_expansion_attempt_does_not_time_out_after_later_depot_loss() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
 
@@ -139,6 +145,7 @@ fn successful_expansion_attempt_does_not_time_out_after_later_depot_loss() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
 
@@ -199,6 +206,7 @@ fn walking_builder_keeps_the_site_until_the_order_is_dropped() {
             &AiFacts::from_observation(obs),
             &JEFFS_AI,
             memory,
+            None,
             &mut |_, _, _| true,
         );
     };
@@ -217,8 +225,16 @@ fn walking_builder_keeps_the_site_until_the_order_is_dropped() {
     assert_eq!(memory.expansion_security.site, Some(site));
     assert_eq!(memory.expansion_security.retry_builder(), None);
 
+    // The first dropped order keeps the site: the builder is usually just shot on the way.
     obs.pending_builds.clear();
     obs.tick += 1;
+    prepare(&obs, &mut memory);
+    assert_eq!(memory.expansion_security.site, Some(site));
+    assert_eq!(memory.expansion_security.retry_builder(), Some(1));
+
+    // A second drop at the same site gives it up.
+    memory.expansion_security.note_build_attempt(obs.tick, 1);
+    obs.tick += config::TICK_HZ * 10;
     prepare(&obs, &mut memory);
     assert_ne!(memory.expansion_security.site, Some(site));
     assert_eq!(memory.expansion_security.retry_builder(), Some(1));
@@ -233,6 +249,7 @@ fn expansion_reserve_expires_and_rearms_after_the_expansion_cycle() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     let reserve = |obs: &AiObservation, memory: &mut AiDecisionMemory| {
@@ -271,6 +288,7 @@ fn expansion_security_requires_arrival_and_uncontested_dwell() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     let points = expansion_security::positions(&obs, None, &memory.expansion_security);
@@ -336,6 +354,7 @@ fn contested_expansion_guards_are_available_to_local_defense() {
         &AiFacts::from_observation(&obs),
         &JEFFS_AI,
         &mut memory,
+        None,
         &mut |_, _, _| true,
     );
     let site = memory.expansion_security.site.unwrap();
@@ -375,6 +394,7 @@ fn expansion_security_retains_party_and_replaces_casualties_without_taking_home_
             &AiFacts::from_observation(obs),
             &JEFFS_AI,
             memory,
+            None,
             &mut |_, _, _| true,
         )
     };
@@ -536,6 +556,7 @@ fn expansion_security_has_spaced_reachable_posts_on_river_and_crossroads() {
                 JEFFS_AI.expansion.unwrap(),
                 EntityKind::ResourceDepot,
                 JEFFS_AI.id,
+                Some(&analysis),
                 &mut |_, _, _| true,
             )
             .unwrap();
@@ -584,6 +605,77 @@ fn expansion_security_has_spaced_reachable_posts_on_river_and_crossroads() {
 }
 
 #[test]
+fn crossroads_natural_is_the_base_behind_the_main_not_the_one_toward_the_enemy() {
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Crossroads", &[(1, 1), (2, 2)], 0x1234_5678).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0x1234_5678,
+        map,
+        Map::metadata_for_name("Crossroads").unwrap(),
+    );
+    let start = game.start_payload();
+    let analysis = AiMapAnalysis::analyze(&start);
+    for player in [1, 2] {
+        let obs = AiObservation::from_snapshot_with_alive(
+            &start,
+            &game.snapshot_for(player),
+            player,
+            [],
+            None,
+        )
+        .unwrap();
+        let enemy = if player == 1 { 2 } else { 1 };
+        let policy = JEFFS_AI.expansion.unwrap();
+        let natural = expansion::expansion_resource_depot_site(
+            &obs,
+            policy,
+            EntityKind::ResourceDepot,
+            JEFFS_AI.id,
+            Some(&analysis),
+            &mut |_, _, _| true,
+        )
+        .unwrap();
+        // The closest base in a straight line sits out on the enemy's side of the main.
+        let straight_line = expansion::generic_expansion_depot_site(
+            &obs,
+            policy,
+            EntityKind::ResourceDepot,
+            &expansion::expansion_candidate_resources(&obs),
+            &mut |_, _, _| true,
+        )
+        .unwrap();
+        let walk = |site: (u32, u32), from: u32| {
+            let center =
+                building_center(site, EntityKind::ResourceDepot, obs.map.tile_size).unwrap();
+            let ts = obs.map.tile_size as f32;
+            analysis
+                .ground_distance_from_start(from, ((center.0 / ts) as u32, (center.1 / ts) as u32))
+                .unwrap()
+        };
+        assert!(
+            walk(natural, enemy) > walk(straight_line, enemy) + 30.0,
+            "player {player}: natural {natural:?} vs {straight_line:?}"
+        );
+        assert!(
+            walk(natural, player) <= walk(straight_line, player),
+            "player {player}: natural {natural:?} vs {straight_line:?}"
+        );
+    }
+}
+
+#[test]
 fn crossroads_expansion_tank_uses_the_same_wall_aware_approach_as_its_rifles() {
     use rts_sim::game::map::Map;
     use rts_sim::game::{Game, PlayerInit};
@@ -622,6 +714,7 @@ fn crossroads_expansion_tank_uses_the_same_wall_aware_approach_as_its_rifles() {
             JEFFS_AI.expansion.unwrap(),
             EntityKind::ResourceDepot,
             JEFFS_AI.id,
+            Some(&analysis),
             &mut |_, _, _| true,
         )
         .unwrap();
@@ -716,7 +809,7 @@ fn surplus_tank_moves_forward_while_reserved_tank_stays_home() {
         .push(combat_at(52, EntityKind::Tank, 11.0 * ts, 10.0 * ts));
     let target = expansion_security::tank_staging_center(&obs, None).unwrap();
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
-    memory.containment_wave_launched = true;
+    memory.containment.wave_launched = true;
     memory.home_defensive_tank = Some(51);
     memory.home_defensive_tank_assigned_once = true;
 
@@ -798,6 +891,7 @@ fn expansion_security_live_opening_reaches_second_base() {
                 JEFFS_AI.expansion.unwrap(),
                 EntityKind::ResourceDepot,
                 JEFFS_AI.id,
+                Some(&AiMapAnalysis::analyze(&start)),
                 &mut |_, _, _| true,
             );
             let blocked = site.map(|site| {
@@ -856,4 +950,122 @@ fn expansion_security_live_opening_reaches_second_base() {
             );
         }
     }
+}
+
+/// Secure the natural in the standard fixture and return it with the site.
+fn secured_natural() -> (AiObservation, AiDecisionMemory, (u32, u32)) {
+    let obs = security_observation();
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    expansion_security::prepare(
+        &obs,
+        &AiFacts::from_observation(&obs),
+        &JEFFS_AI,
+        &mut memory,
+        None,
+        &mut |_, _, _| true,
+    );
+    let site = memory.expansion_security.site.expect("natural site");
+    (obs, memory, site)
+}
+
+#[test]
+fn the_natural_is_only_ordered_with_its_full_cost_banked_and_a_quiet_route() {
+    let (mut obs, memory, site) = secured_natural();
+    let ready =
+        |obs: &AiObservation| expansion_security::natural_attempt_ready(obs, None, &memory, true);
+    obs.economy.steel = 450;
+    obs.economy.oil = 99;
+    assert!(!ready(&obs), "one Oil short");
+    obs.economy.oil = 100;
+    assert!(ready(&obs));
+    assert!(
+        !expansion_security::natural_attempt_ready(&obs, None, &memory, false),
+        "unsecured"
+    );
+
+    // An enemy next to the builder keeps it home.
+    let builder = obs
+        .owned
+        .iter()
+        .find(|unit| unit.kind == EntityKind::Worker)
+        .unwrap();
+    let mut raider = combat_at(900, EntityKind::Rifleman, builder.x + 64.0, builder.y);
+    raider.owner = 2;
+    obs.visible_enemies.push(raider);
+    assert!(!ready(&obs));
+
+    // So does an order already on its way to the site.
+    obs.visible_enemies.clear();
+    obs.pending_builds = vec![crate::ai_core::observation::AiBuildIntent::to_site(
+        1,
+        EntityKind::ResourceDepot,
+        site.0,
+        site.1,
+    )];
+    assert!(!ready(&obs));
+}
+
+#[test]
+fn a_dropped_natural_order_waits_out_the_cooldown_before_the_next_try() {
+    let (mut obs, mut memory, site) = secured_natural();
+    obs.economy.steel = 1000;
+    obs.economy.oil = 1000;
+    memory.expansion_security.note_build_attempt(obs.tick, 1);
+    obs.tick += config::TICK_HZ * 4;
+    expansion_security::prepare(
+        &obs,
+        &AiFacts::from_observation(&obs),
+        &JEFFS_AI,
+        &mut memory,
+        None,
+        &mut |_, _, _| true,
+    );
+    assert_eq!(
+        memory.expansion_security.site,
+        Some(site),
+        "kept after one drop"
+    );
+    assert!(!expansion_security::natural_attempt_ready(
+        &obs, None, &memory, true
+    ));
+    obs.tick += config::TICK_HZ * 20;
+    assert!(expansion_security::natural_attempt_ready(
+        &obs, None, &memory, true
+    ));
+}
+
+#[test]
+fn a_pending_natural_order_keeps_its_oil_from_the_next_tank() {
+    let (mut obs, mut memory, site) = secured_natural();
+    // Start the natural's bounded reserve, then let it expire, so only the pending order can be
+    // what holds the Depot's cost back.
+    decide(&obs, &JEFFS_AI, &mut memory);
+    obs.tick += config::TICK_HZ * 61;
+    let factory = obs
+        .owned
+        .iter_mut()
+        .find(|unit| unit.kind == EntityKind::Factory)
+        .unwrap();
+    factory.production_kind = None;
+    factory.production_queue_len = Some(0);
+    // Enough for a Tank (425/175), but not once the Depot's 450/100 is set aside.
+    obs.economy.steel = 700;
+    obs.economy.oil = 250;
+    let tank = AiIntent::Train {
+        kind: EntityKind::Tank,
+    };
+    let mut control = memory.clone();
+    assert!(
+        decide(&obs, &JEFFS_AI, &mut control)
+            .intents
+            .contains(&tank),
+        "with nothing pending the Tank is trained"
+    );
+    obs.pending_builds = vec![crate::ai_core::observation::AiBuildIntent::to_site(
+        1,
+        EntityKind::ResourceDepot,
+        site.0,
+        site.1,
+    )];
+    assert!(!decide(&obs, &JEFFS_AI, &mut memory).intents.contains(&tank));
 }

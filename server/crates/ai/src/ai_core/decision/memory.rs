@@ -13,6 +13,14 @@ use super::defense::{
 use super::geometry;
 
 const RESOURCE_DEPOT_RESUME_SAFE_TICKS: u32 = config::TICK_HZ * 3;
+/// Enemy Tanks not seen for this long are forgotten when judging whether Jeff is outnumbered.
+pub(super) const ENEMY_TANK_MEMORY_TICKS: u32 = config::TICK_HZ * 90;
+/// Enemy Tank attacks on Jeff's bases are remembered this long when sizing the home reserve.
+/// AI 2.1 attacks every minute or two, so this spans its last few waves.
+pub(super) const ENEMY_ATTACK_MEMORY_TICKS: u32 = config::TICK_HZ * 180;
+/// Tanks Jeff keeps home whatever it has seen, and at most.
+pub(super) const HOME_TANK_RESERVE_MIN: usize = 2;
+pub(super) const HOME_TANK_RESERVE_MAX: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DefensiveIncidentMemory {
@@ -44,9 +52,49 @@ struct IncompleteResourceDepotMemory {
     last_damage_tick: u32,
 }
 
+/// One push: the units in it, where it is marching, and its firing and smoke state.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ContainmentPush {
+    pub(super) stationary_since: Option<u32>,
+    pub(super) wave_launched: bool,
+    pub(super) opening_tanks: BTreeSet<u32>,
+    /// How many Tanks the current push launched with. It falls back once half of them are lost.
+    pub(super) launch_tanks: usize,
+    pub(super) recovery_active: bool,
+    pub(super) active_tanks: BTreeSet<u32>,
+    pub(super) active_scout: Option<u32>,
+    pub(super) active_riflemen: BTreeSet<u32>,
+    pub(super) march_waypoint: Option<(i32, i32)>,
+    pub(super) route: Vec<(i32, i32)>,
+    pub(super) route_index: usize,
+    pub(super) route_objective: Option<(i32, i32)>,
+    pub(super) last_formation_command_tick: Option<u32>,
+    pub(super) assembly_started_tick: Option<u32>,
+    pub(super) waypoint_started_tick: Option<u32>,
+    pub(super) repush_count: usize,
+    pub(super) recall_active: bool,
+    pub(super) contact_last_tick: Option<u32>,
+    /// Push Tanks whose latest order was Hold Position. A holding Tank picks its own targets in
+    /// range without moving; sending Hold again would clear that target.
+    pub(super) held_tanks: BTreeSet<u32>,
+    pub(super) focus_target: Option<u32>,
+    pub(super) focus_stable_since: Option<u32>,
+    pub(super) smoke_target: Option<u32>,
+    pub(super) smoke_focus_target: Option<u32>,
+    pub(super) smoke_expires_tick: Option<u32>,
+    /// Whether the Tanks stood at the push's destination at the last decision.
+    pub(super) at_destination: bool,
+    /// When the push was last ordered to clear a Tank Trap in its way.
+    pub(super) trap_order_tick: Option<u32>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AiDecisionMemory {
     pub(super) expansion_security: super::expansion_security::ExpansionSecurity,
+    /// Jeff's bases beyond the natural: dry-well unlocks, the site being taken and its guards.
+    pub(super) later_bases: super::later_bases::LaterBases,
+    /// Jeff's forward picket and the Riflemen sealing the home line during a raid alert.
+    pub(super) route_line: super::defense::RouteLine,
     profile_id: Option<&'static str>,
     attack_first_size: Option<usize>,
     next_attack_size: usize,
@@ -60,32 +108,32 @@ pub(crate) struct AiDecisionMemory {
     pub(super) local_defense_held_tanks: BTreeSet<u32>,
     /// Completed building HP at the previous local-defense decision, to spot damage from fog.
     pub(super) local_defense_building_hp: BTreeMap<u32, u32>,
+    /// Last decision tick on which a completed building lost HP.
+    pub(super) local_defense_building_hit_tick: Option<u32>,
     defender_posture: BTreeMap<u32, DefenderPostureMemory>,
     entrenchment_available_since: Option<u32>,
     pub(super) pending_upgrades: BTreeSet<UpgradeKind>,
     launched_frontal_units: BTreeMap<u32, u32>,
-    pub(super) containment_stationary_since: Option<u32>,
-    pub(super) containment_wave_launched: bool,
-    pub(super) containment_opening_tanks: BTreeSet<u32>,
-    pub(super) containment_recovery_active: bool,
-    pub(super) containment_active_tanks: BTreeSet<u32>,
-    pub(super) containment_active_scout: Option<u32>,
-    pub(super) containment_active_riflemen: BTreeSet<u32>,
-    pub(super) containment_march_waypoint: Option<(i32, i32)>,
-    pub(super) containment_route: Vec<(i32, i32)>,
-    pub(super) containment_route_index: usize,
-    pub(super) containment_route_objective: Option<(i32, i32)>,
-    pub(super) containment_last_formation_command_tick: Option<u32>,
-    pub(super) containment_assembly_started_tick: Option<u32>,
-    pub(super) containment_waypoint_started_tick: Option<u32>,
-    pub(super) containment_repush_count: usize,
-    pub(super) containment_recall_active: bool,
-    pub(super) containment_contact_last_tick: Option<u32>,
-    pub(super) containment_focus_target: Option<u32>,
-    pub(super) containment_focus_stable_since: Option<u32>,
-    pub(super) containment_smoke_target: Option<u32>,
-    pub(super) containment_smoke_focus_target: Option<u32>,
-    pub(super) containment_smoke_expires_tick: Option<u32>,
+    /// The push under way (or forming), its units, route and firing state.
+    pub(super) containment: ContainmentPush,
+    /// The other group of a two-pronged push. While one group is being driven its state sits in
+    /// `containment` and the other's here, so "the partner" is always this field.
+    pub(super) partner_push: ContainmentPush,
+    /// The two-pronged push under way, if any.
+    pub(super) pincer: Option<super::frontal::pincer::Pincer>,
+    /// A two-pronged push is possible but waits for a second Scout Car.
+    pub(super) pincer_scout_wanted: bool,
+    /// Approach lanes last worked out for a target: the target, the tick, and the two sides.
+    pub(super) pincer_lanes: Option<super::frontal::pincer::PincerLanes>,
+    /// The Tank Trap home Tanks were last sent to clear, and when.
+    pub(super) trap_order: Option<(u32, u32)>,
+    /// How many enemy Tanks were in sight together, by tick, over the last
+    /// `ENEMY_TANK_MEMORY_TICKS`. Counting every Tank seen instead also counted the ones Jeff had
+    /// destroyed: AI 2.1 feeding Tanks into Jeff's defense read as 8-9 while it had 3.
+    pub(super) enemy_tank_sightings: BTreeMap<u32, usize>,
+    /// How many enemy Tanks were in an attack on Jeff's bases, by tick, over the last
+    /// `ENEMY_ATTACK_MEMORY_TICKS`.
+    pub(super) enemy_attack_sightings: BTreeMap<u32, usize>,
     pub(super) home_defensive_tank: Option<u32>,
     pub(super) home_defensive_tank_assigned_once: bool,
     pub(super) enemy_natural_resource_depot: Option<u32>,
@@ -101,6 +149,8 @@ impl AiDecisionMemory {
     pub(crate) fn for_profile(profile: &AiProfile) -> Self {
         Self {
             expansion_security: Default::default(),
+            later_bases: Default::default(),
+            route_line: Default::default(),
             profile_id: Some(profile.id),
             attack_first_size: Some(profile.attack.first_attack_size),
             next_attack_size: profile.attack.first_attack_size,
@@ -111,32 +161,19 @@ impl AiDecisionMemory {
             defensive_incident: None,
             local_defense_held_tanks: BTreeSet::new(),
             local_defense_building_hp: BTreeMap::new(),
+            local_defense_building_hit_tick: None,
             defender_posture: BTreeMap::new(),
             entrenchment_available_since: None,
             pending_upgrades: BTreeSet::new(),
             launched_frontal_units: BTreeMap::new(),
-            containment_stationary_since: None,
-            containment_wave_launched: false,
-            containment_opening_tanks: BTreeSet::new(),
-            containment_recovery_active: false,
-            containment_active_tanks: BTreeSet::new(),
-            containment_active_scout: None,
-            containment_active_riflemen: BTreeSet::new(),
-            containment_march_waypoint: None,
-            containment_route: Vec::new(),
-            containment_route_index: 0,
-            containment_route_objective: None,
-            containment_last_formation_command_tick: None,
-            containment_assembly_started_tick: None,
-            containment_waypoint_started_tick: None,
-            containment_repush_count: 0,
-            containment_recall_active: false,
-            containment_contact_last_tick: None,
-            containment_focus_target: None,
-            containment_focus_stable_since: None,
-            containment_smoke_target: None,
-            containment_smoke_focus_target: None,
-            containment_smoke_expires_tick: None,
+            containment: ContainmentPush::default(),
+            partner_push: ContainmentPush::default(),
+            pincer: None,
+            pincer_scout_wanted: false,
+            pincer_lanes: None,
+            trap_order: None,
+            enemy_tank_sightings: BTreeMap::new(),
+            enemy_attack_sightings: BTreeMap::new(),
             home_defensive_tank: None,
             home_defensive_tank_assigned_once: false,
             enemy_natural_resource_depot: None,
@@ -216,28 +253,29 @@ impl AiDecisionMemory {
         self.entrenchment_available_since = None;
         self.pending_upgrades.clear();
         self.launched_frontal_units.clear();
-        self.containment_stationary_since = None;
-        self.containment_wave_launched = false;
-        self.containment_opening_tanks.clear();
-        self.containment_recovery_active = false;
-        self.containment_active_tanks.clear();
-        self.containment_active_scout = None;
-        self.containment_active_riflemen.clear();
-        self.containment_march_waypoint = None;
-        self.containment_route.clear();
-        self.containment_route_index = 0;
-        self.containment_route_objective = None;
-        self.containment_last_formation_command_tick = None;
-        self.containment_assembly_started_tick = None;
-        self.containment_waypoint_started_tick = None;
-        self.containment_repush_count = 0;
-        self.containment_recall_active = false;
-        self.containment_contact_last_tick = None;
-        self.containment_focus_target = None;
-        self.containment_focus_stable_since = None;
-        self.containment_smoke_target = None;
-        self.containment_smoke_focus_target = None;
-        self.containment_smoke_expires_tick = None;
+        self.containment.stationary_since = None;
+        self.containment.wave_launched = false;
+        self.containment.opening_tanks.clear();
+        self.containment.recovery_active = false;
+        self.containment.active_tanks.clear();
+        self.containment.active_scout = None;
+        self.containment.active_riflemen.clear();
+        self.containment.march_waypoint = None;
+        self.containment.route.clear();
+        self.containment.route_index = 0;
+        self.containment.route_objective = None;
+        self.containment.last_formation_command_tick = None;
+        self.containment.assembly_started_tick = None;
+        self.containment.waypoint_started_tick = None;
+        self.containment.repush_count = 0;
+        self.containment.recall_active = false;
+        self.containment.contact_last_tick = None;
+        self.containment.held_tanks.clear();
+        self.containment.focus_target = None;
+        self.containment.focus_stable_since = None;
+        self.containment.smoke_target = None;
+        self.containment.smoke_focus_target = None;
+        self.containment.smoke_expires_tick = None;
         self.home_defensive_tank = None;
         self.home_defensive_tank_assigned_once = false;
         self.enemy_natural_resource_depot = None;
@@ -349,6 +387,64 @@ impl AiDecisionMemory {
 
     pub(super) fn clear_defensive_incident(&mut self) {
         self.defensive_incident = None;
+    }
+
+    /// Record the enemy Tanks in sight and forget those not seen for a while.
+    pub(super) fn note_enemy_tanks(&mut self, observation: &AiObservation) {
+        let tick = observation.tick;
+        let visible = observation
+            .visible_enemies
+            .iter()
+            .filter(|enemy| enemy.kind == EntityKind::Tank && enemy.hp > 0)
+            .count();
+        if visible > 0 {
+            self.enemy_tank_sightings.insert(tick, visible);
+        }
+        self.enemy_tank_sightings
+            .retain(|seen, _| tick.saturating_sub(*seen) <= ENEMY_TANK_MEMORY_TICKS);
+        let attacking = super::defense::local_defense_contact(observation).map_or(0, |contact| {
+            observation
+                .visible_enemies
+                .iter()
+                .filter(|enemy| {
+                    enemy.kind == EntityKind::Tank && contact.target_ids.contains(&enemy.id)
+                })
+                .count()
+        });
+        if attacking > 0 {
+            self.enemy_attack_sightings.insert(tick, attacking);
+        }
+        self.enemy_attack_sightings
+            .retain(|seen, _| tick.saturating_sub(*seen) <= ENEMY_ATTACK_MEMORY_TICKS);
+    }
+
+    /// The most enemy Tanks seen together in one attack on Jeff's bases within the last
+    /// `ENEMY_ATTACK_MEMORY_TICKS`.
+    pub(super) fn largest_recent_attack(&self) -> usize {
+        self.enemy_attack_sightings
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// How many Tanks Jeff keeps home, the home Tank included: three for every four Tanks in the
+    /// largest recent attack, between `HOME_TANK_RESERVE_MIN` and `HOME_TANK_RESERVE_MAX`. Across
+    /// 86 AI 2.1 attacks, 2-4 Tanks with the entrenched infantry held attacks of 3-4 Tanks; bases
+    /// fell to 5 Tanks against none and 3 against 2.
+    pub(super) fn home_tank_reserve(&self) -> usize {
+        (self.largest_recent_attack() * 3)
+            .div_ceil(4)
+            .clamp(HOME_TANK_RESERVE_MIN, HOME_TANK_RESERVE_MAX)
+    }
+
+    /// The most enemy Tanks seen together within the last `ENEMY_TANK_MEMORY_TICKS`.
+    pub(super) fn recent_enemy_tanks(&self) -> usize {
+        self.enemy_tank_sightings
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
     }
 
     pub(super) fn sync_defender_posture(&mut self, observation: &AiObservation) {
@@ -464,7 +560,7 @@ impl AiDecisionMemory {
         observation: &AiObservation,
         profile: &AiProfile,
     ) {
-        if profile.home_anti_tank.is_none() || !self.containment_wave_launched {
+        if profile.home_anti_tank.is_none() || !self.containment.wave_launched {
             self.home_defensive_tank = None;
             return;
         }
@@ -483,7 +579,7 @@ impl AiDecisionMemory {
             .filter(|entity| entity.kind == EntityKind::Tank)
             .filter(|entity| {
                 self.home_defensive_tank_assigned_once
-                    || !self.containment_opening_tanks.contains(&entity.id)
+                    || !self.containment.opening_tanks.contains(&entity.id)
             })
             .min_by(|left, right| {
                 geometry::dist2(left.x, left.y, own_base.0, own_base.1)

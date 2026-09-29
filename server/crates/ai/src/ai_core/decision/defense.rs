@@ -7,6 +7,7 @@ use super::*;
 mod envelope;
 mod incident;
 mod pocket;
+mod route_line;
 mod spacing;
 pub(super) use spacing::{separated_rifle_position, separated_rifle_position_where};
 
@@ -26,6 +27,7 @@ use self::pocket::{
 pub(super) use self::pocket::{
     stage_defensive_pocket_machine_gunners, stage_home_defensive_pocket_riflemen,
 };
+pub(super) use self::route_line::{plan_route_line, RouteLine};
 
 pub(super) fn crossroads_wall_aware_approach_direction(
     observation: &AiObservation,
@@ -1183,7 +1185,7 @@ fn defensive_firing_sector_is_clear(
         })
 }
 
-fn defensive_position_is_open(
+pub(super) fn defensive_position_is_open(
     observation: &AiObservation,
     map_analysis: Option<&AiMapAnalysis>,
     x: f32,

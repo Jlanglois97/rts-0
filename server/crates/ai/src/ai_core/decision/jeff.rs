@@ -82,3 +82,50 @@ pub(super) fn rifleman_home_rally(
         observation.map,
     ))
 }
+
+/// The main-base buildings Jeff keeps behind its HQ on Crossroads.
+pub(super) fn crossroads_sheltered_kind(kind: EntityKind) -> bool {
+    matches!(
+        kind,
+        EntityKind::Barracks
+            | EntityKind::TrainingCentre
+            | EntityKind::EngineeringComplex
+            | EntityKind::Factory
+    )
+}
+
+/// On Crossroads raids walk straight into the first building on their way to the HQ. Every
+/// Factory placed ahead of the HQ on the enemy's walk in (7-8 tiles nearer the enemy than the HQ)
+/// was destroyed, usually more than once, while each main has room behind the HQ, walled off by
+/// water, that the enemy can only reach by walking past it. This is how many tiles farther the
+/// nearest enemy walks to a building at this site than to Jeff's HQ: negative ahead of the HQ,
+/// positive behind it. `None` for other buildings, other maps and without map analysis.
+pub(super) fn crossroads_site_depth(
+    observation: &AiObservation,
+    analysis: Option<&AiMapAnalysis>,
+    kind: EntityKind,
+    tile_x: u32,
+    tile_y: u32,
+) -> Option<f32> {
+    if !crossroads_sheltered_kind(kind)
+        || defense::crossroads_wall_aware_approach_direction(observation).is_none()
+    {
+        return None;
+    }
+    let analysis = analysis?;
+    let tile_size = observation.map.tile_size.max(1);
+    let center = geometry::building_center((tile_x, tile_y), kind, tile_size)?;
+    let center_tile = (
+        (center.0 / tile_size as f32) as u32,
+        (center.1 / tile_size as f32) as u32,
+    );
+    let enemy_walk = |tile: (u32, u32)| {
+        observation
+            .players
+            .iter()
+            .filter(|player| player.is_alive && observation.is_enemy_player(player.id))
+            .filter_map(|player| analysis.ground_distance_from_start(player.id, tile))
+            .min_by(f32::total_cmp)
+    };
+    Some(enemy_walk(center_tile)? - enemy_walk(observation.own_start_tile)?)
+}

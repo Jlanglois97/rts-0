@@ -26,6 +26,9 @@ const REGION_CORE_CLEARANCE_TILES: u16 = 10;
 const REGION_BODY_CLEARANCE_TILES: u16 = 5;
 const REGION_MIN_CORE_TILES: u32 = 24;
 const CHOKE_CONTACT_RADIUS_TILES: u16 = 8;
+/// A route enters a base once it is this close to the start: just outside the start's resource
+/// patches (at most 7 tiles out) and the home defensive pocket.
+const BASE_ROUTE_ENTRY_TILES: f32 = 12.0;
 const CHOKE_PAIR_PATH_SLACK_TILES: u32 = 2;
 const CHOKE_MIN_BAND_TILES: u32 = 4;
 const CHOKE_MAX_BAND_TILES: u32 = 1_024;
@@ -194,6 +197,12 @@ pub(crate) struct AiMapAnalysis {
     chokes: Vec<AiMapChoke>,
     starts: Vec<AiStartMapping>,
     resource_clusters: Vec<AiResourceCluster>,
+    /// Per start, the shortest ground route from the nearest enemy start to it, one tile per step,
+    /// starting at the enemy: the way an attack on that base actually arrives.
+    base_routes: Vec<(u32, Vec<AiTile>)>,
+    /// Per start, the walking distance from it to every tile in tenths of a tile (`u32::MAX` where
+    /// ground from that start cannot reach).
+    start_ground_distances: Vec<(u32, Vec<u32>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -331,7 +340,7 @@ impl AiMapAnalysis {
         };
         let starts = build_start_mappings(&start.players, tile_lookups, &resource_clusters);
 
-        Self {
+        let mut analysis = Self {
             key,
             width,
             height,
@@ -346,7 +355,96 @@ impl AiMapAnalysis {
             chokes,
             starts,
             resource_clusters,
-        }
+            base_routes: Vec::new(),
+            start_ground_distances: Vec::new(),
+        };
+        analysis.base_routes = analysis.build_base_routes();
+        analysis.start_ground_distances = analysis
+            .starts
+            .iter()
+            .filter_map(|start| {
+                let from = tile_center_world(start.start_tile, analysis.tile_size);
+                Some((start.player_id, analysis.ground_distance_field(from)?))
+            })
+            .collect();
+        analysis
+    }
+
+    /// Where an attack on `player_id`'s start arrives: the point on the shortest ground route from
+    /// the nearest enemy start that first comes within `BASE_ROUTE_ENTRY_TILES` of it.
+    pub(crate) fn base_route_entry(&self, player_id: u32) -> Option<(f32, f32)> {
+        self.base_route_point(player_id, BASE_ROUTE_ENTRY_TILES)
+    }
+
+    /// The first point on the route an attack on `player_id`'s start takes that is within
+    /// `radius_tiles` of that start (straight-line), walking in from the enemy.
+    pub(crate) fn base_route_point(&self, player_id: u32, radius_tiles: f32) -> Option<(f32, f32)> {
+        let (_, route) = self.base_routes.iter().find(|(id, _)| *id == player_id)?;
+        let start = self
+            .starts
+            .iter()
+            .find(|start| start.player_id == player_id)?;
+        let own = tile_center_world(start.start_tile, self.tile_size);
+        let radius = radius_tiles * self.tile_size as f32;
+        route
+            .iter()
+            .map(|tile| tile_center_world(*tile, self.tile_size))
+            .find(|point| {
+                let dx = point.0 - own.0;
+                let dy = point.1 - own.1;
+                dx * dx + dy * dy <= radius * radius
+            })
+    }
+
+    /// How far `player_id`'s units walk from their start to `tile`, in tiles, around terrain.
+    pub(crate) fn ground_distance_from_start(
+        &self,
+        player_id: u32,
+        tile: (u32, u32),
+    ) -> Option<f32> {
+        let (_, field) = self
+            .start_ground_distances
+            .iter()
+            .find(|(id, _)| *id == player_id)?;
+        let distance = *field.get(tile_index(self.width, self.height, tile.0, tile.1)?)?;
+        (distance != u32::MAX).then(|| distance as f32 / 10.0)
+    }
+
+    /// The ground route an attack on `player_id`'s start takes, from the nearest enemy start in.
+    pub(crate) fn base_route_tiles(&self, player_id: u32) -> Option<&[AiTile]> {
+        self.base_routes
+            .iter()
+            .find(|(id, _)| *id == player_id)
+            .map(|(_, route)| route.as_slice())
+    }
+
+    fn build_base_routes(&self) -> Vec<(u32, Vec<AiTile>)> {
+        self.starts
+            .iter()
+            .filter_map(|start| {
+                let enemy = self
+                    .starts
+                    .iter()
+                    .filter(|other| other.team_id != start.team_id)
+                    .min_by_key(|other| {
+                        (
+                            tile_distance2(other.start_tile, start.start_tile),
+                            other.player_id,
+                        )
+                    })?;
+                let own = tile_center_world(start.start_tile, self.tile_size);
+                let from = tile_center_world(enemy.start_tile, self.tile_size);
+                let tile_size = self.tile_size.max(1) as f32;
+                let route = self
+                    .compact_group_route(from, own, 1)
+                    .into_iter()
+                    .map(|point| {
+                        AiTile::new((point.0 / tile_size) as u32, (point.1 / tile_size) as u32)
+                    })
+                    .collect::<Vec<_>>();
+                (!route.is_empty()).then_some((start.player_id, route))
+            })
+            .collect()
     }
 
     #[allow(dead_code)]

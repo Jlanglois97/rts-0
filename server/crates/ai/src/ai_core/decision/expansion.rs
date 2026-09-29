@@ -218,7 +218,7 @@ where
         }
         site
     } else {
-        expansion_resource_depot_site(observation, expansion, kind, profile.id, placeable)?
+        expansion_resource_depot_site(observation, expansion, kind, profile.id, None, placeable)?
     };
     if uses_current_jeffs_ai_policy(profile.id)
         && observation.own_start_tile == (9, 9)
@@ -242,12 +242,12 @@ pub(super) fn expansion_resource_depot_site<F>(
     expansion: ExpansionPolicy,
     kind: EntityKind,
     profile_id: &str,
+    analysis: Option<&AiMapAnalysis>,
     placeable: &mut F,
 ) -> Option<(u32, u32)>
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
-    let stats = config::building_stats(kind)?;
     let resources = expansion_candidate_resources(observation);
     if resources.is_empty() {
         return None;
@@ -268,10 +268,140 @@ where
             return placeable(kind, tile.0, tile.1).then_some(tile);
         }
     }
-    let mut best = None;
-    for anchor in expansion_anchor_tiles(observation, &resources) {
+    if uses_current_jeffs_ai_policy(profile_id) {
+        return defensible_expansion_depot_site(
+            observation,
+            analysis,
+            expansion,
+            kind,
+            &resources,
+            placeable,
+        );
+    }
+    generic_expansion_depot_site(observation, expansion, kind, &resources, placeable)
+}
+
+/// The shared best-site search over every free resource cluster, without any profile's
+/// hand-placed natural.
+pub(super) fn generic_expansion_depot_site<F>(
+    observation: &AiObservation,
+    expansion: ExpansionPolicy,
+    kind: EntityKind,
+    resources: &[&AiResourceSummary],
+    placeable: &mut F,
+) -> Option<(u32, u32)>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    expansion_site_candidates(observation, expansion, kind, resources, placeable)
+        .into_iter()
+        .fold(None, |best, candidate| {
+            if expansion_site_candidate_better(candidate, best) {
+                Some(candidate)
+            } else {
+                best
+            }
+        })
+        .map(|candidate| candidate.tile)
+}
+
+/// Each tile a site is farther to walk from the main costs this many tiles of head start: a site
+/// far behind the main is out of the enemy's way but stretches the defenders across two bases.
+const EXPANSION_WALK_COST: f32 = 0.5;
+
+/// Jeff's expansions: the site the defenders reach furthest ahead of the enemy. Straight-line
+/// distance from the main favours sites out toward the enemy's side, which are raided in passing
+/// and reached by the enemy first; walking distances show which sites the enemy has to come past
+/// the main to reach. Falls back to the shared search without walking distances.
+pub(super) fn defensible_expansion_depot_site<F>(
+    observation: &AiObservation,
+    analysis: Option<&AiMapAnalysis>,
+    expansion: ExpansionPolicy,
+    kind: EntityKind,
+    resources: &[&AiResourceSummary],
+    placeable: &mut F,
+) -> Option<(u32, u32)>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    let candidates = expansion_site_candidates(observation, expansion, kind, resources, placeable);
+    let defended = analysis.and_then(|analysis| {
+        candidates
+            .iter()
+            .filter_map(|candidate| {
+                expansion_site_defensibility(observation, analysis, kind, candidate.tile)
+                    .map(|score| (score, *candidate))
+            })
+            .fold(None, |best, (score, candidate)| match best {
+                Some((best_score, best_candidate))
+                    if best_score > score
+                        || (best_score == score
+                            && !expansion_site_candidate_better(
+                                candidate,
+                                Some(best_candidate),
+                            )) =>
+                {
+                    Some((best_score, best_candidate))
+                }
+                _ => Some((score, candidate)),
+            })
+    });
+    if let Some((_, candidate)) = defended {
+        return Some(candidate.tile);
+    }
+    candidates
+        .into_iter()
+        .fold(None, |best, candidate| {
+            if expansion_site_candidate_better(candidate, best) {
+                Some(candidate)
+            } else {
+                best
+            }
+        })
+        .map(|candidate| candidate.tile)
+}
+
+/// How many whole tiles of head start defenders walking from the main have over the nearest enemy
+/// walking from its start, less `EXPANSION_WALK_COST` per tile of the walk from the main. A site
+/// the enemy must pass the main to reach keeps the main's whole head start; one out toward the
+/// enemy loses it from both ends, being nearer them and farther from us.
+pub(super) fn expansion_site_defensibility(
+    observation: &AiObservation,
+    analysis: &AiMapAnalysis,
+    kind: EntityKind,
+    tile: (u32, u32),
+) -> Option<i32> {
+    let center = building_center(tile, kind, observation.map.tile_size)?;
+    let tile_size = observation.map.tile_size.max(1) as f32;
+    let center_tile = ((center.0 / tile_size) as u32, (center.1 / tile_size) as u32);
+    let own = analysis.ground_distance_from_start(observation.player_id, center_tile)?;
+    let enemy = observation
+        .players
+        .iter()
+        .filter(|player| player.is_alive && observation.is_enemy_player(player.id))
+        .filter_map(|player| analysis.ground_distance_from_start(player.id, center_tile))
+        .min_by(f32::total_cmp)?;
+    Some((enemy - own - EXPANSION_WALK_COST * own).round() as i32)
+}
+
+/// Every placeable Depot footprint that reaches its cluster's full resources, in search order.
+fn expansion_site_candidates<F>(
+    observation: &AiObservation,
+    expansion: ExpansionPolicy,
+    kind: EntityKind,
+    resources: &[&AiResourceSummary],
+    placeable: &mut F,
+) -> Vec<ExpansionSiteCandidate>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    let mut candidates = Vec::new();
+    let Some(stats) = config::building_stats(kind) else {
+        return candidates;
+    };
+    for anchor in expansion_anchor_tiles(observation, resources) {
         let cluster_resources =
-            expansion_cluster_resources_for_anchor(observation, anchor, &resources);
+            expansion_cluster_resources_for_anchor(observation, anchor, resources);
         if cluster_resources.is_empty() {
             continue;
         }
@@ -320,14 +450,11 @@ where
                 if !placeable(kind, tx, ty) {
                     continue;
                 }
-                if expansion_site_candidate_better(candidate, best) {
-                    best = Some(candidate);
-                }
+                candidates.push(candidate);
             }
         }
     }
-
-    best.map(|candidate: ExpansionSiteCandidate| candidate.tile)
+    candidates
 }
 
 fn instructed_schone_tage_expansion_site(
@@ -740,6 +867,7 @@ mod tests {
             visible_enemies: Vec::new(),
             ability_states: Vec::new(),
             smokes: Vec::new(),
+            visible_tank_traps: Vec::new(),
             pending_builds: Vec::new(),
             upgrades: Vec::new(),
         };

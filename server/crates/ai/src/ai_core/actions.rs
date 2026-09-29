@@ -48,6 +48,37 @@ impl<'a> AiActionContext<'a> {
         &self.command_trace
     }
 
+    pub(crate) fn emitted_len(&self) -> usize {
+        self.emitted.len()
+    }
+
+    /// Units given an order since `start`, in emission order, each flagged when the order was a
+    /// Hold Position.
+    pub(crate) fn unit_orders_since(&self, start: usize) -> Vec<(u32, bool)> {
+        self.emitted
+            .iter()
+            .skip(start)
+            .flat_map(|action| {
+                let (units, hold): (&[u32], bool) = match action {
+                    AiActionRequest::HoldPosition { units, .. } => (units, true),
+                    AiActionRequest::Move { units, .. }
+                    | AiActionRequest::AttackMove { units, .. }
+                    | AiActionRequest::Attack { units, .. }
+                    | AiActionRequest::ClearObstacleArea { units, .. }
+                    | AiActionRequest::Gather { units, .. }
+                    | AiActionRequest::Build { units, .. }
+                    | AiActionRequest::SetupAntiTankGuns { units, .. }
+                    | AiActionRequest::UseAbility { units, .. } => (units, false),
+                    AiActionRequest::Train { .. }
+                    | AiActionRequest::SetRally { .. }
+                    | AiActionRequest::AdjustProductionRepeat { .. }
+                    | AiActionRequest::Research { .. } => (&[], false),
+                };
+                units.iter().map(move |unit| (*unit, hold))
+            })
+            .collect()
+    }
+
     pub(crate) fn emit_action(&mut self, action: AiActionRequest) {
         let command = crate::action_emitter::emit_request(action.clone());
         self.command_trace.push(command_trace_label(&command));
@@ -791,6 +822,27 @@ pub(crate) fn attack_units(
     ctx.emit_action(AiActionRequest::Attack {
         units: units.clone(),
         target,
+        queued: false,
+    });
+    Some(units)
+}
+
+/// Order `units` to clear the Tank Traps around `trap`, a completed trap in sight. They shoot every
+/// trap within four tiles of it before ordinary targets.
+pub(crate) fn clear_obstacle_area(
+    ctx: &mut AiActionContext<'_>,
+    units: impl IntoIterator<Item = u32>,
+    trap: u32,
+) -> Option<Vec<u32>> {
+    let mut units: Vec<u32> = units.into_iter().collect();
+    units.sort_unstable();
+    units.dedup();
+    if units.is_empty() {
+        return None;
+    }
+    ctx.emit_action(AiActionRequest::ClearObstacleArea {
+        units: units.clone(),
+        target: trap,
         queued: false,
     });
     Some(units)
