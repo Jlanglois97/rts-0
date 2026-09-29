@@ -176,13 +176,16 @@ where
         if ready {
             let resources = expansion::expansion_candidate_resources(observation);
             let rejected = memory.later_bases.rejected_sites.clone();
-            let site = expansion::defensible_expansion_depot_site(
+            let route =
+                map_analysis.and_then(|analysis| analysis.base_route_tiles(observation.player_id));
+            let site = expansion::defensible_expansion_depot_site_adjusted(
                 observation,
                 map_analysis,
                 expansion,
                 EntityKind::ResourceDepot,
                 &resources,
                 &mut |kind, x, y| !site_is_rejected(&rejected, (x, y)) && placeable(kind, x, y),
+                |tile| route_exposure_penalty(observation, route, tile),
             );
             let site_center = site.and_then(|site| {
                 building_center(site, EntityKind::ResourceDepot, observation.map.tile_size)
@@ -311,6 +314,41 @@ where
 
 /// Tanks this close to the HQ count toward the main's reserve.
 const MAIN_GARRISON_RADIUS_TILES: f32 = 16.0;
+
+/// A later base this close to the enemy's route to the main stands on its way in, and every attack
+/// passes it. On Classic the third base went 3 tiles from that route and cost 7 Tanks and the Depot
+/// within 1,700 ticks; every other map's third base lies 21-62 tiles off it.
+const ROUTE_EXPOSURE_TILES: f32 = 8.0;
+/// Taken off such a site's score (tiles of walking head start), so a site off the route is preferred
+/// unless it gives up more head start than that.
+const ROUTE_EXPOSURE_PENALTY: i32 = 60;
+
+fn route_exposure_penalty(
+    observation: &AiObservation,
+    route: Option<&[crate::ai_core::map_analysis::AiTile]>,
+    tile: (u32, u32),
+) -> i32 {
+    let Some(center) = building_center(tile, EntityKind::ResourceDepot, observation.map.tile_size)
+    else {
+        return 0;
+    };
+    let ts = observation.map.tile_size.max(1) as f32;
+    let exposed = route.is_some_and(|route| {
+        route.iter().any(|step| {
+            dist2(
+                (step.x as f32 + 0.5) * ts,
+                (step.y as f32 + 0.5) * ts,
+                center.0,
+                center.1,
+            ) <= squared(ROUTE_EXPOSURE_TILES * ts)
+        })
+    });
+    if exposed {
+        -ROUTE_EXPOSURE_PENALTY
+    } else {
+        0
+    }
+}
 
 /// Tanks at the main: near the HQ or at the home post, and neither pushing nor guarding a new base.
 /// The home Tank counts. Tanks left at other bases do not: in one lost game nine Tanks were "home"

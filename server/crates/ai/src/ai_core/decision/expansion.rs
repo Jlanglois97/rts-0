@@ -324,13 +324,38 @@ pub(super) fn defensible_expansion_depot_site<F>(
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
+    defensible_expansion_depot_site_adjusted(
+        observation,
+        analysis,
+        expansion,
+        kind,
+        resources,
+        placeable,
+        |_| 0,
+    )
+}
+
+/// `defensible_expansion_depot_site` with `adjust(tile)` added to each candidate's score.
+pub(super) fn defensible_expansion_depot_site_adjusted<F, A>(
+    observation: &AiObservation,
+    analysis: Option<&AiMapAnalysis>,
+    expansion: ExpansionPolicy,
+    kind: EntityKind,
+    resources: &[&AiResourceSummary],
+    placeable: &mut F,
+    adjust: A,
+) -> Option<(u32, u32)>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+    A: Fn((u32, u32)) -> i32,
+{
     let candidates = expansion_site_candidates(observation, expansion, kind, resources, placeable);
     let defended = analysis.and_then(|analysis| {
         candidates
             .iter()
             .filter_map(|candidate| {
                 expansion_site_defensibility(observation, analysis, kind, candidate.tile)
-                    .map(|score| (score, *candidate))
+                    .map(|score| (score + adjust(candidate.tile), *candidate))
             })
             .fold(None, |best, (score, candidate)| match best {
                 Some((best_score, best_candidate))

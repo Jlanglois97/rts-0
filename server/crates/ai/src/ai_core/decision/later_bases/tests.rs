@@ -242,3 +242,44 @@ fn an_abandoned_site_is_only_ruled_out_when_rejected() {
     abandon_site(&mut state, (40, 40), 2_000, true);
     assert!(site_is_rejected(&state.rejected_sites, (40, 40)));
 }
+
+#[test]
+fn a_later_base_on_the_enemys_route_in_is_marked_down() {
+    use crate::ai_core::map_analysis::AiMapAnalysis;
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Classic", &[(1, 1), (2, 2)], 0).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0,
+        map,
+        Map::metadata_for_name("Classic").unwrap(),
+    );
+    let start = game.start_payload();
+    let analysis = AiMapAnalysis::analyze(&start);
+    let observation =
+        AiObservation::from_snapshot_with_alive(&start, &game.snapshot_for(1), 1, [], None)
+            .unwrap();
+    assert_eq!(observation.own_start_tile, (9, 9));
+    let route = analysis.base_route_tiles(1);
+    // The base at (39, 43) lies on the diagonal the enemy walks in on; (68, 27) and the natural at
+    // (39, 14) do not.
+    assert_eq!(
+        route_exposure_penalty(&observation, route, (38, 42)),
+        -ROUTE_EXPOSURE_PENALTY
+    );
+    assert_eq!(route_exposure_penalty(&observation, route, (67, 26)), 0);
+    assert_eq!(route_exposure_penalty(&observation, route, (38, 13)), 0);
+    // Without map analysis nothing is marked down.
+    assert_eq!(route_exposure_penalty(&observation, None, (38, 42)), 0);
+}
