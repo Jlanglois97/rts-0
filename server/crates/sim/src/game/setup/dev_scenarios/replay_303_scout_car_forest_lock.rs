@@ -50,6 +50,11 @@ impl Game {
             REPLAY_SEED,
             "dev:replay_303_scout_car_forest_lock",
         );
+        // The recorded seven-unit move exceeded the current human command budget after the
+        // Command Car bonus was removed. This scenario replays movement, without an AI controller.
+        if let Some(player) = game.state.players.iter_mut().find(|player| player.id == SOUPMAN) {
+            player.is_ai = true;
+        }
         game.state.tick = REPLAY_START_TICK;
         game.state.rng = TrackedRng::seed_from_match_seed(REPLAY_SEED);
         game.state.ground_decals.begin_tick(REPLAY_START_TICK);

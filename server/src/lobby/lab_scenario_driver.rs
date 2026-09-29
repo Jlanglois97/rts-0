@@ -585,7 +585,7 @@ mod tests {
             .player_resources
             .iter()
             .find(|player| player.id == 1)
-            .is_some_and(|player| player.supply_used < 300));
+            .is_some_and(|player| player.supply_used < 244));
 
         let actions = driver.actions_for_tick(&game);
         let respawns: Vec<_> = actions
@@ -620,7 +620,7 @@ mod tests {
             .player_resources
             .iter()
             .find(|player| player.id == 1)
-            .is_some_and(|player| player.supply_used == 300));
+            .is_some_and(|player| player.supply_used == 244));
         assert_eq!(
             restored
                 .entities
