@@ -352,10 +352,6 @@ export const ABILITIES = Object.freeze({
     rangeTiles: null,
     cooldownTicks: SCOUT_PLANE_ABILITY_COOLDOWN_TICKS,
     cost: Object.freeze({ steel: 0, oil: 0 }),
-    carrierCosts: Object.freeze({
-      [KIND.RESOURCE_DEPOT]: Object.freeze({ steel: 0, oil: 0 }),
-      [KIND.COMMAND_CAR]: Object.freeze({ steel: 0, oil: 0 }),
-    }),
     upgradeRequirement: UPGRADE.SCOUT_PLANE_UNLOCK,
     radiusTiles: SCOUT_PLANE_ORBIT_RADIUS_TILES,
     durationTicks: SCOUT_PLANE_LIFETIME_TICKS,
