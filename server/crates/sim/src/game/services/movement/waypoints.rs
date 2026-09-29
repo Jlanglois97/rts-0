@@ -16,7 +16,9 @@ use crate::game::upgrade::UpgradeKind;
 use crate::game::PlayerState;
 use crate::rules::terrain::{movement_speed_multiplier, TerrainKind};
 
-use super::car_drive::{barrage_maneuver_target, barrage_pose_ready, plan_scout_car_motion};
+use super::car_drive::{
+    barrage_maneuver_target, barrage_pose_ready, plan_barrage_maneuver, plan_scout_car_motion,
+};
 use super::pivot_drive::{
     angle_delta, close_nudge_hull_axis_motion, distance_between, normalize_angle,
     pivot_drive_intent, pivot_drive_speed_scale, rotate_toward, vehicle_body_turn_rate,
@@ -199,16 +201,36 @@ pub(super) fn advance_moving_units(
             }
         } else if is_car {
             if let Some(snapshot) = entities.get(id).cloned() {
-                if let Some(plan) = plan_scout_car_motion(
-                    map,
-                    occ,
-                    entities,
-                    spatial,
-                    id,
-                    &snapshot,
-                    (x, y),
-                    budget,
-                ) {
+                let plan = if let Some(target) = barrage_target {
+                    plan_barrage_maneuver(
+                        map,
+                        occ,
+                        entities,
+                        spatial,
+                        id,
+                        &snapshot,
+                        (x, y),
+                        budget,
+                        target,
+                        |direction| {
+                            map.elevation_movement_multiplier_at(x, y, direction)
+                                * ability_runtime
+                                    .magic_anchor_movement_multiplier(x, y, direction, tick)
+                        },
+                    )
+                } else {
+                    plan_scout_car_motion(
+                        map,
+                        occ,
+                        entities,
+                        spatial,
+                        id,
+                        &snapshot,
+                        (x, y),
+                        budget,
+                    )
+                };
+                if let Some(plan) = plan {
                     x = plan.pos.0;
                     y = plan.pos.1;
                     static_blocked_this_tick = plan.static_blocked;

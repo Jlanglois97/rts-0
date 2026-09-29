@@ -44,7 +44,7 @@ pub(in crate::game::services::movement) fn barrage_pose_ready(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn plan_barrage_maneuver(
+pub(in crate::game::services::movement) fn plan_barrage_maneuver(
     map: &Map,
     occ: &Occupancy,
     entities: &EntityStore,
@@ -54,6 +54,7 @@ pub(super) fn plan_barrage_maneuver(
     current: (f32, f32),
     budget: f32,
     target: (f32, f32),
+    directional_speed_multiplier: impl Fn((f32, f32)) -> f32,
 ) -> Option<ScoutCarMotionPlan> {
     let profile = car_motion_profile(e.kind)?;
     let definition = ability::definition(AbilityKind::Barrage);
@@ -65,8 +66,17 @@ pub(super) fn plan_barrage_maneuver(
     for sign in [1.0, -1.0] {
         for mut primitive in scout_car_primitives(profile, false, false) {
             primitive.travel_sign = sign;
+            // Probe the arc's travel direction, including reverse, for the same
+            // directional terrain and ability modifiers used by routed movement.
+            let (probe, _) = sample_primitive(current, e.facing(), primitive, budget)?;
+            let direction = unit_direction(current, probe)?;
+            let step_budget = budget
+                * directional_speed_multiplier((
+                    direction.0 * config::TILE_SIZE as f32,
+                    direction.1 * config::TILE_SIZE as f32,
+                ));
             let Some(candidate) =
-                scout_car_candidate(profile, map, occ, e, current, primitive, budget)
+                scout_car_candidate(profile, map, occ, e, current, primitive, step_budget)
             else {
                 continue;
             };

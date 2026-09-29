@@ -787,3 +787,35 @@ fn barrage_ten_degree_tolerance_wraps_at_pi() {
     assert!(ability::barrage_facing_ready(0.0, 9.99_f32.to_radians()));
     assert!(!ability::barrage_facing_ready(0.0, 10.01_f32.to_radians()));
 }
+
+#[test]
+fn barrage_positioning_respects_uphill_movement_penalty() {
+    let first_step = |uphill: bool| {
+        let (mut game, launcher, target) = fixture(0);
+        let start = game.state.map.tile_center(8, 8);
+        if uphill {
+            game.state.map.elevation.fill(2);
+            let index = game.state.map.index(8, 8);
+            game.state.map.elevation[index] = 0;
+        }
+        game.state
+            .entities
+            .get_mut(launcher)
+            .unwrap()
+            .set_facing(std::f32::consts::FRAC_PI_2);
+        order_barrage(&mut game, launcher, target);
+        game.tick();
+        let e = game.state.entities.get(launcher).unwrap();
+        (e.pos_x - start.0).hypot(e.pos_y - start.1)
+    };
+    let flat = first_step(false);
+    let uphill = first_step(true);
+    assert!(
+        uphill > 0.0,
+        "positioning should still make progress uphill"
+    );
+    assert!(
+        uphill < flat * 0.9,
+        "uphill barrage positioning bypassed the terrain penalty: flat={flat}, uphill={uphill}"
+    );
+}
