@@ -227,7 +227,7 @@ pub const UNITS: &[UnitDef] = &[
             sight_tiles: 9,
             cost_steel: 150,
             cost_oil: 40,
-            supply: 6,
+            supply: 3,
             build_ticks: 440,
             radius: 20.0,
         },
@@ -307,7 +307,7 @@ pub const UNITS: &[UnitDef] = &[
             sight_tiles: 9,
             cost_steel: 425,
             cost_oil: 175,
-            supply: 8,
+            supply: 6,
             build_ticks: 750,
             radius: 18.0,
         },
@@ -820,12 +820,12 @@ mod tests {
     }
 
     #[test]
-    fn anti_tank_gun_uses_six_supply_and_doubled_cooldown() {
+    fn anti_tank_gun_uses_three_supply_and_doubled_cooldown() {
         let stats = unit_def(EntityKind::AntiTankGun)
             .expect("anti-tank gun def")
             .stats;
 
-        assert_eq!(stats.supply, 6);
+        assert_eq!(stats.supply, 3);
         assert_eq!(stats.cooldown, 144);
     }
 

@@ -594,12 +594,13 @@ function selectionBudgetForHudEntities(entities) {
     if (!entity) continue;
     const weight = commandWeight(entity.kind);
     used += weight;
-    if (entity.kind === KIND.COMMAND_CAR) cap += COMMAND_CAR_SUPPLY_CAP_BONUS + weight;
+    if (entity.kind === KIND.COMMAND_CAR) cap += COMMAND_CAR_SUPPLY_CAP_BONUS;
   }
   return { used, cap, over: used > cap };
 }
 
 function commandWeight(kind) {
+  if (kind === KIND.COMMAND_CAR) return 0;
   const supply = STATS[kind]?.supply;
   return Number.isFinite(supply) && supply > 0 ? supply : 1;
 }
