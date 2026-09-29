@@ -16,7 +16,7 @@ use crate::game::upgrade::UpgradeKind;
 use crate::game::PlayerState;
 use crate::rules::terrain::{movement_speed_multiplier, TerrainKind};
 
-use super::car_drive::plan_scout_car_motion;
+use super::car_drive::{barrage_maneuver_target, barrage_pose_ready, plan_scout_car_motion};
 use super::pivot_drive::{
     angle_delta, close_nudge_hull_axis_motion, distance_between, normalize_angle,
     pivot_drive_intent, pivot_drive_speed_scale, rotate_toward, vehicle_body_turn_rate,
@@ -54,6 +54,27 @@ pub(super) fn advance_moving_units(
     ability_runtime: &AbilityRuntime,
 ) {
     for id in entities.ids() {
+        let barrage_target = entities.get(id).and_then(barrage_maneuver_target);
+        if let Some(target) = barrage_target {
+            if entities
+                .get(id)
+                .is_some_and(|e| barrage_pose_ready(e, target))
+            {
+                if let Some(e) = entities.get_mut(id) {
+                    e.clear_path();
+                    e.set_path_goal(None);
+                    e.mark_move_phase(MovePhase::Arrived);
+                }
+                continue;
+            }
+            if let Some(e) = entities.get_mut(id) {
+                // Once maneuvering, retain the pose goal even if an arc briefly leaves
+                // the range annulus. Do not alternate with the old approach path.
+                e.clear_path();
+                e.set_path_goal(None);
+                e.mark_move_phase(MovePhase::Moving);
+            }
+        }
         let (
             kind,
             owner,
@@ -66,7 +87,7 @@ pub(super) fn advance_moving_units(
             movement_target,
         ) = {
             let e = match entities.get(id) {
-                Some(e) if e.is_unit() && !e.path_is_empty() => e,
+                Some(e) if e.is_unit() && (!e.path_is_empty() || barrage_target.is_some()) => e,
                 _ => continue,
             };
             if panzerfaust_movement_locked(e) {
@@ -457,7 +478,7 @@ pub(super) fn advance_moving_units(
             }
             // A plain Move with an empty path has arrived → go idle so normal auto-acquire
             // resumes after the destination is reached.
-            if e.path_is_empty() {
+            if e.path_is_empty() && barrage_target.is_none() {
                 e.mark_move_phase(MovePhase::Arrived);
                 if let Some(m) = e.movement.as_mut() {
                     m.static_blocked_ticks = 0;

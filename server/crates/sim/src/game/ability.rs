@@ -121,6 +121,12 @@ pub fn effect_hook(kind: AbilityKind) -> AbilityEffectHook {
     }
 }
 
+/// Rocket racks follow the hull; ten degrees of launch leeway on either side.
+pub(crate) fn barrage_facing_ready(facing: f32, bearing: f32) -> bool {
+    let error = (bearing - facing).sin().atan2((bearing - facing).cos());
+    error.abs() <= 10.0_f32.to_radians()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{definition, AbilityEffectHook, AbilityKind};

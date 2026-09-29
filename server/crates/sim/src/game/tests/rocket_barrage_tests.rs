@@ -1,6 +1,6 @@
 use super::fixtures::*;
 use super::*;
-use crate::game::mortar::HALF_TURN_TICKS;
+
 use crate::game::services::dist2;
 
 fn fixture(oil: u32) -> (Game, u32, (f32, f32)) {
@@ -198,7 +198,7 @@ fn barrage_click_waits_for_a_truck_facing_away_then_fires_once() {
     order_barrage(&mut game, launcher, target);
 
     let mut launches = 0;
-    for _ in 0..=config::ROCKET_BARRAGE_UNLOAD_TICKS + HALF_TURN_TICKS + 4 {
+    for _ in 0..=config::ROCKET_BARRAGE_UNLOAD_TICKS + config::TICK_HZ * 15 + 4 {
         for (player, events) in game.tick() {
             if player == 1 {
                 launches += events
@@ -237,7 +237,7 @@ fn queued_move_behind_turning_barrage_waits_for_the_unload() {
     );
 
     let mut first_launch_tick = None;
-    for elapsed in 0..=HALF_TURN_TICKS + 2 {
+    for elapsed in 0..=config::TICK_HZ * 15 + 2 {
         let events = game.tick();
         if events.iter().any(|(player, events)| {
             *player == 1
@@ -254,6 +254,16 @@ fn queued_move_behind_turning_barrage_waits_for_the_unload() {
         "the turning barrage never launched"
     );
 
+    let firing_position = game
+        .state
+        .entities
+        .get(launcher)
+        .map(|e| (e.pos_x, e.pos_y))
+        .unwrap();
+    assert_ne!(
+        firing_position, start,
+        "the truck must drive to align its hull"
+    );
     for _ in 0..config::ROCKET_BARRAGE_UNLOAD_TICKS {
         let position = game
             .state
@@ -262,7 +272,7 @@ fn queued_move_behind_turning_barrage_waits_for_the_unload() {
             .map(|entity| (entity.pos_x, entity.pos_y))
             .unwrap();
         assert_eq!(
-            position, start,
+            position, firing_position,
             "the pre-queued move interrupted the unload"
         );
         game.tick();
@@ -701,4 +711,79 @@ fn rack_projection_is_public_only_when_truck_is_visible() {
         view.abilities.is_empty(),
         "physical rounds must not expose private cooldowns"
     );
+}
+
+#[test]
+fn barrage_drives_to_a_valid_firing_pose_from_multiple_bearings_and_ranges() {
+    for degrees in [0.0_f32, 9.0, 11.0, 45.0, 90.0, 180.0, -90.0, -179.0] {
+        for target_offset in [8.0_f32, 100.0, 384.0, 1500.0] {
+            let (mut game, launcher, _) = fixture(0);
+            let start = game.state.map.tile_center(8, 8);
+            let target = (start.0 + target_offset, start.1);
+            game.state
+                .entities
+                .get_mut(launcher)
+                .unwrap()
+                .set_facing(degrees.to_radians());
+            order_barrage(&mut game, launcher, target);
+            let mut fired = false;
+            for _ in 0..config::TICK_HZ * 30 {
+                let prior = game
+                    .state
+                    .entities
+                    .get(launcher)
+                    .map(|e| (e.pos_x, e.pos_y, e.facing()))
+                    .unwrap();
+                let events = game.tick();
+                let after = game.state.entities.get(launcher).unwrap();
+                if after.facing() != prior.2 {
+                    assert!(
+                        (after.pos_x - prior.0).hypot(after.pos_y - prior.1) > 0.01,
+                        "truck pivoted in place"
+                    );
+                }
+                if events.iter().any(|(player, events)| {
+                    *player == 1
+                        && events
+                            .iter()
+                            .any(|event| matches!(event, Event::MortarLaunch { rocket: true, .. }))
+                }) {
+                    let e = game.state.entities.get(launcher).unwrap();
+                    let bearing = (target.1 - e.pos_y).atan2(target.0 - e.pos_x);
+                    assert!(
+                        ability::barrage_facing_ready(e.facing(), bearing),
+                        "fired outside ten degrees"
+                    );
+                    assert!(crate::game::services::ability_orders::caster_in_range(
+                        &game.state.map,
+                        &game.state.entities,
+                        launcher,
+                        ability::AbilityKind::Barrage,
+                        target.0,
+                        target.1
+                    ));
+                    if degrees.abs() > 10.0 {
+                        assert_ne!((e.pos_x, e.pos_y), start);
+                    }
+                    fired = true;
+                    break;
+                }
+            }
+            assert!(
+                fired,
+                "never fired: angle={degrees}, distance={target_offset}, entity={:?}",
+                game.state.entities.get(launcher)
+            );
+        }
+    }
+}
+
+#[test]
+fn barrage_ten_degree_tolerance_wraps_at_pi() {
+    assert!(ability::barrage_facing_ready(
+        179.0_f32.to_radians(),
+        -179.0_f32.to_radians()
+    ));
+    assert!(ability::barrage_facing_ready(0.0, 9.99_f32.to_radians()));
+    assert!(!ability::barrage_facing_ready(0.0, 10.01_f32.to_radians()));
 }

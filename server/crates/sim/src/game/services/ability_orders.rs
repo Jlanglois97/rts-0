@@ -711,6 +711,9 @@ pub(crate) fn world_ability_facing_ready(
         return false;
     }
     let target_angle = (y - e.pos_y).atan2(x - e.pos_x);
+    if ability == AbilityKind::Barrage {
+        return ability::barrage_facing_ready(e.facing(), target_angle);
+    }
     rotate_mortar_for_fire(e, target_angle)
 }
 
@@ -735,6 +738,9 @@ pub(crate) fn world_ability_current_facing_ready(
         return false;
     }
     let target_angle = (y - e.pos_y).atan2(x - e.pos_x);
+    if ability == AbilityKind::Barrage {
+        return ability::barrage_facing_ready(e.facing(), target_angle);
+    }
     mortar_current_facing_ready(e, target_angle)
 }
 
@@ -891,8 +897,13 @@ pub(crate) fn staging_point(
     if !len.is_finite() {
         return None;
     }
-    let is_artillery_fire = matches!(ability, AbilityKind::PointFire | AbilityKind::BlanketFire);
-    let margin = if is_artillery_fire {
+    let is_artillery_fire = matches!(
+        ability,
+        AbilityKind::PointFire | AbilityKind::BlanketFire | AbilityKind::Barrage
+    );
+    let margin = if ability == AbilityKind::Barrage {
+        config::TILE_SIZE as f32 * 2.0
+    } else if is_artillery_fire {
         config::TILE_SIZE as f32 * 0.75
     } else {
         (caster.radius() * 0.25).max(1.0)
@@ -947,6 +958,9 @@ pub(crate) fn staging_point(
         }
         let sx = x + dir_x / dir_len * staging_distance;
         let sy = y + dir_y / dir_len * staging_distance;
+        if ability == AbilityKind::Barrage && !map.contains_world_point(sx, sy) {
+            return None;
+        }
         let (sx, sy) = SmokeCloudStore::clamp_point_to_map(map, sx, sy)?;
         let distance = (sx - x).hypot(sy - y);
         (distance.is_finite() && distance >= min_range_px && distance <= range_px)

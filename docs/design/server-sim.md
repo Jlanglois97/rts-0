@@ -1319,6 +1319,15 @@ spatial indexes across later mutations.
 
 ### 3.5 Command planning and queued order semantics
 
+Rocket Truck barrage orders require the target to be within the existing 10–44 tile
+range and within ±10° of the hull facing. Range approach uses the ordinary ability path;
+terminal positioning samples collision-checked forward/reverse driving arcs until both
+conditions hold. The truck stops before launching and remains committed through its unload.
+The rack does not turn the hull in place. This reuses the ability order and movement state;
+there is no new wire order or checkpoint field. Terminal positioning is a local search, so
+crowded or blocked firing positions can still require a manual move.
+
+
 Entrenchment research takes 20 seconds.
 
 Deployed anti-tank guns acquire and retain only targets inside their fixed setup cone. Their body
