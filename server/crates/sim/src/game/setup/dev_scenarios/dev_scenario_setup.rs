@@ -29,16 +29,14 @@ impl DevScenarioSetup {
     pub fn command(&self) -> SimCommand {
         match self.order {
             DevScenarioOrder::RecordedCommands(ref commands) => commands[0].1.clone(),
-            DevScenarioOrder::Move
-            | DevScenarioOrder::MoveSequence {
-                sequence: &[],
-                ..
-            } => SimCommand::Move {
-                units: self.units.clone(),
-                x: self.goal.0,
-                y: self.goal.1,
-                queued: false,
-            },
+            DevScenarioOrder::Move | DevScenarioOrder::MoveSequence { sequence: &[], .. } => {
+                SimCommand::Move {
+                    units: self.units.clone(),
+                    x: self.goal.0,
+                    y: self.goal.1,
+                    queued: false,
+                }
+            }
             DevScenarioOrder::MoveSequence { sequence, .. } => {
                 let (_, (x, y)) = sequence[0];
                 SimCommand::Move {
@@ -66,10 +64,7 @@ impl DevScenarioSetup {
     pub fn scheduled_commands(&self) -> Vec<(u32, SimCommand)> {
         match self.order {
             DevScenarioOrder::RecordedCommands(ref commands) => commands.clone(),
-            DevScenarioOrder::MoveSequence {
-                sequence: &[],
-                ..
-            } => {
+            DevScenarioOrder::MoveSequence { sequence: &[], .. } => {
                 vec![(self.issue_after_ticks, self.command())]
             }
             DevScenarioOrder::MoveSequence { sequence, .. } => sequence

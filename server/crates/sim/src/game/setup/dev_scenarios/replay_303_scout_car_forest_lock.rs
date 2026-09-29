@@ -110,12 +110,7 @@ mod tests {
         assert_eq!(setup.game.tick_count(), REPLAY_START_TICK);
         assert_eq!(setup.game.state.entities.iter().count(), GROUP.len());
         assert_eq!(setup.game.state.map.no_vehicle_tiles.len(), 21);
-        assert!(setup
-            .game
-            .state
-            .players
-            .iter()
-            .all(|player| !player.is_ai));
+        assert!(setup.game.state.players.iter().all(|player| !player.is_ai));
 
         let schedule = setup.scheduled_commands_with_admission();
         let mut next_command = 0;
