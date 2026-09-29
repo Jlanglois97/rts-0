@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(cost(EntityKind::Rifleman), (35, 0));
         assert_eq!(cost(EntityKind::Panzerfaust), (55, 10));
         assert_eq!(cost(EntityKind::ScoutCar), (125, 60));
-        assert_eq!(cost(EntityKind::ScoutPlane), (50, 75));
+        assert_eq!(cost(EntityKind::ScoutPlane), (0, 0));
         assert_eq!(cost(EntityKind::Tank), (425, 175));
         assert_eq!(cost(EntityKind::CommandCar), (150, 85));
         assert_eq!(cost(EntityKind::MortarTeam), (100, 40));

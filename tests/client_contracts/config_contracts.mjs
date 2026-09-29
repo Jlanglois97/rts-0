@@ -100,8 +100,8 @@ import { CommandInteraction } from "../../client/src/command_interaction.js";
     "steelworks protocol kind should present as Gun Works",
   );
   assert(
-    STATS[KIND.SCOUT_PLANE].cost.steel === 50 &&
-      STATS[KIND.SCOUT_PLANE].cost.oil === 75 &&
+    STATS[KIND.SCOUT_PLANE].cost.steel === 0 &&
+      STATS[KIND.SCOUT_PLANE].cost.oil === 0 &&
       SCOUT_PLANE_SPEED_PX_PER_TICK === 2.6 &&
       STATS[KIND.SCOUT_PLANE].sight === 19 &&
       STATS[KIND.SCOUT_PLANE].supply === 0 &&
@@ -118,14 +118,10 @@ import { CommandInteraction } from "../../client/src/command_interaction.js";
       ABILITIES[ABILITY.SCOUT_PLANE].hotkey === "C" &&
       ABILITIES[ABILITY.SCOUT_PLANE].requires == null &&
       ABILITIES[ABILITY.SCOUT_PLANE].upgradeRequirement === UPGRADE.SCOUT_PLANE_UNLOCK &&
-      ABILITIES[ABILITY.SCOUT_PLANE].cost.steel === 50 &&
-      ABILITIES[ABILITY.SCOUT_PLANE].cost.oil === 75 &&
-      ABILITIES[ABILITY.SCOUT_PLANE].carrierCosts[KIND.RESOURCE_DEPOT].steel === 38 &&
-      ABILITIES[ABILITY.SCOUT_PLANE].carrierCosts[KIND.RESOURCE_DEPOT].oil === 56 &&
-      ABILITIES[ABILITY.SCOUT_PLANE].carrierCosts[KIND.COMMAND_CAR].steel === 63 &&
-      ABILITIES[ABILITY.SCOUT_PLANE].carrierCosts[KIND.COMMAND_CAR].oil === 94 &&
+      ABILITIES[ABILITY.SCOUT_PLANE].cost.steel === 0 &&
+      ABILITIES[ABILITY.SCOUT_PLANE].cost.oil === 0 &&
       ABILITIES[ABILITY.SCOUT_PLANE].durationTicks === 900,
-    "Resource Depot and Command Car expose carrier-priced Scout Plane sorties on the C slot",
+    "Resource Depot and Command Car expose free Scout Plane sorties on the C slot",
   );
   assert(
     Array.isArray(STATS[KIND.TRAINING_CENTRE].requires),
@@ -413,7 +409,7 @@ import { CommandInteraction } from "../../client/src/command_interaction.js";
     "Smoke Plus research cost and time mirror server",
   );
   const scoutPlaneResearch = UPGRADES[UPGRADE.SCOUT_PLANE_UNLOCK];
-  assert(scoutPlaneResearch.cost.steel === 50 && scoutPlaneResearch.cost.oil === 100, "Scout Plane research costs mirror server");
+  assert(scoutPlaneResearch.cost.steel === 100 && scoutPlaneResearch.cost.oil === 200, "Scout Plane research costs mirror server");
   assert(scoutPlaneResearch.researchTicks === SCOUT_PLANE_UNLOCK_RESEARCH_TICKS && SCOUT_PLANE_UNLOCK_RESEARCH_TICKS === TICK_HZ * 20, "Scout Plane research takes 20 seconds");
   assert(
     ABILITIES[ABILITY.SMOKE].upgradedRadiusTiles === SMOKE_PLUS_CLOUD_RADIUS_TILES &&

@@ -1094,20 +1094,20 @@ withFakeHudDocument(({ FakeElement }) => {
   const resourceDepotScoutPlaneCard = buildCommandCardDescriptors(commandCardCtx({
     selection: [scoutPlaneResourceDepot],
     entities: [scoutPlaneResourceDepot],
-    resources: { steel: 38, oil: 56, supplyUsed: 0, supplyCap: 10 },
+    resources: { steel: 0, oil: 0, supplyUsed: 0, supplyCap: 10 },
     upgrades: [UPGRADE.SCOUT_PLANE_UNLOCK],
   }));
   const depotScoutPlaneAbility = buttonByLabel(resourceDepotScoutPlaneCard, "Scout Plane");
   assert(depotScoutPlaneAbility.slotIndex === 8, "Resource Depot Scout Plane ability should use the C slot");
   assert(depotScoutPlaneAbility.intent.readyIds.join(",") === "70", "Scout Plane ability should use the selected Resource Depot");
-  assert(depotScoutPlaneAbility.cost.steel === 38 && depotScoutPlaneAbility.cost.oil === 56, "Resource Depot Scout Plane should show its 25%-discounted 38/56 cost");
+  assert(depotScoutPlaneAbility.cost.steel === 0 && depotScoutPlaneAbility.cost.oil === 0, "Resource Depot Scout Plane should show zero resource cost");
   assert(depotScoutPlaneAbility.enabled, "Resource Depot Scout Plane ability should enable after research");
 
   const busyScoutPlaneDepot = { ...scoutPlaneResourceDepot, prodQueue: 1 };
   const busyDepotCard = buildCommandCardDescriptors(commandCardCtx({
     selection: [busyScoutPlaneDepot],
     entities: [busyScoutPlaneDepot],
-    resources: { steel: 38, oil: 56, supplyUsed: 0, supplyCap: 10 },
+    resources: { steel: 0, oil: 0, supplyUsed: 0, supplyCap: 10 },
     upgrades: [UPGRADE.SCOUT_PLANE_UNLOCK],
   }));
   assert(buttonByLabel(busyDepotCard, "Scout Plane").slotIndex === 8, "busy Resource Depot keeps Scout Plane on C");
@@ -1122,7 +1122,7 @@ withFakeHudDocument(({ FakeElement }) => {
       { ability: ABILITY.SCOUT_PLANE, cooldownLeft: 0, remainingUses: null },
     ],
   };
-  const scoutPlaneResources = { steel: 63, oil: 94, supplyUsed: 0, supplyCap: 10 };
+  const scoutPlaneResources = { steel: 0, oil: 0, supplyUsed: 0, supplyCap: 10 };
   const researchedScoutPlane = { resources: scoutPlaneResources, upgrades: [UPGRADE.SCOUT_PLANE_UNLOCK] };
   const commandCarScoutPlaneCard = buildCommandCardDescriptors(commandCardCtx({ selection: [commandCar], entities: [scoutPlaneResourceDepot, commandCar], ...researchedScoutPlane }));
   const scoutPlaneAbility = buttonByLabel(commandCarScoutPlaneCard, "Scout Plane");
@@ -1131,8 +1131,8 @@ withFakeHudDocument(({ FakeElement }) => {
   assert(scoutPlaneAbility.intent.type === "ability", "Scout Plane button should arm an ability target");
   assert(scoutPlaneAbility.intent.targetMode === "worldPoint", "Scout Plane ability should target a world point");
   assert(scoutPlaneAbility.intent.readyIds.join(",") === "74", "Scout Plane ability should use the selected Command Car");
-  assert(scoutPlaneAbility.cost.steel === 63 && scoutPlaneAbility.cost.oil === 94, "Command Car Scout Plane should show its 25%-increased 63/94 cost");
-  assert(scoutPlaneAbility.enabled, "Scout Plane ability should enable with sufficient resources");
+  assert(scoutPlaneAbility.cost.steel === 0 && scoutPlaneAbility.cost.oil === 0, "Command Car Scout Plane should show zero resource cost");
+  assert(scoutPlaneAbility.enabled, "Scout Plane ability should enable with zero resources");
 
   const unresearchedScoutPlaneCard = buildCommandCardDescriptors(commandCardCtx({ selection: [commandCar], entities: [commandCar], resources: scoutPlaneResources }));
   const unresearchedScoutPlane = buttonByLabel(unresearchedScoutPlaneCard, "Scout Plane");
@@ -1145,16 +1145,6 @@ withFakeHudDocument(({ FakeElement }) => {
   }));
   const noResourceDepotScoutPlane = buttonByLabel(noResourceDepotScoutPlaneCard, "Scout Plane");
   assert(noResourceDepotScoutPlane.enabled, "Scout Plane ability should not require a completed Resource Depot");
-
-  const oilBlockedScoutPlaneCard = buildCommandCardDescriptors(commandCardCtx({
-    selection: [commandCar], entities: [scoutPlaneResourceDepot, commandCar],
-    resources: { steel: 63, oil: 93, supplyUsed: 0, supplyCap: 10 },
-    upgrades: [UPGRADE.SCOUT_PLANE_UNLOCK],
-  }));
-  const oilBlockedScoutPlane = buttonByLabel(oilBlockedScoutPlaneCard, "Scout Plane");
-  assert(!oilBlockedScoutPlane.enabled, "Scout Plane ability should disable when oil is short");
-  assert(oilBlockedScoutPlane.unaffordable, "resource-blocked Scout Plane ability should stay clickable for feedback");
-  assert(oilBlockedScoutPlane.title === "Not enough resources", "Scout Plane resource-blocked tooltip should name resources");
 
   const activeScoutPlane = {
     id: 75,

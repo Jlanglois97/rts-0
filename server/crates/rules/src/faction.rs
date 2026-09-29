@@ -1164,11 +1164,11 @@ mod tests {
         );
         assert_eq!(
             ability_cost_for_carrier(AbilityKind::ScoutPlane, SCOUT_PLANE_RESOURCE_DEPOT_CARRIER),
-            ResourceCost::new(38, 56)
+            ResourceCost::new(0, 0)
         );
         assert_eq!(
             ability_cost_for_carrier(AbilityKind::ScoutPlane, SCOUT_PLANE_COMMAND_CAR_CARRIER),
-            ResourceCost::new(63, 94)
+            ResourceCost::new(0, 0)
         );
 
         let point_fire = CURRENT_CATALOG.ability(AbilityKind::PointFire).unwrap();
