@@ -279,7 +279,20 @@ pub(super) fn issue_frontal_wave(
         return None;
     }
 
-    let staged = if profile.frontal_wave.line_staging {
+    // The current Jeff holds its armor on the home post once that has moved off the main's line:
+    // toward the natural, or kept after the main's steel ran out.
+    let home_post = memory
+        .home_post
+        .filter(|post| uses_current_jeffs_ai_policy(profile.id) && !post.on_main_line);
+    let staged = if let Some(post) = home_post {
+        defense::stage_defensive_line_at(
+            actions,
+            observation,
+            &plan.ready_units,
+            post.center(),
+            post.facing(),
+        )
+    } else if profile.frontal_wave.line_staging {
         stage_main_steel_defensive_line(
             actions,
             observation,
@@ -362,6 +375,45 @@ pub(super) fn sync_containment_recovery(
 }
 
 /// End the current push: the next one assembles at the regroup point, one Tank larger.
+/// A launched push this small comes home when enemy Tanks shelling a base outnumber the home Tanks.
+const SMALL_PUSH_TANKS: usize = 4;
+
+/// Bring a small launched push home to the home post (the HQ without one). It re-forms from there
+/// like a push that fell back, but a recall is not a failed push, so the next push is no larger.
+/// In the lost games 2-4 Tanks sat out at the enemy's bases while 2-6 AI Tanks took the natural.
+pub(super) fn recall_small_push_home(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    memory: &mut AiDecisionMemory,
+) -> Option<Vec<u32>> {
+    let push = &memory.containment;
+    if !push.wave_launched
+        || push.recovery_active
+        || push.active_tanks.is_empty()
+        || push.active_tanks.len() > SMALL_PUSH_TANKS
+        || memory.enemy_main_destroyed
+    {
+        return None;
+    }
+    let owned: BTreeSet<u32> = observation.owned.iter().map(|unit| unit.id).collect();
+    let units: Vec<u32> = push
+        .active_tanks
+        .iter()
+        .copied()
+        .chain(push.active_scout)
+        .chain(push.active_riflemen.iter().copied())
+        .filter(|id| owned.contains(id))
+        .collect();
+    let home = memory.home_post.map_or_else(
+        || tile_center(observation.own_start_tile, observation.map.tile_size),
+        |post| post.center(),
+    );
+    let repush_count = memory.containment.repush_count;
+    begin_containment_recovery(memory);
+    memory.containment.repush_count = repush_count;
+    actions::move_units(actions, units, home.0, home.1)
+}
+
 fn begin_containment_recovery(memory: &mut AiDecisionMemory) {
     memory.containment.repush_count = memory.containment.repush_count.saturating_add(1);
     memory.containment.recovery_active = true;
@@ -629,7 +681,10 @@ fn issue_expansion_containment_wave(
             0
         };
         let launch_outnumbered = memory.recent_enemy_tanks() + lead_needed > tanks.len();
-        let assembly_ready = assembled && !river_opening_guard && !launch_outnumbered;
+        // Nor while enemy Tanks shelling a base outnumber the home Tanks near them.
+        let home_outgunned = push_uses_available_armor && memory.home_outgunned;
+        let assembly_ready =
+            assembled && !river_opening_guard && !launch_outnumbered && !home_outgunned;
         if !assembly_ready {
             if formation_command_due(memory, observation.tick) {
                 issue_containment_formation(actions, observation, &formation, false);

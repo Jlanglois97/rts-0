@@ -123,6 +123,15 @@ pub(crate) struct AiDecisionMemory {
     /// How many enemy Tanks were in an attack on Jeff's bases, by tick, over the last
     /// `ENEMY_ATTACK_MEMORY_TICKS`.
     pub(super) enemy_attack_sightings: BTreeMap<u32, usize>,
+    /// Jeff's home Tanks (see `home_armor`): the main's steel centre last seen, which outlives
+    /// the steel; this decision's home post; whether Tanks shelling a base outnumber the home Tanks
+    /// that could answer them; where each Tank stood at the last decision; and Tanks recently sent
+    /// to the post, by tick.
+    pub(super) home_steel_anchor: Option<(i32, i32)>,
+    pub(super) home_post: Option<super::home_armor::HomePost>,
+    pub(super) home_outgunned: bool,
+    pub(super) home_tank_positions: BTreeMap<u32, (i32, i32)>,
+    pub(super) home_tank_orders: BTreeMap<u32, u32>,
     pub(super) home_defensive_tank: Option<u32>,
     pub(super) home_defensive_tank_assigned_once: bool,
     pub(super) enemy_natural_resource_depot: Option<u32>,
@@ -159,6 +168,11 @@ impl AiDecisionMemory {
             trap_order: None,
             enemy_tank_sightings: BTreeMap::new(),
             enemy_attack_sightings: BTreeMap::new(),
+            home_steel_anchor: None,
+            home_post: None,
+            home_outgunned: false,
+            home_tank_positions: BTreeMap::new(),
+            home_tank_orders: BTreeMap::new(),
             home_defensive_tank: None,
             home_defensive_tank_assigned_once: false,
             enemy_natural_resource_depot: None,
@@ -396,6 +410,10 @@ impl AiDecisionMemory {
                 })
                 .count()
         });
+        // Tanks shelling a base from outside the local defense zone are attacking it too.
+        let shelling = super::defense::tank_siege_contact(observation)
+            .map_or(0, |siege| siege.target_ids.len());
+        let attacking = attacking.max(shelling);
         if attacking > 0 {
             self.enemy_attack_sightings.insert(tick, attacking);
         }

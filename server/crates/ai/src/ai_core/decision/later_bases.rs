@@ -104,6 +104,11 @@ impl LaterBases {
     pub(super) fn target_bases(&self) -> usize {
         REQUIRED_BASES_BEFORE_DEPLETION + self.unlocking_depots.len()
     }
+
+    /// The site being taken, or the new Depot its guards still cover.
+    pub(super) fn covered_site(&self) -> Option<(u32, u32)> {
+        self.guard_site
+    }
 }
 
 const REQUIRED_BASES_BEFORE_DEPLETION: usize = 3;
@@ -307,9 +312,9 @@ where
 /// Tanks this close to the HQ count toward the main's reserve.
 const MAIN_GARRISON_RADIUS_TILES: f32 = 16.0;
 
-/// Tanks at the main: near the HQ and neither pushing nor guarding a new base. The home Tank
-/// counts. Tanks left at other bases do not: in one lost game nine Tanks were "home" by count,
-/// two of them at the main, and four AI 2.1 Tanks walked in to the HQ.
+/// Tanks at the main: near the HQ or at the home post, and neither pushing nor guarding a new base.
+/// The home Tank counts. Tanks left at other bases do not: in one lost game nine Tanks were "home"
+/// by count, two of them at the main, and four AI 2.1 Tanks walked in to the HQ.
 pub(super) fn main_tank_ids(observation: &AiObservation, memory: &AiDecisionMemory) -> Vec<u32> {
     let ts = observation.map.tile_size as f32;
     let hq = geometry::tile_center(observation.own_start_tile, observation.map.tile_size);
@@ -318,10 +323,13 @@ pub(super) fn main_tank_ids(observation: &AiObservation, memory: &AiDecisionMemo
         .into_iter()
         .filter(|id| !memory.later_bases.guards.contains(id))
         .filter(|id| {
-            observation
-                .owned
-                .iter()
-                .any(|unit| unit.id == *id && dist2(unit.x, unit.y, hq.0, hq.1) <= radius2)
+            observation.owned.iter().any(|unit| {
+                unit.id == *id
+                    && (dist2(unit.x, unit.y, hq.0, hq.1) <= radius2
+                        || memory
+                            .home_post
+                            .is_some_and(|post| post.contains(observation, (unit.x, unit.y))))
+            })
         })
         .collect()
 }
@@ -342,6 +350,8 @@ pub(super) fn recall_tanks_to_main(
         return Vec::new();
     }
     let hq = geometry::tile_center(observation.own_start_tile, observation.map.tile_size);
+    // They go to the home post, where the home Tanks stand, rather than to the HQ.
+    let home = memory.home_post.map_or(hq, |post| post.center());
     let mut away: Vec<&AiEntitySummary> = free_tank_ids(observation, memory)
         .into_iter()
         .filter(|id| {
@@ -361,8 +371,8 @@ pub(super) fn recall_tanks_to_main(
     actions::move_units(
         actions,
         away.iter().take(short).map(|unit| unit.id),
-        hq.0,
-        hq.1,
+        home.0,
+        home.1,
     )
     .unwrap_or_default()
 }

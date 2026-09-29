@@ -112,6 +112,29 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         };
     }
 
+    // Enemy Tanks shelling a base from beyond the zone: the home Tanks answer them together from
+    // firing range, or, too few to match them, stay put rather than go in one at a time. Either
+    // way nobody searches the damaged building: the shooter is in sight, and the search sent
+    // Riflemen out against Tanks while the Tanks stood out of range.
+    if stationary_tanks {
+        if let Some(siege) = tank_siege(observation, local_defenders) {
+            if !siege.matched() {
+                return None;
+            }
+            return stationary_tank_defense(
+                actions,
+                observation,
+                memory,
+                siege.responders,
+                local_defenders,
+                map_analysis,
+                &siege.contact.target_ids,
+                siege.target,
+                true,
+            );
+        }
+    }
+
     // A Resource Depot sees one tile, so attackers shooting a building from range are often in
     // fog. Treat the building losing HP as the contact so defenders go and find them.
     if let Some(position) = damaged_building {
@@ -160,6 +183,72 @@ pub(in crate::ai_core::decision) fn respond_to_local_incident(
         incident.position.0,
         incident.position.1,
     )
+}
+
+/// Home Tanks this close to the Tank being answered answer it.
+const SIEGE_RESPONSE_TILES: f32 = 32.0;
+/// Enemy Tanks this close to the Tank being answered count against the home Tanks.
+const SIEGE_ODDS_TILES: f32 = 16.0;
+
+/// Enemy Tanks within reach of one of the base's buildings, the one to answer first, and the home
+/// Tanks near enough to answer.
+pub(in crate::ai_core::decision) struct TankSiege {
+    pub(in crate::ai_core::decision) contact: LocalDefenseContact,
+    pub(in crate::ai_core::decision) target: u32,
+    pub(in crate::ai_core::decision) responders: Vec<u32>,
+    pub(in crate::ai_core::decision) enemy_tanks: usize,
+}
+
+impl TankSiege {
+    /// Whether the home Tanks at least match the enemy Tanks around the target.
+    pub(in crate::ai_core::decision) fn matched(&self) -> bool {
+        self.responders.len() >= self.enemy_tanks
+    }
+}
+
+/// Enemy Tanks in reach of the base and the home Tanks (from `local_defenders`) that could answer
+/// them. Tanks inside the local defense zone count too; the zone's own response runs first.
+pub(in crate::ai_core::decision) fn tank_siege(
+    observation: &AiObservation,
+    local_defenders: &[u32],
+) -> Option<TankSiege> {
+    let contact = super::envelope::tank_siege_contact(observation)?;
+    let target = primary_defense_target(observation, &contact.target_ids)?;
+    let target_position = observation
+        .visible_enemies
+        .iter()
+        .find(|enemy| enemy.id == target)
+        .map(|enemy| (enemy.x, enemy.y))?;
+    let ts = observation.map.tile_size as f32;
+    let responders = observation
+        .owned
+        .iter()
+        .filter(|unit| {
+            unit.kind == EntityKind::Tank
+                && unit.is_complete
+                && unit.hp > 0
+                && local_defenders.contains(&unit.id)
+                && dist2(unit.x, unit.y, target_position.0, target_position.1)
+                    <= squared(SIEGE_RESPONSE_TILES * ts)
+        })
+        .map(|unit| unit.id)
+        .collect();
+    let enemy_tanks = observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| {
+            enemy.kind == EntityKind::Tank
+                && enemy.hp > 0
+                && dist2(enemy.x, enemy.y, target_position.0, target_position.1)
+                    <= squared(SIEGE_ODDS_TILES * ts)
+        })
+        .count();
+    Some(TankSiege {
+        contact,
+        target,
+        responders,
+        enemy_tanks,
+    })
 }
 
 /// Infantry already within this much of its reach of a raider counts as covering the raid.

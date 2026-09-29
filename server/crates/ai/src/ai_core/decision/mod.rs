@@ -30,6 +30,7 @@ mod expansion;
 mod expansion_security;
 mod frontal;
 mod geometry;
+mod home_armor;
 mod jeff;
 mod later_bases;
 mod memory;
@@ -238,6 +239,15 @@ where
         active_production_policy(observation, profile)
     };
     let attack_policy = active_attack_policy(observation, profile);
+    if uses_current_jeffs_ai_policy(profile.id) {
+        home_armor::update_home_post(
+            observation,
+            memory,
+            map_analysis,
+            facts.nearest_public_enemy_base,
+            attack_policy.stage_distance_tiles,
+        );
+    }
     let mut idle_builders = facts.idle_workers.clone();
     let mut gathering_builders = facts.gathering_workers.clone();
     idle_builders.sort_unstable();
@@ -981,6 +991,20 @@ where
                 intents.push(AiIntent::Attack { units });
                 jeff_layered_home_defense = true;
             }
+            // Enemy Tanks in reach of a base outnumber the home Tanks that could answer them: a
+            // small push comes home rather than lose the base behind it, and none leaves meanwhile.
+            if uses_current_jeffs_ai_policy(profile.id) {
+                memory.home_outgunned = defense::tank_siege(observation, &local_defenders)
+                    .is_some_and(|siege| !siege.matched());
+                if memory.home_outgunned {
+                    if let Some(units) =
+                        frontal::recall_small_push_home(&mut actions, observation, memory)
+                    {
+                        local_defense_assigned.extend(units.iter().copied());
+                        intents.push(AiIntent::Move { units });
+                    }
+                }
+            }
         } else if jeff_layered_home_defense {
             let local_targets: Vec<u32> = defense::local_defense_targets(observation)
                 .into_iter()
@@ -1177,7 +1201,21 @@ where
             }
         }
 
-        if let Some(enemy_base) = facts.nearest_public_enemy_base {
+        // The current Jeff's home Tank waits behind the home post once that has moved off the
+        // main's line; it sat beside the HQ all game while the natural was shelled.
+        let jeff_home_post = memory
+            .home_post
+            .filter(|post| uses_current_jeffs_ai_policy(profile.id) && !post.on_main_line);
+        if let Some((tank_id, post)) = memory.home_defensive_tank.zip(jeff_home_post) {
+            if !local_defense_assigned.contains(&tank_id) {
+                let point = post.home_tank_point(observation);
+                if let Some(units) =
+                    stage_defensive_tank_at(&mut actions, observation, tank_id, point)
+                {
+                    intents.push(AiIntent::Stage { units });
+                }
+            }
+        } else if let Some(enemy_base) = facts.nearest_public_enemy_base {
             if let Some(tank_id) = memory.home_defensive_tank {
                 let distance = profile
                     .defensive_machine_gunners
@@ -1279,6 +1317,48 @@ where
                     }
                     intents.push(intent);
                 }
+            }
+        }
+
+        // Last: the current Jeff's resting Tanks with no other orders gather on the home post, so
+        // none sits idle in a corner of the main or out on the map.
+        if uses_current_jeffs_ai_policy(profile.id) {
+            let mut excluded: BTreeSet<u32> = local_defense_assigned.clone();
+            excluded.extend(memory.home_defensive_tank);
+            excluded.extend(forward_defensive_tank);
+            excluded.extend(memory.later_bases.guards.iter().copied());
+            excluded.extend(route_line_reserved.iter().copied());
+            excluded.extend(memory.route_line.picket());
+            excluded.extend(expansion_footprint_blockers.iter().copied());
+            let ordered: BTreeSet<u32> = actions
+                .unit_orders_since(0)
+                .into_iter()
+                .map(|(unit, _)| unit)
+                .collect();
+            let covered_sites: Vec<(f32, f32)> = [
+                memory.later_bases.covered_site(),
+                memory.expansion_security.site,
+            ]
+            .into_iter()
+            .flatten()
+            .filter_map(|site| {
+                geometry::building_center(
+                    site,
+                    EntityKind::ResourceDepot,
+                    observation.map.tile_size,
+                )
+            })
+            .collect();
+            let gathered = home_armor::gather_resting_tanks(
+                &mut actions,
+                observation,
+                memory,
+                &excluded,
+                &ordered,
+                &covered_sites,
+            );
+            if !gathered.is_empty() {
+                intents.push(AiIntent::Move { units: gathered });
             }
         }
     }

@@ -11,14 +11,14 @@ mod route_line;
 mod spacing;
 pub(super) use spacing::{separated_rifle_position, separated_rifle_position_where};
 
-pub(super) use self::envelope::local_defense_contact;
 use self::envelope::{
     defended_building_sites, defended_envelope_center, defended_envelope_support,
     defensive_formation_sites, DefendedBuildingSite,
 };
-pub(super) use self::incident::respond_to_local_incident;
+pub(super) use self::envelope::{local_defense_contact, tank_siege_contact};
 #[cfg(test)]
 pub(super) use self::incident::select_defensive_interceptors;
+pub(super) use self::incident::{respond_to_local_incident, tank_siege};
 #[cfg(test)]
 use self::pocket::{
     defensive_pocket_basis, defensive_pocket_machine_gunner_assignments,
@@ -326,6 +326,34 @@ pub(super) fn stage_main_steel_defensive_line_with_spacing(
         lateral_spacing_tiles,
         formation_slots,
     )?;
+    attack_move_to_line_slots(actions, observation, assignments)
+}
+
+/// Units attack-move to their slots on a line through `line_center` facing `direction`; units
+/// already on their slot get no order.
+pub(super) fn stage_defensive_line_at(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    ready_units: &[u32],
+    line_center: (f32, f32),
+    direction: (f32, f32),
+) -> Option<Vec<u32>> {
+    let assignments = defensive_line_assignments_at(
+        observation,
+        ready_units,
+        line_center,
+        direction,
+        EXPANSION_DEFENSIVE_LINE_SPACING_TILES,
+        ready_units.len(),
+    )?;
+    attack_move_to_line_slots(actions, observation, assignments)
+}
+
+fn attack_move_to_line_slots(
+    actions: &mut AiActionContext<'_>,
+    observation: &AiObservation,
+    assignments: Vec<DefensiveLineAssignment>,
+) -> Option<Vec<u32>> {
     let units_by_id: BTreeMap<u32, &AiEntitySummary> = observation
         .owned
         .iter()
@@ -1289,20 +1317,60 @@ pub(super) fn main_steel_defensive_line_assignments(
         return None;
     }
     let steel_center = main_steel_cluster_center(observation)?;
-    let enemy = (enemy_base.x, enemy_base.y);
-    let (dir_x, dir_y) = normalized_direction(steel_center, enemy)?;
+    let line_center =
+        main_steel_line_center(observation, steel_center, enemy_base, distance_tiles)?;
+    let direction = normalized_direction(steel_center, (enemy_base.x, enemy_base.y))?;
+    defensive_line_assignments_at(
+        observation,
+        ready_units,
+        line_center,
+        direction,
+        lateral_spacing_tiles,
+        formation_slots,
+    )
+}
+
+/// The centre of the main's defensive line: `distance_tiles` from the main's steel toward the
+/// enemy base.
+pub(super) fn main_steel_line_center(
+    observation: &AiObservation,
+    steel_center: (f32, f32),
+    enemy_base: EnemyBaseFact,
+    distance_tiles: f32,
+) -> Option<(f32, f32)> {
+    let (dir_x, dir_y) = normalized_direction(steel_center, (enemy_base.x, enemy_base.y))?;
     let tile_size = observation.map.tile_size as f32;
     if tile_size <= 0.0 {
         return None;
     }
     let front_distance = distance_tiles.max(1.0) * tile_size;
-    let line_center = clamp_to_map(
+    Some(clamp_to_map(
         (
             steel_center.0 + dir_x * front_distance,
             steel_center.1 + dir_y * front_distance,
         ),
         observation.map,
-    );
+    ))
+}
+
+/// Slots on a line through `line_center`, across `direction` (the way the line faces), spaced
+/// `lateral_spacing_tiles` apart and centred on the middle of `formation_slots`.
+pub(super) fn defensive_line_assignments_at(
+    observation: &AiObservation,
+    ready_units: &[u32],
+    line_center: (f32, f32),
+    direction: (f32, f32),
+    lateral_spacing_tiles: f32,
+    formation_slots: usize,
+) -> Option<Vec<DefensiveLineAssignment>> {
+    if ready_units.is_empty() {
+        return None;
+    }
+    let tile_size = observation.map.tile_size as f32;
+    if tile_size <= 0.0 {
+        return None;
+    }
+    let (dir_x, dir_y) = direction;
     let perp = (-dir_y, dir_x);
     let spacing = lateral_spacing_tiles.max(0.0) * tile_size;
     let mut units = ready_units.to_vec();
