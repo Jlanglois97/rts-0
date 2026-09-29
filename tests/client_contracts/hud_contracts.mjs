@@ -1248,8 +1248,7 @@ withFakeHudDocument(({ FakeElement }) => {
     resources: { steel: 0, oil: 0 },
   }));
   const pointFire = buttonByLabel(pointFireCard, "Fire");
-  assert(pointFire.unaffordable, "unaffordable Artillery Fire should stay clickable");
-  assert(pointFire.onUnavailableIntent.type === "playNotEnough", "unaffordable ability should play resource notice");
+  assert(pointFire.enabled && !pointFire.unaffordable, "Artillery Fire should be enabled with zero resources");
   assert(pointFire.intent.targetMode === "worldPoint", "Artillery Fire arms a world-point target");
   assert(!buttonByLabel(pointFireCard, "Blanket Fire"), "legacy Blanket Fire stays off the command card");
 
