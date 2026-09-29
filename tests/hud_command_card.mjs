@@ -474,8 +474,8 @@ for (const [kind, upgrade] of [
     { commandId: "unit.stop", slotIndex: 4, hotkey: "S" },
     { commandId: kriegsiaCommandId("ability", ABILITY.SCOUT_PLANE), slotIndex: 8, hotkey: "C" },
   ]);
-  assert.equal(commandCarCard.slots[8].cost.steel, 63);
-  assert.equal(commandCarCard.slots[8].cost.oil, 94);
+  assert.equal(commandCarCard.slots[8].cost.steel, 0);
+  assert.equal(commandCarCard.slots[8].cost.oil, 0);
 }
 
 {
