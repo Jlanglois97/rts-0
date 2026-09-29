@@ -4,6 +4,11 @@ use super::*;
 const HOME_RIFLES: usize = 4;
 const PARTY_SIZE: usize = 2;
 const SECURE_TICKS: u32 = config::TICK_HZ * 3;
+/// A guard that stops just short of its post, pressed against the natural's steel patches, never
+/// reaches the arrival tolerance. Guards this close to their posts, with nothing hostile near,
+/// secure the site after a longer dwell instead.
+const STUCK_GUARD_TILES: f32 = 1.5;
+const STUCK_GUARD_SECURE_TICKS: u32 = config::TICK_HZ * 15;
 const MIN_PARTY_SEPARATION_TILES: f32 = 2.75;
 const TANK_FRONT_OFFSET_TILES: f32 = 2.75;
 const BUILD_START_TIMEOUT_TICKS: u32 = config::TICK_HZ * 3;
@@ -25,6 +30,8 @@ pub(super) struct ExpansionSecurity {
     pub(super) riflemen: Vec<u32>,
     slots: BTreeMap<u32, usize>,
     secure_since: Option<u32>,
+    /// When both guards were last found near their posts (within `STUCK_GUARD_TILES`).
+    near_since: Option<u32>,
     build_attempt_tick: Option<u32>,
     build_attempt_worker: Option<u32>,
     retry_builder: Option<u32>,
@@ -220,6 +227,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         security.reserve_since = None;
         security.build_attempt_tick = None;
         security.secure_since = None;
+        security.near_since = None;
         security.retry_builder = security.build_attempt_worker.take();
         if failures >= MAX_NATURAL_SITE_FAILURES {
             if let Some(site) = security.site {
@@ -249,6 +257,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
         security.riflemen.clear();
         security.slots.clear();
         security.secure_since = None;
+        security.near_since = None;
         security.build_attempt_tick = None;
         security.build_attempt_worker = None;
         security.retry_builder = None;
@@ -324,6 +333,7 @@ pub(super) fn prepare<F: FnMut(EntityKind, u32, u32) -> bool>(
     let security = &mut memory.expansion_security;
     if security.riflemen != previous {
         security.secure_since = None;
+        security.near_since = None;
     }
     security
         .slots
@@ -647,34 +657,40 @@ pub(super) fn update_and_stage(
     let mut party_positions = Vec::new();
     let mut assignments = Vec::new();
     let mut arrived = security.riflemen.len() == PARTY_SIZE && points.len() == PARTY_SIZE;
+    let mut near = arrived;
     for id in &security.riflemen {
         let Some(point) = security.slots.get(id).and_then(|slot| points.get(*slot)) else {
             arrived = false;
+            near = false;
             continue;
         };
         let Some(unit) = observation.owned.iter().find(|unit| unit.id == *id) else {
             arrived = false;
+            near = false;
             continue;
         };
         party_positions.push((unit.x, unit.y));
-        let close = dist2(unit.x, unit.y, point.0, point.1)
-            <= squared(defense::EXPANSION_DEFENSIVE_LINE_REISSUE_EPS_TILES * ts);
+        let distance2 = dist2(unit.x, unit.y, point.0, point.1);
+        let close = distance2 <= squared(defense::EXPANSION_DEFENSIVE_LINE_REISSUE_EPS_TILES * ts);
         let footprint_clear = !crate::sdk::unit_circle_touches_rect(
             (unit.x, unit.y),
             rts_rules::balance::unit_placement_radius(unit.kind),
             depot_rect,
         );
         assignments.push((*id, *point, close, footprint_clear, unit.state));
-        arrived &= close && footprint_clear && unit.state != AiEntityState::Attack;
+        let in_place = footprint_clear && unit.state != AiEntityState::Attack;
+        arrived &= close && in_place;
+        near &= distance2 <= squared(STUCK_GUARD_TILES * ts) && in_place;
     }
-    arrived = arrived
-        && party_positions.len() == PARTY_SIZE
+    let separated = party_positions.len() == PARTY_SIZE
         && dist2(
             party_positions[0].0,
             party_positions[0].1,
             party_positions[1].0,
             party_positions[1].1,
         ) >= squared(MIN_PARTY_SEPARATION_TILES * ts);
+    arrived = arrived && separated;
+    near = near && separated;
     // On contact, leave the guards unclaimed so local incident handling can use them. Once the
     // area clears, their normal staging orders bring them back to their assigned posts.
     if !contested {
@@ -686,9 +702,20 @@ pub(super) fn update_and_stage(
             }
         }
     }
+    let near_since = if near && !contested {
+        Some(*security.near_since.get_or_insert(observation.tick))
+    } else {
+        security.near_since = None;
+        None
+    };
     if arrived && !contested {
         let since = *security.secure_since.get_or_insert(observation.tick);
         observation.tick.saturating_sub(since) >= SECURE_TICKS
+    } else if let Some(since) = near_since
+        .filter(|since| observation.tick.saturating_sub(*since) >= STUCK_GUARD_SECURE_TICKS)
+    {
+        security.secure_since = Some(since);
+        true
     } else {
         security.secure_since = None;
         false
