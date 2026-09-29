@@ -834,8 +834,8 @@ fn artillery_target_is_owner_only_and_enemy_events_require_current_vision() {
         "enemy should see delayed impact only with current vision at the impact"
     );
     assert!(
-        game.state.players[0].steel <= initial_steel - config::ARTILLERY_AMMO_COST_STEEL,
-        "at least one fired shell should spend steel at fire time"
+        game.state.players[0].steel == initial_steel,
+        "firing shells should not spend steel"
     );
 }
 
@@ -894,8 +894,8 @@ fn packed_artillery_point_fire_auto_sets_up_before_firing() {
     }
     assert!(owner_saw_target, "auto-setup should eventually fire");
     assert!(
-        game.state.players[0].steel <= initial_steel - config::ARTILLERY_AMMO_COST_STEEL,
-        "auto-setup point fire should spend ammo only once the gun is deployed"
+        game.state.players[0].steel == initial_steel,
+        "auto-setup point fire should not spend steel"
     );
 }
 
@@ -1037,7 +1037,7 @@ fn artillery_point_fire_inside_minimum_range_repositions_and_fires_at_clicked_po
     };
     assert!((order.intent.x - too_close.0).abs() < 0.001);
     assert!((order.intent.y - too_close.1).abs() < 0.001);
-    assert!(game.state.players[0].steel <= initial_steel - config::ARTILLERY_AMMO_COST_STEEL);
+    assert!(game.state.players[0].steel == initial_steel);
 }
 
 #[test]

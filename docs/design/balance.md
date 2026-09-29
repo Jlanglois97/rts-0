@@ -453,7 +453,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
 - Artillery uses `ARTILLERY_MIN_RANGE_TILES = 10`, `ARTILLERY_MAX_RANGE_TILES = 35`,
   `ARTILLERY_FIELD_OF_FIRE_RAD = 30 degrees total`, `ARTILLERY_RELOAD_TICKS = 90` (~3s),
   `ARTILLERY_SETUP_TICKS = 180` (~6s setup or teardown), `ARTILLERY_SHELL_DELAY_TICKS = 150` (~5s), and
-  `ARTILLERY_AMMO_COST_STEEL = 5`. It moves at 1.6 px/tick, slightly slower than the
+  `ARTILLERY_AMMO_COST_STEEL = 0` (firing is free). It moves at 1.6 px/tick, slightly slower than the
   Anti-Tank Gun's 1.672 px/tick speed.
   Unified Fire uses a player-selected radius clamped between
   `ARTILLERY_MIN_FIRE_RADIUS_TILES = 4` and `ARTILLERY_BLANKET_RADIUS_TILES = 15` around the stored
@@ -467,7 +467,7 @@ profiles and explicit activation/autocast policy instead of being folded into de
   second, and armored units last. Within each tier it scores aim points by the summed purchase
   value inside its minimum dispersion circle. It sets up
   without abandoning the commanded route, prefers targets inside its deployed field before
-  redeploying, spends the normal 5 steel per shell, retains friendly fire, and resumes movement
+  redeploying, fires without spending steel, retains friendly fire, and resumes movement
   after a one-second no-target grace. Separate guns make independent choices, so overkill is valid.
   Its body length, width, clearance, and selection radius are scaled to 75% of the Tank, matching
   its rendered rig and shrinking both its visual and authoritative gameplay footprint. It costs

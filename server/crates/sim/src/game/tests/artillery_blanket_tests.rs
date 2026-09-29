@@ -124,8 +124,8 @@ fn packed_artillery_fire_auto_sets_up_and_samples_inside_selected_circle() {
         "sampled target should stay inside the selected fire circle"
     );
     assert!(
-        game.state.players[0].steel <= initial_steel - config::ARTILLERY_AMMO_COST_STEEL,
-        "auto-setup blanket fire should spend ammo only once the gun is deployed"
+        game.state.players[0].steel == initial_steel,
+        "auto-setup blanket fire should not spend steel"
     );
 }
 
