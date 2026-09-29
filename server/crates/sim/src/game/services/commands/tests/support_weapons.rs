@@ -247,7 +247,10 @@ fn artillery_point_fire_system_fires_without_steel() {
         config::ARTILLERY_RELOAD_TICKS,
         "firing still applies the normal reload cooldown"
     );
-    assert!(events.values().flatten().all(|event| !matches!(event, Event::Notice { .. })));
+    assert!(events
+        .values()
+        .flatten()
+        .all(|event| !matches!(event, Event::Notice { .. })));
     assert!(
         events
             .values()
@@ -308,7 +311,10 @@ fn artillery_blanket_fire_system_fires_without_steel() {
         config::ARTILLERY_RELOAD_TICKS,
         "blanket firing still applies the normal reload cooldown"
     );
-    assert!(events.values().flatten().all(|event| !matches!(event, Event::Notice { .. })));
+    assert!(events
+        .values()
+        .flatten()
+        .all(|event| !matches!(event, Event::Notice { .. })));
     assert!(
         events
             .values()
