@@ -82,7 +82,6 @@ pub(super) fn select_rifle_escorts(
                 && unit.free_for_combat
                 && !defensive_riflemen.contains(&unit.id)
                 && !memory.expansion_security.riflemen.contains(&unit.id)
-                && !memory.partner_push.active_riflemen.contains(&unit.id)
                 && !memory
                     .route_line
                     .reserved()

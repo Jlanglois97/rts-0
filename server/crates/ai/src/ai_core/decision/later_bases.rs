@@ -376,7 +376,6 @@ fn free_tank_ids(observation: &AiObservation, memory: &AiDecisionMemory) -> Vec<
         .filter(|unit| {
             !memory.containment.active_tanks.contains(&unit.id)
                 && !memory.containment.opening_tanks.contains(&unit.id)
-                && !memory.partner_push.active_tanks.contains(&unit.id)
         })
         .map(|unit| unit.id)
         .collect()
@@ -546,7 +545,6 @@ fn select_guards(observation: &AiObservation, memory: &mut AiDecisionMemory, sit
             Some(unit.id) != home_tank
                 && !memory.containment.active_tanks.contains(&unit.id)
                 && !memory.containment.opening_tanks.contains(&unit.id)
-                && !memory.partner_push.active_tanks.contains(&unit.id)
         })
         .collect();
     candidates.sort_by(|left, right| {

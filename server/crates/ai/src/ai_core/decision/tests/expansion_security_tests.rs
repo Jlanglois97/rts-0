@@ -346,6 +346,66 @@ fn expansion_security_requires_arrival_and_uncontested_dwell() {
 }
 
 #[test]
+fn guards_stuck_just_short_of_their_posts_secure_the_site_after_a_longer_dwell() {
+    let mut obs = security_observation();
+    let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);
+    expansion_security::prepare(
+        &obs,
+        &AiFacts::from_observation(&obs),
+        &JEFFS_AI,
+        &mut memory,
+        None,
+        &mut |_, _, _| true,
+    );
+    let points = expansion_security::positions(&obs, None, &memory.expansion_security);
+    let step = |obs: &AiObservation, memory: &mut AiDecisionMemory| {
+        let facts = AiFacts::from_observation(obs);
+        let mut actions = AiActionContext::new(&facts, SpendBudget::new(1000, 1000, 20, 80));
+        expansion_security::update_and_stage(obs, None, memory, &mut actions)
+    };
+    // Each guard stands a tile short of its post, as one pressed against steel patches does.
+    let site = memory.expansion_security.site.unwrap();
+    let center = building_center(site, EntityKind::ResourceDepot, obs.map.tile_size).unwrap();
+    for (id, point) in memory.expansion_security.riflemen.iter().zip(&points) {
+        let away = geometry::normalized_direction(center, *point).unwrap();
+        let unit = obs.owned.iter_mut().find(|unit| unit.id == *id).unwrap();
+        unit.x = point.0 + away.0 * config::TILE_SIZE as f32;
+        unit.y = point.1 + away.1 * config::TILE_SIZE as f32;
+    }
+    assert!(!step(&obs, &mut memory));
+    obs.tick += config::TICK_HZ * 3;
+    assert!(
+        !step(&obs, &mut memory),
+        "short of the post the usual dwell is not enough"
+    );
+    obs.tick += config::TICK_HZ * 12;
+    assert!(
+        step(&obs, &mut memory),
+        "a longer dwell near the posts secures the site"
+    );
+
+    // Contact near the site restarts the wait.
+    let mut enemy = combat_at(900, EntityKind::Rifleman, points[0].0, points[0].1);
+    enemy.owner = 2;
+    obs.visible_enemies.push(enemy);
+    assert!(!step(&obs, &mut memory));
+    obs.visible_enemies.clear();
+    obs.tick += config::TICK_HZ * 3;
+    assert!(!step(&obs, &mut memory));
+
+    // Farther off than that, the guards are not in place at all.
+    for (id, point) in memory.expansion_security.riflemen.iter().zip(&points) {
+        let away = geometry::normalized_direction(center, *point).unwrap();
+        let unit = obs.owned.iter_mut().find(|unit| unit.id == *id).unwrap();
+        unit.x = point.0 + away.0 * 2.0 * config::TILE_SIZE as f32;
+        unit.y = point.1 + away.1 * 2.0 * config::TILE_SIZE as f32;
+    }
+    assert!(!step(&obs, &mut memory));
+    obs.tick += config::TICK_HZ * 30;
+    assert!(!step(&obs, &mut memory));
+}
+
+#[test]
 fn contested_expansion_guards_are_available_to_local_defense() {
     let mut obs = security_observation();
     let mut memory = AiDecisionMemory::for_profile(&JEFFS_AI);

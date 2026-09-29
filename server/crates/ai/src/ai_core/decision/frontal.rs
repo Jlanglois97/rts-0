@@ -6,7 +6,6 @@ mod formation;
 #[cfg(test)]
 mod formation_tests;
 mod legacy_beta;
-pub(super) mod pincer;
 pub(super) mod smoke;
 
 use self::catch_up::*;
@@ -234,41 +233,18 @@ pub(super) fn issue_frontal_wave(
             && (plan.should_attack() || relaxed_start || containment_active)
         {
             let orders_start = actions.emitted_len();
-            let intent = if uses_current_jeffs_ai_policy(profile.id) {
-                let crossroads =
-                    defense::crossroads_wall_aware_approach_direction(observation).is_some();
-                let group_min = if crossroads {
-                    CROSSROADS_PUSH_MIN_TANKS
-                        .max(memory.recent_enemy_tanks() + CROSSROADS_PUSH_TANK_LEAD)
-                } else {
-                    containment.minimum_tanks_to_continue
-                };
-                pincer::drive_pushes(
-                    actions,
-                    observation,
-                    plan,
-                    enemy_base,
-                    containment,
-                    profile,
-                    map_analysis,
-                    memory,
-                    group_min.max(pincer::PRONG_MIN_TANKS),
-                )
-            } else {
-                issue_expansion_containment_wave(
-                    actions,
-                    observation,
-                    plan,
-                    enemy_base,
-                    containment,
-                    is_jeffs_ai_profile(profile.id),
-                    profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
-                    false,
-                    None,
-                    map_analysis,
-                    memory,
-                )
-            };
+            let intent = issue_expansion_containment_wave(
+                actions,
+                observation,
+                plan,
+                enemy_base,
+                containment,
+                is_jeffs_ai_profile(profile.id),
+                profile.id != JEFFS_AI_PRE_TANK_CATCHUP_ID,
+                uses_current_jeffs_ai_policy(profile.id),
+                map_analysis,
+                memory,
+            );
             note_containment_holds(actions, memory, orders_start);
             if intent.is_some() {
                 return intent;
@@ -329,7 +305,6 @@ pub(super) fn containment_wave_needs_control(memory: &AiDecisionMemory) -> bool 
     memory.containment.wave_launched
         || memory.containment.recovery_active
         || !memory.containment.active_tanks.is_empty()
-        || !memory.partner_push.active_tanks.is_empty()
 }
 
 pub(super) fn sync_containment_recovery(
@@ -456,7 +431,6 @@ fn issue_expansion_containment_wave(
     tight_formation: bool,
     lead_anchor_tank_catchup: bool,
     push_uses_available_armor: bool,
-    prong: Option<pincer::ProngOrders>,
     map_analysis: Option<&AiMapAnalysis>,
     memory: &mut AiDecisionMemory,
 ) -> Option<AiIntent> {
@@ -525,7 +499,6 @@ fn issue_expansion_containment_wave(
                 .home_defensive_tank
                 .into_iter()
                 .chain(memory.later_bases.guards.iter().copied())
-                .chain(memory.partner_push.active_tanks.iter().copied())
                 .collect();
             let mut tanks = actions::select_ready_combat_units_excluding(
                 &observation.owned,
@@ -534,7 +507,6 @@ fn issue_expansion_containment_wave(
             );
             let mut scouts =
                 actions::select_ready_combat_units(&observation.owned, &[EntityKind::ScoutCar]);
-            scouts.retain(|scout| memory.partner_push.active_scout != Some(*scout));
             if !memory.containment.wave_launched {
                 tanks.retain(|tank| plan.ready_units.contains(tank));
                 scouts.retain(|scout| plan.ready_units.contains(scout));
@@ -571,7 +543,6 @@ fn issue_expansion_containment_wave(
                 .chain(memory.later_bases.guards.iter().copied())
                 .collect();
             exclusions.extend(memory.containment.active_tanks.iter().copied());
-            exclusions.extend(memory.partner_push.active_tanks.iter().copied());
             let mut newcomers = actions::select_ready_combat_units_excluding(
                 &observation.owned,
                 &[EntityKind::Tank],
@@ -736,15 +707,7 @@ fn issue_expansion_containment_wave(
     } else {
         containment_points(own_base, objective, observation.map, policy)?
     };
-    // A group of a two-pronged push goes to its own side's point and lines up facing the target
-    // from that side.
-    let tank_point = prong
-        .filter(|_| !endgame_search_active)
-        .map_or(tank_point, |orders| orders.destination);
-    let facing_from = prong
-        .filter(|_| !endgame_search_active)
-        .map_or(own_base, |orders| orders.approach_from);
-    let toward_objective = normalized_direction(facing_from, objective)?;
+    let toward_objective = normalized_direction(own_base, objective)?;
     let tank_assignments = if tight_formation {
         compact_tank_formation_assignments(
             observation,
@@ -770,7 +733,6 @@ fn issue_expansion_containment_wave(
             .get(tank_id)
             .is_some_and(|tank| dist2(tank.x, tank.y, point.0, point.1) <= tolerance2)
     });
-    memory.containment.at_destination = tanks_in_position;
     let tank_anchor = if tight_formation {
         frontmost_unit_position(observation, &tanks, toward_objective)?
     } else {
@@ -778,7 +740,7 @@ fn issue_expansion_containment_wave(
     };
     let trailing_point = scout_trailing_point(
         tank_anchor,
-        facing_from,
+        own_base,
         objective,
         observation.map,
         policy.scout_trailing_tiles,
@@ -794,18 +756,15 @@ fn issue_expansion_containment_wave(
     let contact_active = memory.containment.contact_last_tick.is_some_and(|last| {
         observation.tick.saturating_sub(last) <= CONTAINMENT_CONTACT_MEMORY_TICKS
     });
-    // A group waiting for its partner steps forward in short moves even in contact, instead of
-    // pressing in alone or standing still.
-    let creep_step = prong.is_some_and(|orders| orders.creep_step);
-    if creep_step {
-        reset_containment_route(memory);
-        store_waypoint(memory, tank_point, observation.tick);
-        memory.containment.last_formation_command_tick = None;
-    }
-    let should_stop = (tanks_in_position || contact_active) && !creep_step;
+    let should_stop = tanks_in_position || contact_active;
     // A Tank Trap across the way is cleared before marching on, while nothing hostile is near.
-    if push_uses_available_armor && !contact_active && !creep_step && !tanks_in_position {
-        if let Some(trap) = obstacles::trap_across_push(observation, &tanks, tank_point) {
+    if push_uses_available_armor && !contact_active && !tanks_in_position {
+        if let Some(trap) = obstacles::trap_across_push(
+            observation,
+            &tanks,
+            tank_point,
+            (enemy_base.x, enemy_base.y),
+        ) {
             let refresh = memory.containment.trap_order_tick.is_none_or(|last| {
                 observation.tick.saturating_sub(last) >= obstacles::TRAP_ORDER_REFRESH_TICKS
             });
@@ -955,7 +914,7 @@ fn issue_expansion_containment_wave(
                 if tight_formation {
                     scout_forward_from_tanks(
                         tank_anchor,
-                        facing_from,
+                        own_base,
                         objective,
                         observation.map,
                         policy.scout_forward_tiles,
@@ -1005,7 +964,7 @@ fn issue_expansion_containment_wave(
                 scouts[0],
                 &riflemen,
                 current_waypoint,
-                facing_from,
+                own_base,
                 objective,
                 policy,
             )?;
@@ -1043,7 +1002,7 @@ fn issue_expansion_containment_wave(
                     && formation_vehicle_core_is_grouped(
                         observation,
                         &formation,
-                        facing_from,
+                        own_base,
                         objective,
                     ))
             {
@@ -1070,7 +1029,7 @@ fn issue_expansion_containment_wave(
                 let lead_position = unit_position(observation, lead_tank)?;
                 let rear_position = unit_position(observation, rear_tank)?;
                 let direct_catch_up_point =
-                    tank_catch_up_point(lead_position, facing_from, objective, observation.map)?;
+                    tank_catch_up_point(lead_position, own_base, objective, observation.map)?;
                 let route_catch_up_point =
                     defense::crossroads_wall_aware_approach_direction(observation).and_then(|_| {
                         map_analysis.and_then(|analysis| {
@@ -1121,7 +1080,7 @@ fn issue_expansion_containment_wave(
                 scouts[0],
                 &riflemen,
                 next,
-                facing_from,
+                own_base,
                 objective,
                 policy,
             )?;

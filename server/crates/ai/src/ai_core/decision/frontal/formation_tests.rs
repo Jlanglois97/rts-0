@@ -95,7 +95,6 @@ fn issue_test_containment(
         // Formation mechanics are tested on a fixed two-Tank push, not the sized one.
         false,
         None,
-        None,
         memory,
     );
     (intent, actions.into_commands())
