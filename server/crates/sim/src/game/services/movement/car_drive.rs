@@ -23,6 +23,11 @@ use super::vehicle_route::{
 };
 use super::{ARRIVE_EPS, MAX_UNIT_BOUNDING_RADIUS_PX, STEERING_MAX_NEIGHBORS};
 
+mod rocket_position;
+pub(super) use rocket_position::{
+    barrage_maneuver_target, barrage_pose_ready, plan_barrage_maneuver,
+};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct ScoutCarMotionPlan {
     pub(super) pos: (f32, f32),
@@ -365,16 +370,7 @@ fn sample_primitive(
     if !facing.is_finite() || !travel_distance.is_finite() || travel_distance < 0.0 {
         return None;
     }
-    if primitive.travel_sign < 0.0 {
-        let forward = (facing.cos(), facing.sin());
-        return Some((
-            (
-                current.0 - forward.0 * travel_distance,
-                current.1 - forward.1 * travel_distance,
-            ),
-            facing,
-        ));
-    }
+    let travel_distance = travel_distance * primitive.travel_sign;
     if primitive.curvature.abs() <= 1.0e-5 {
         let forward = (facing.cos(), facing.sin());
         return Some((
