@@ -3,7 +3,9 @@
 //! are ordered to clear the area around it; then they shoot every trap within four tiles, ahead of
 //! ordinary targets. Jeff clears the traps that stand in its Tanks' way, and only while nothing
 //! hostile is near the trap or the units clearing it. Traps anywhere else are left alone: some may
-//! be keeping enemy armor out of Jeff's own base.
+//! be keeping enemy armor out of Jeff's own base. A push never clears a trap on Jeff's own side of
+//! the map (nearer Jeff's HQ than the enemy base): it goes round it. On Schone Tage pushes used to
+//! cut through their own side's trap lines, and one opened the wall beside Jeff's main.
 
 use super::geometry::{dist2, normalized_direction, squared, tile_center};
 use super::*;
@@ -45,11 +47,13 @@ fn center_of(observation: &AiObservation, units: &[u32]) -> Option<(f32, f32)> {
 }
 
 /// A safe trap across a marching push's way: ahead of its Tanks toward `destination`, near their
-/// line of march, with nothing hostile near it or them.
+/// line of march, on the enemy's side of the map (nearer `enemy_base` than Jeff's HQ), with
+/// nothing hostile near it or them.
 pub(super) fn trap_across_push(
     observation: &AiObservation,
     tanks: &[u32],
     destination: (f32, f32),
+    enemy_base: (f32, f32),
 ) -> Option<u32> {
     if observation.visible_tank_traps.is_empty() {
         return None;
@@ -60,6 +64,7 @@ pub(super) fn trap_across_push(
     }
     let dir = normalized_direction(center, destination)?;
     let ts = observation.map.tile_size as f32;
+    let hq = tile_center(observation.own_start_tile, observation.map.tile_size);
     observation
         .visible_tank_traps
         .iter()
@@ -67,9 +72,12 @@ pub(super) fn trap_across_push(
             let rel = (trap.x - center.0, trap.y - center.1);
             let along = rel.0 * dir.0 + rel.1 * dir.1;
             let lateral = (rel.0 * dir.1 - rel.1 * dir.0).abs();
+            let enemy_side = dist2(trap.x, trap.y, enemy_base.0, enemy_base.1)
+                < dist2(trap.x, trap.y, hq.0, hq.1);
             (along > 0.0
                 && along <= PUSH_TRAP_AHEAD_TILES * ts
                 && lateral <= PUSH_TRAP_LANE_TILES * ts
+                && enemy_side
                 && !hostile_near(observation, (trap.x, trap.y), TRAP_SAFE_TILES))
             .then_some((trap.id, along))
         })

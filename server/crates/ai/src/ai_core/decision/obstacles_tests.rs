@@ -59,29 +59,58 @@ fn classic(player: u32) -> (AiObservation, AiMapAnalysis) {
 #[test]
 fn a_push_clears_a_trap_across_its_way_only_while_nothing_hostile_is_near() {
     let (mut observation, _) = classic(1);
+    // Jeff's HQ in the west, the enemy's in the east; the push is on the enemy's side.
+    observation.own_start_tile = (10, 41);
+    let enemy_base = (120.5 * 32.0, 41.5 * 32.0);
+    let tanks = [901, 902, 903];
+    for (index, id) in tanks.iter().enumerate() {
+        observation
+            .owned
+            .push(unit(*id, 1, EntityKind::Tank, (80.0, 40.0 + index as f32)));
+    }
+    let destination = (110.0 * 32.0, 41.0 * 32.0);
+    observation.visible_tank_traps = vec![trap(500, (86.0, 41.0))];
+    assert_eq!(
+        trap_across_push(&observation, &tanks, destination, enemy_base),
+        Some(500)
+    );
+
+    // Behind the push, or off to the side of its way: left alone.
+    observation.visible_tank_traps = vec![trap(501, (74.0, 41.0)), trap(502, (86.0, 49.0))];
+    assert_eq!(
+        trap_across_push(&observation, &tanks, destination, enemy_base),
+        None
+    );
+
+    // An enemy Rifleman near the trap makes it unsafe.
+    observation.visible_tank_traps = vec![trap(500, (86.0, 41.0))];
+    observation
+        .visible_enemies
+        .push(unit(700, 2, EntityKind::Rifleman, (92.0, 41.0)));
+    assert_eq!(
+        trap_across_push(&observation, &tanks, destination, enemy_base),
+        None
+    );
+}
+
+#[test]
+fn a_push_leaves_traps_on_jeffs_own_side_of_the_map() {
+    let (mut observation, _) = classic(1);
+    observation.own_start_tile = (10, 41);
+    let enemy_base = (120.5 * 32.0, 41.5 * 32.0);
     let tanks = [901, 902, 903];
     for (index, id) in tanks.iter().enumerate() {
         observation
             .owned
             .push(unit(*id, 1, EntityKind::Tank, (40.0, 40.0 + index as f32)));
     }
-    let destination = (70.0 * 32.0, 41.0 * 32.0);
+    // Straight across the push's way, but nearer Jeff's HQ than the enemy's: it may be keeping
+    // enemy armor out, so the push goes round it.
     observation.visible_tank_traps = vec![trap(500, (46.0, 41.0))];
     assert_eq!(
-        trap_across_push(&observation, &tanks, destination),
-        Some(500)
+        trap_across_push(&observation, &tanks, (70.0 * 32.0, 41.0 * 32.0), enemy_base),
+        None
     );
-
-    // Behind the push, or off to the side of its way: left alone.
-    observation.visible_tank_traps = vec![trap(501, (34.0, 41.0)), trap(502, (46.0, 49.0))];
-    assert_eq!(trap_across_push(&observation, &tanks, destination), None);
-
-    // An enemy Rifleman near the trap makes it unsafe.
-    observation.visible_tank_traps = vec![trap(500, (46.0, 41.0))];
-    observation
-        .visible_enemies
-        .push(unit(700, 2, EntityKind::Rifleman, (52.0, 41.0)));
-    assert_eq!(trap_across_push(&observation, &tanks, destination), None);
 }
 
 #[test]

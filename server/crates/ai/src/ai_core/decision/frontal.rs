@@ -759,7 +759,12 @@ fn issue_expansion_containment_wave(
     let should_stop = tanks_in_position || contact_active;
     // A Tank Trap across the way is cleared before marching on, while nothing hostile is near.
     if push_uses_available_armor && !contact_active && !tanks_in_position {
-        if let Some(trap) = obstacles::trap_across_push(observation, &tanks, tank_point) {
+        if let Some(trap) = obstacles::trap_across_push(
+            observation,
+            &tanks,
+            tank_point,
+            (enemy_base.x, enemy_base.y),
+        ) {
             let refresh = memory.containment.trap_order_tick.is_none_or(|last| {
                 observation.tick.saturating_sub(last) >= obstacles::TRAP_ORDER_REFRESH_TICKS
             });
