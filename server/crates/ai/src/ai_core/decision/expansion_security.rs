@@ -608,7 +608,6 @@ pub(super) fn surplus_tank_for_forward_base(
                 && Some(unit.id) != memory.home_defensive_tank
                 && !memory.containment.active_tanks.contains(&unit.id)
                 && !memory.containment.opening_tanks.contains(&unit.id)
-                && !memory.partner_push.active_tanks.contains(&unit.id)
                 && !memory.later_bases.guards.contains(&unit.id)
         })
         .min_by_key(|unit| unit.id)

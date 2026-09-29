@@ -706,12 +706,8 @@ where
         production_policy.unit_priorities,
         facts.completed_upgrades(),
     );
-    let effective_unit_priorities = effective_unit_priorities_for_fast_tank_timing(
-        profile,
-        &facts,
-        &effective_unit_priorities,
-        pincer_scouts(profile, memory),
-    );
+    let effective_unit_priorities =
+        effective_unit_priorities_for_fast_tank_timing(profile, &facts, &effective_unit_priorities);
     let effective_unit_priorities = effective_unit_priorities_for_turtle(
         profile,
         memory,
@@ -758,12 +754,7 @@ where
     );
     let production_unit_counts =
         unit_counts_for_priorities(observation, &facts, profile, &effective_unit_priorities);
-    let production_max_counts = production_max_counts(
-        profile,
-        observation,
-        map_analysis,
-        pincer_scouts(profile, memory),
-    );
+    let production_max_counts = production_max_counts(profile, observation, map_analysis);
     for building_kind in production_building_order(&effective_unit_priorities) {
         let buildings = facts.production_buildings(building_kind);
         if buildings.is_empty() {
@@ -874,18 +865,17 @@ where
     // The current Jeff's launched push keeps its units: home defense answers raids with what stayed
     // home, and the push keeps its own orders meanwhile. It used to lose all but two Tanks to
     // home defense within moments of leaving.
-    let push_units: BTreeSet<u32> = if uses_current_jeffs_ai_policy(profile.id) {
-        [&memory.containment, &memory.partner_push]
-            .into_iter()
-            .filter(|push| push.wave_launched && !push.recovery_active)
-            .flat_map(|push| {
-                push.active_tanks
-                    .iter()
-                    .copied()
-                    .chain(push.active_scout)
-                    .chain(push.active_riflemen.iter().copied())
-                    .collect::<Vec<_>>()
-            })
+    let push_units: BTreeSet<u32> = if uses_current_jeffs_ai_policy(profile.id)
+        && memory.containment.wave_launched
+        && !memory.containment.recovery_active
+    {
+        memory
+            .containment
+            .active_tanks
+            .iter()
+            .copied()
+            .chain(memory.containment.active_scout)
+            .chain(memory.containment.active_riflemen.iter().copied())
             .collect()
     } else {
         BTreeSet::new()
@@ -1055,7 +1045,6 @@ where
                             && unit.hp > 0
                             && !local_defense_assigned.contains(&unit.id)
                             && !memory.containment.active_riflemen.contains(&unit.id)
-                            && !memory.partner_push.active_riflemen.contains(&unit.id)
                             && !memory.expansion_security.riflemen.contains(&unit.id)
                             && !route_line_reserved.contains(&unit.id)
                     })
@@ -1077,8 +1066,6 @@ where
                         && matches!(entity.kind, EntityKind::Tank | EntityKind::ScoutCar)
                         && !memory.containment.active_tanks.contains(&entity.id)
                         && memory.containment.active_scout != Some(entity.id)
-                        && !memory.partner_push.active_tanks.contains(&entity.id)
-                        && memory.partner_push.active_scout != Some(entity.id)
                 })
                 .min_by(|left, right| {
                     geometry::dist2(left.x, left.y, own_base.0, own_base.1)
@@ -1477,21 +1464,14 @@ fn effective_unit_priorities_for_upgrades(
         .collect()
 }
 
-/// One more Scout Car while a two-pronged push waits for its second.
-fn pincer_scouts(profile: &AiProfile, memory: &AiDecisionMemory) -> usize {
-    usize::from(uses_current_jeffs_ai_policy(profile.id) && memory.pincer_scout_wanted)
-}
-
 fn effective_unit_priorities_for_fast_tank_timing(
     profile: &AiProfile,
     facts: &AiFacts,
     unit_priorities: &[EntityKind],
-    extra_scouts: usize,
 ) -> Vec<EntityKind> {
     let Some(timing) = profile.fast_tank_timing else {
         return unit_priorities.to_vec();
     };
-    let scout_car_target = timing.scout_car_target + extra_scouts;
     let mut priorities: Vec<EntityKind> = unit_priorities
         .iter()
         .copied()
@@ -1501,7 +1481,7 @@ fn effective_unit_priorities_for_fast_tank_timing(
         })
         .collect();
     if facts.unit_count(EntityKind::Tank) >= timing.tanks_before_scout_car
-        && facts.unit_count(EntityKind::ScoutCar) < scout_car_target
+        && facts.unit_count(EntityKind::ScoutCar) < timing.scout_car_target
     {
         priorities.sort_by_key(|unit| (*unit != EntityKind::ScoutCar) as u8);
     }
@@ -1572,7 +1552,6 @@ fn production_max_counts(
     profile: &AiProfile,
     observation: &AiObservation,
     map_analysis: Option<&AiMapAnalysis>,
-    extra_scouts: usize,
 ) -> Vec<(EntityKind, usize)> {
     let mut counts = profile
         .defensive_machine_gunners
@@ -1594,7 +1573,7 @@ fn production_max_counts(
         ));
     }
     if let Some(timing) = profile.fast_tank_timing {
-        counts.push((EntityKind::ScoutCar, timing.scout_car_target + extra_scouts));
+        counts.push((EntityKind::ScoutCar, timing.scout_car_target));
     }
     if let Some(policy) = profile.home_anti_tank {
         counts.push((EntityKind::AntiTankGun, policy.target_guns));
