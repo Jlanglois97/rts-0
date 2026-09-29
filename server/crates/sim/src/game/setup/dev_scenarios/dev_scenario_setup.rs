@@ -13,7 +13,10 @@ pub struct DevScenarioSetup {
 pub(super) enum DevScenarioOrder {
     Move,
     RecordedCommands(Vec<(u32, SimCommand)>),
-    MoveSequence(&'static [(u32, (f32, f32))]),
+    MoveSequence {
+        sequence: &'static [(u32, (f32, f32))],
+        ignore_command_limits: bool,
+    },
     AttackMove,
     MoveWithPanzerfaustWindup {
         attacker: u32,
@@ -26,13 +29,15 @@ impl DevScenarioSetup {
     pub fn command(&self) -> SimCommand {
         match self.order {
             DevScenarioOrder::RecordedCommands(ref commands) => commands[0].1.clone(),
-            DevScenarioOrder::Move | DevScenarioOrder::MoveSequence(&[]) => SimCommand::Move {
-                units: self.units.clone(),
-                x: self.goal.0,
-                y: self.goal.1,
-                queued: false,
-            },
-            DevScenarioOrder::MoveSequence(sequence) => {
+            DevScenarioOrder::Move | DevScenarioOrder::MoveSequence { sequence: &[], .. } => {
+                SimCommand::Move {
+                    units: self.units.clone(),
+                    x: self.goal.0,
+                    y: self.goal.1,
+                    queued: false,
+                }
+            }
+            DevScenarioOrder::MoveSequence { sequence, .. } => {
                 let (_, (x, y)) = sequence[0];
                 SimCommand::Move {
                     units: self.units.clone(),
@@ -59,10 +64,10 @@ impl DevScenarioSetup {
     pub fn scheduled_commands(&self) -> Vec<(u32, SimCommand)> {
         match self.order {
             DevScenarioOrder::RecordedCommands(ref commands) => commands.clone(),
-            DevScenarioOrder::MoveSequence(&[]) => {
+            DevScenarioOrder::MoveSequence { sequence: &[], .. } => {
                 vec![(self.issue_after_ticks, self.command())]
             }
-            DevScenarioOrder::MoveSequence(sequence) => sequence
+            DevScenarioOrder::MoveSequence { sequence, .. } => sequence
                 .iter()
                 .map(|&(tick, (x, y))| {
                     (
@@ -78,6 +83,20 @@ impl DevScenarioSetup {
                 .collect(),
             _ => vec![(self.issue_after_ticks, self.command())],
         }
+    }
+
+    pub fn scheduled_commands_with_admission(&self) -> Vec<(u32, SimCommand, bool)> {
+        let ignore_limits = match self.order {
+            DevScenarioOrder::MoveSequence {
+                ignore_command_limits,
+                ..
+            } => ignore_command_limits,
+            _ => false,
+        };
+        self.scheduled_commands()
+            .into_iter()
+            .map(|(tick, command)| (tick, command, ignore_limits))
+            .collect()
     }
 
     pub fn panzerfaust_windup(&self) -> Option<(u32, u32, u16)> {

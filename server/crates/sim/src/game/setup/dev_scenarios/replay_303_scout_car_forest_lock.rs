@@ -60,7 +60,13 @@ impl Game {
             units: GROUP.to_vec(),
             goal: ORDERS[0].1,
             issue_after_ticks: ORDERS[0].0,
-            order: DevScenarioOrder::MoveSequence(&ORDERS),
+            // The recorded seven-unit move exceeded the current human command budget after the
+            // Command Car bonus was removed. Keep replay admission explicit instead of changing
+            // player identity.
+            order: DevScenarioOrder::MoveSequence {
+                sequence: &ORDERS,
+                ignore_command_limits: true,
+            },
         }
         .checkpoint_backed("dev:replay_303_scout_car_forest_lock")
     }
@@ -104,19 +110,25 @@ mod tests {
         assert_eq!(setup.game.tick_count(), REPLAY_START_TICK);
         assert_eq!(setup.game.state.entities.iter().count(), GROUP.len());
         assert_eq!(setup.game.state.map.no_vehicle_tiles.len(), 21);
+        assert!(setup.game.state.players.iter().all(|player| !player.is_ai));
 
-        let schedule = setup.scheduled_commands();
+        let schedule = setup.scheduled_commands_with_admission();
         let mut next_command = 0;
         let mut former_lock_position = None;
         let tank_start = position(&setup.game, 322);
         while setup.game.tick_count() < 15_360 {
             while schedule
                 .get(next_command)
-                .is_some_and(|(tick, _)| *tick == setup.game.tick_count())
+                .is_some_and(|(tick, _, _)| *tick == setup.game.tick_count())
             {
-                setup
-                    .game
-                    .enqueue(setup.player_id, schedule[next_command].1.clone());
+                let (_, command, ignore_limits) = schedule[next_command].clone();
+                if ignore_limits {
+                    setup
+                        .game
+                        .enqueue_server_authored_command_ignoring_limits(setup.player_id, command);
+                } else {
+                    setup.game.enqueue(setup.player_id, command);
+                }
                 next_command += 1;
             }
             setup.game.tick();

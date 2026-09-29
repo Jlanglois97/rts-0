@@ -38,7 +38,7 @@ impl Game {
         self.state.pending.push(PendingCommand::normal(player, cmd));
     }
 
-    pub(in crate::game) fn enqueue_lab_command_ignoring_limits(
+    pub fn enqueue_server_authored_command_ignoring_limits(
         &mut self,
         player: u32,
         cmd: SimCommand,
@@ -46,6 +46,14 @@ impl Game {
         self.state
             .pending
             .push(PendingCommand::lab_ignore_command_limits(player, cmd));
+    }
+
+    pub(in crate::game) fn enqueue_lab_command_ignoring_limits(
+        &mut self,
+        player: u32,
+        cmd: SimCommand,
+    ) {
+        self.enqueue_server_authored_command_ignoring_limits(player, cmd);
     }
 
     pub(super) fn record_commands_for_tick(&mut self, pending: &[PendingCommand]) {

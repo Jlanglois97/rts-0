@@ -28,10 +28,10 @@ fn command_budget_allows_twenty_four_one_supply_units() {
 }
 
 #[test]
-fn command_budget_rejects_fourth_tank_without_command_car() {
+fn command_budget_rejects_fifth_tank_without_command_car() {
     let map = flat_map(64);
     let mut entities = EntityStore::new();
-    let units = spawn_units(&mut entities, 1, EntityKind::Tank, 4);
+    let units = spawn_units(&mut entities, 1, EntityKind::Tank, 5);
     mark_units_moving(&mut entities, &units);
     let events = apply_with_players(
         &map,
@@ -50,13 +50,13 @@ fn command_budget_rejects_fourth_tank_without_command_car() {
             entities.get(*id).map(|entity| entity.order()),
             Some(Order::Move(_))
         )),
-        "four tanks should exceed the base command budget and keep their orders"
+        "five tanks should exceed the base command budget and keep their orders"
     );
     assert_notice(&events, 1, "Command supply exceeded");
 }
 
 #[test]
-fn command_car_bonus_offsets_own_supply_and_stacks() {
+fn command_car_has_zero_command_cost_without_raising_cap() {
     let map = flat_map(64);
 
     let mut one_car_entities = EntityStore::new();
@@ -68,9 +68,10 @@ fn command_car_bonus_offsets_own_supply_and_stacks() {
         1,
     ));
     mark_units_moving(&mut one_car_entities, &one_car_units);
-    apply(
+    let events = apply_with_players(
         &map,
         &mut one_car_entities,
+        &mut [player_state(1), player_state(2)],
         vec![(
             1,
             SimCommand::Stop {
@@ -81,13 +82,14 @@ fn command_car_bonus_offsets_own_supply_and_stacks() {
     assert!(
         one_car_units.iter().all(|id| matches!(
             one_car_entities.get(*id).map(|entity| entity.order()),
-            Some(Order::Idle)
+            Some(Order::Move(_))
         )),
-        "one Command Car should make five tanks legal: 44 used / 48 cap"
+        "one Command Car must not make five tanks legal"
     );
+    assert_notice(&events, 1, "Command supply exceeded");
 
     let mut two_car_entities = EntityStore::new();
-    let mut two_car_units = spawn_units(&mut two_car_entities, 1, EntityKind::Tank, 8);
+    let mut two_car_units = spawn_units(&mut two_car_entities, 1, EntityKind::Tank, 4);
     two_car_units.extend(spawn_units(
         &mut two_car_entities,
         1,
@@ -110,7 +112,7 @@ fn command_car_bonus_offsets_own_supply_and_stacks() {
             two_car_entities.get(*id).map(|entity| entity.order()),
             Some(Order::Idle)
         )),
-        "two Command Cars should stack: 72 used / 72 cap"
+        "four tanks and two zero-cost Command Cars should fit the base 24 budget"
     );
 }
 
