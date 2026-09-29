@@ -135,6 +135,9 @@ impl Game {
     /// Queue a validated-on-apply domain command from `player`. Cheap; real work happens in tick().
     pub fn enqueue(&mut self, player: u32, cmd: SimCommand);
 
+    /// Queue a trusted server-authored command that uses lab/dev admission limits.
+    pub fn enqueue_server_authored_command_ignoring_limits(&mut self, player: u32, cmd: SimCommand);
+
     /// Arm one authored dev-scenario infantry source with a bounded Panzerfaust windup. Returns
     /// false for stale ids, missing combat state, or a zero-duration windup.
     pub fn start_dev_scenario_panzerfaust_windup(
@@ -1369,8 +1372,9 @@ supply. Command Cars have zero command weight and add no capacity
 (`COMMAND_CAR_SUPPLY_CAP_BONUS = 0`); other units use mirrored supply as command weight.
 AI-owned players are exempt from this budget because live AI
 still issues ordinary `SimCommand`s through
-`Game::enqueue`. Lab `issueCommandAs` can also opt into a lab-only admission mode that bypasses
-the command-supply budget and uses a larger bounded unit-id window for scenario-scale commands.
+`Game::enqueue`. Lab `issueCommandAs` and authored dev replay drivers can also opt into a
+server-owned admission mode that bypasses the command-supply budget and uses a larger bounded
+unit-id window for scenario-scale commands.
 Lab scenario export and restore preserve stable active and queued order intent, including artillery
 point-fire and blanket-fire commands. Restore also hydrates the runtime state required for active
 movement, build, deconstruct, and artillery point-fire orders to resume execution.
