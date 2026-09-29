@@ -201,7 +201,7 @@ fn artillery_point_fire_inside_arc_keeps_setup_facing_fixed() {
 }
 
 #[test]
-fn artillery_point_fire_system_rechecks_ammo_affordability() {
+fn artillery_point_fire_system_fires_without_steel() {
     let map = flat_map(64);
     let mut entities = EntityStore::new();
     let mut players = vec![player_state(1), player_state(2)];
@@ -237,7 +237,7 @@ fn artillery_point_fire_system_rechecks_ammo_affordability() {
 
     assert_eq!(
         players[0].steel, 0,
-        "failed artillery fire should not spend unavailable ammo"
+        "artillery fire should leave zero steel unchanged"
     );
     assert_eq!(
         entities
@@ -245,20 +245,20 @@ fn artillery_point_fire_system_rechecks_ammo_affordability() {
             .expect("artillery should exist")
             .attack_cd(),
         config::ARTILLERY_RELOAD_TICKS,
-        "promotion-time ammo failure still applies the current reload penalty"
+        "firing still applies the normal reload cooldown"
     );
-    assert_notice(&events, 1, protocol::notices::ARTILLERY_STEEL_SHORTAGE);
+    assert!(events.values().flatten().all(|event| !matches!(event, Event::Notice { .. })));
     assert!(
         events
             .values()
             .flat_map(|events| events.iter())
-            .all(|event| !matches!(event, Event::ArtilleryTarget { .. })),
-        "unaffordable point fire should not schedule a visible target marker"
+            .any(|event| matches!(event, Event::ArtilleryTarget { .. })),
+        "point fire should launch a shell with zero steel"
     );
 }
 
 #[test]
-fn artillery_blanket_fire_system_rechecks_ammo_affordability() {
+fn artillery_blanket_fire_system_fires_without_steel() {
     let map = flat_map(64);
     let mut entities = EntityStore::new();
     let mut players = vec![player_state(1), player_state(2)];
@@ -298,7 +298,7 @@ fn artillery_blanket_fire_system_rechecks_ammo_affordability() {
 
     assert_eq!(
         players[0].steel, 0,
-        "failed blanket fire should not spend unavailable ammo"
+        "blanket fire should leave zero steel unchanged"
     );
     assert_eq!(
         entities
@@ -306,15 +306,15 @@ fn artillery_blanket_fire_system_rechecks_ammo_affordability() {
             .expect("artillery should exist")
             .attack_cd(),
         config::ARTILLERY_RELOAD_TICKS,
-        "promotion-time Blanket Fire ammo failure still applies the current reload penalty"
+        "blanket firing still applies the normal reload cooldown"
     );
-    assert_notice(&events, 1, protocol::notices::ARTILLERY_STEEL_SHORTAGE);
+    assert!(events.values().flatten().all(|event| !matches!(event, Event::Notice { .. })));
     assert!(
         events
             .values()
             .flat_map(|events| events.iter())
-            .all(|event| !matches!(event, Event::ArtilleryTarget { .. })),
-        "unaffordable Blanket Fire should not schedule a visible target marker"
+            .any(|event| matches!(event, Event::ArtilleryTarget { .. })),
+        "blanket fire should launch a shell with zero steel"
     );
 }
 
