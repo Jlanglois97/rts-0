@@ -41,9 +41,6 @@ const CREEP_INTERVAL_TICKS: u32 = config::TICK_HZ * 5;
 /// Contact only means a group has reached the target, and only then does it creep, within this
 /// much beyond its staging distance. Fighting on the way there is ordinary stop-and-fight.
 const ENGAGED_MARGIN_TILES: f32 = 6.0;
-/// The target point follows the nearest steel still in the ground; a shift this small is the same
-/// target, not a new one.
-const OBJECTIVE_SHIFT_TILES: f32 = 8.0;
 /// Approach lanes to a target are worked out again after this long.
 const LANE_CACHE_TICKS: u32 = config::TICK_HZ * 30;
 
@@ -88,6 +85,9 @@ pub(crate) struct Pincer {
     /// Each group's closest approach to its waiting point, in tiles, and when it last improved.
     closest: [Option<i32>; 2],
     last_progress_tick: [u32; 2],
+    /// Whether the main group has set out since the pincer formed. A pincer can form while it is
+    /// still forming up (or re-forming after a fallback), and that is not a failure.
+    main_left: bool,
 }
 
 /// Where the push being driven goes this decision.
@@ -338,7 +338,6 @@ fn maybe_form_pincer(
     if memory.pincer.is_some()
         || !memory.partner_push.active_tanks.is_empty()
         || memory.containment.active_tanks.is_empty()
-        || memory.containment.recovery_active
         || memory.enemy_natural_destroyed
         || memory.enemy_main_destroyed
     {
@@ -359,9 +358,10 @@ fn maybe_form_pincer(
     let is_kind = |id: &u32, kind: EntityKind| by_id.get(id).is_some_and(|unit| unit.kind == kind);
     let main_tanks: Vec<u32> = memory.containment.active_tanks.iter().copied().collect();
     let main_scout = memory.containment.active_scout;
-    let launched = memory.containment.wave_launched;
-    // Before it leaves, the push already holds every Tank beyond the home reserve: split it in
-    // two. Once it is out, only Tanks beyond the reserve that were built since can go.
+    // A push forming up at home, first time or after a fallback, already holds every Tank beyond
+    // the home reserve: split it in two so both groups set out together. Once it is out, only
+    // Tanks beyond the reserve that were built since can go.
+    let launched = memory.containment.wave_launched && !memory.containment.recovery_active;
     let (mut pool, partner_size) = if launched {
         let extras: Vec<u32> = plan
             .ready_units
@@ -471,6 +471,7 @@ fn maybe_form_pincer(
         last_creep_tick: [None, None],
         closest: [None, None],
         last_progress_tick: [observation.tick, observation.tick],
+        main_left: launched,
     });
 }
 
@@ -503,15 +504,13 @@ pub(super) fn drive_pushes(
         let partner_failed = partner.recovery_active
             || partner.active_tanks.is_empty()
             || (partner.wave_launched && partner.active_scout.is_none());
-        let main_failed =
-            memory.containment.recovery_active || memory.containment.active_tanks.is_empty();
-        let target_moved = memory.enemy_natural_destroyed
-            || memory.enemy_main_destroyed
-            || objective.is_none_or(|objective| {
-                let pinned = world(pincer.objective);
-                dist2(objective.0, objective.1, pinned.0, pinned.1)
-                    > squared(OBJECTIVE_SHIFT_TILES * observation.map.tile_size as f32)
-            });
+        let main_failed = memory.containment.active_tanks.is_empty()
+            || (pincer.main_left && memory.containment.recovery_active);
+        // The target stays pinned where the pincer was planned: the nearest steel to the enemy
+        // natural moves as its patches run dry, and following it split pincers apart. Only the
+        // natural (or main) falling ends it.
+        let target_moved =
+            memory.enemy_natural_destroyed || memory.enemy_main_destroyed || objective.is_none();
         if partner_failed || main_failed {
             dissolve_partner(actions, memory, rally);
         } else if target_moved {
@@ -585,6 +584,7 @@ pub(super) fn drive_pushes(
     // for; one that stalls far away or runs out the clock calls the pincer off.
     let mut pincer = memory.pincer.take();
     if let Some(p) = pincer.as_mut() {
+        p.main_left |= memory.containment.wave_launched && !memory.containment.recovery_active;
         note_prong(p, 0, &memory.containment, observation);
         note_prong(p, 1, &memory.partner_push, observation);
         let distance_to_hold = |p: &Pincer, index: usize, push: &ContainmentPush| {

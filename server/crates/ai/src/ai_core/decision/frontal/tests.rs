@@ -43,6 +43,7 @@ fn regroup_test_observation(owned: Vec<AiEntitySummary>) -> AiObservation {
         visible_enemies: Vec::new(),
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     }
@@ -293,6 +294,7 @@ fn main_resource_depot_is_acquired_outside_nominal_standoff_radius() {
         visible_enemies: vec![resource_depot],
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     };

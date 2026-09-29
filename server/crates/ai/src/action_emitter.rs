@@ -34,6 +34,15 @@ pub(crate) fn emit_request(request: AiActionRequest) -> SimCommand {
             target,
             queued,
         },
+        AiActionRequest::ClearObstacleArea {
+            units,
+            target,
+            queued,
+        } => SimCommand::ClearObstacleArea {
+            units,
+            target,
+            queued,
+        },
         AiActionRequest::Gather {
             units,
             node,

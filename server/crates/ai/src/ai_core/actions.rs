@@ -64,6 +64,7 @@ impl<'a> AiActionContext<'a> {
                     AiActionRequest::Move { units, .. }
                     | AiActionRequest::AttackMove { units, .. }
                     | AiActionRequest::Attack { units, .. }
+                    | AiActionRequest::ClearObstacleArea { units, .. }
                     | AiActionRequest::Gather { units, .. }
                     | AiActionRequest::Build { units, .. }
                     | AiActionRequest::SetupAntiTankGuns { units, .. }
@@ -821,6 +822,27 @@ pub(crate) fn attack_units(
     ctx.emit_action(AiActionRequest::Attack {
         units: units.clone(),
         target,
+        queued: false,
+    });
+    Some(units)
+}
+
+/// Order `units` to clear the Tank Traps around `trap`, a completed trap in sight. They shoot every
+/// trap within four tiles of it before ordinary targets.
+pub(crate) fn clear_obstacle_area(
+    ctx: &mut AiActionContext<'_>,
+    units: impl IntoIterator<Item = u32>,
+    trap: u32,
+) -> Option<Vec<u32>> {
+    let mut units: Vec<u32> = units.into_iter().collect();
+    units.sort_unstable();
+    units.dedup();
+    if units.is_empty() {
+        return None;
+    }
+    ctx.emit_action(AiActionRequest::ClearObstacleArea {
+        units: units.clone(),
+        target: trap,
         queued: false,
     });
     Some(units)

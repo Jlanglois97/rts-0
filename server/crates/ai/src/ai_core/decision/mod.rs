@@ -33,6 +33,7 @@ mod geometry;
 mod jeff;
 mod later_bases;
 mod memory;
+mod obstacles;
 mod policies;
 mod production;
 mod resources;
@@ -1237,6 +1238,15 @@ where
             );
             if !returning.is_empty() {
                 intents.push(AiIntent::Move { units: returning });
+            }
+            if let Some(clearing) = obstacles::clear_route_traps(
+                &mut actions,
+                observation,
+                memory,
+                map_analysis,
+                &local_defense_assigned,
+            ) {
+                intents.push(AiIntent::Attack { units: clearing });
             }
         }
 

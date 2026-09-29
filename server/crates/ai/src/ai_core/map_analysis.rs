@@ -410,6 +410,14 @@ impl AiMapAnalysis {
         (distance != u32::MAX).then(|| distance as f32 / 10.0)
     }
 
+    /// The ground route an attack on `player_id`'s start takes, from the nearest enemy start in.
+    pub(crate) fn base_route_tiles(&self, player_id: u32) -> Option<&[AiTile]> {
+        self.base_routes
+            .iter()
+            .find(|(id, _)| *id == player_id)
+            .map(|(_, route)| route.as_slice())
+    }
+
     fn build_base_routes(&self) -> Vec<(u32, Vec<AiTile>)> {
         self.starts
             .iter()

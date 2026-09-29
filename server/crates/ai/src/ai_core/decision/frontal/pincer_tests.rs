@@ -97,6 +97,7 @@ fn test_pincer() -> Pincer {
         last_creep_tick: [None, None],
         closest: [None, None],
         last_progress_tick: [0, 0],
+        main_left: true,
     }
 }
 
@@ -147,6 +148,7 @@ fn launched_push(
         visible_enemies: Vec::new(),
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     };

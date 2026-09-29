@@ -84,6 +84,8 @@ pub(crate) struct ContainmentPush {
     pub(super) smoke_expires_tick: Option<u32>,
     /// Whether the Tanks stood at the push's destination at the last decision.
     pub(super) at_destination: bool,
+    /// When the push was last ordered to clear a Tank Trap in its way.
+    pub(super) trap_order_tick: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -123,6 +125,8 @@ pub(crate) struct AiDecisionMemory {
     pub(super) pincer_scout_wanted: bool,
     /// Approach lanes last worked out for a target: the target, the tick, and the two sides.
     pub(super) pincer_lanes: Option<super::frontal::pincer::PincerLanes>,
+    /// The Tank Trap home Tanks were last sent to clear, and when.
+    pub(super) trap_order: Option<(u32, u32)>,
     /// How many enemy Tanks were in sight together, by tick, over the last
     /// `ENEMY_TANK_MEMORY_TICKS`. Counting every Tank seen instead also counted the ones Jeff had
     /// destroyed: AI 2.1 feeding Tanks into Jeff's defense read as 8-9 while it had 3.
@@ -167,6 +171,7 @@ impl AiDecisionMemory {
             pincer: None,
             pincer_scout_wanted: false,
             pincer_lanes: None,
+            trap_order: None,
             enemy_tank_sightings: BTreeMap::new(),
             enemy_attack_sightings: BTreeMap::new(),
             home_defensive_tank: None,

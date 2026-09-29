@@ -223,6 +223,23 @@ pub(super) fn containment_formation(
     })
 }
 
+/// The formation's Tanks and Scout Car are at their slots.
+pub(super) fn formation_vehicles_in_position(
+    observation: &AiObservation,
+    formation: &ContainmentFormation,
+    tolerance_tiles: f32,
+) -> bool {
+    let tolerance2 = (tolerance_tiles * observation.map.tile_size as f32).powi(2);
+    let in_position = |(id, point): &(u32, (f32, f32))| {
+        observation
+            .owned
+            .iter()
+            .find(|unit| unit.id == *id)
+            .is_some_and(|unit| dist2(unit.x, unit.y, point.0, point.1) <= tolerance2)
+    };
+    formation.tanks.iter().all(in_position) && in_position(&formation.scout)
+}
+
 pub(super) fn formation_units_in_position(
     observation: &AiObservation,
     formation: &ContainmentFormation,

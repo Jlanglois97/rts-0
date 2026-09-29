@@ -173,6 +173,8 @@ pub(crate) struct AiObservation {
     pub(crate) visible_enemies: Vec<AiEntitySummary>,
     pub(crate) ability_states: Vec<AiAbilitySummary>,
     pub(crate) smokes: Vec<AiSmokeSummary>,
+    /// Completed Tank Traps in sight (neutral, so in neither list above).
+    pub(crate) visible_tank_traps: Vec<AiEntitySummary>,
     pub(crate) pending_builds: Vec<AiBuildIntent>,
     pub(crate) upgrades: Vec<UpgradeKind>,
 }
@@ -279,6 +281,7 @@ impl AiObservation {
             visible_enemies,
             ability_states,
             smokes,
+            visible_tank_traps: frame.tank_traps().iter().map(project_entity).collect(),
             pending_builds,
             upgrades: frame.completed_upgrades().to_vec(),
         })
@@ -415,6 +418,14 @@ impl AiObservation {
             .collect();
         visible_enemies.sort_by_key(|e| e.id);
 
+        let mut visible_tank_traps: Vec<AiEntitySummary> = snapshot
+            .entities
+            .iter()
+            .filter(|e| e.owner == NEUTRAL)
+            .filter_map(AiEntitySummary::from_entity_view)
+            .filter(|e| e.kind == EntityKind::TankTrap && e.is_complete)
+            .collect();
+        visible_tank_traps.sort_by_key(|e| e.id);
         let mut visible_allies: Vec<AiEntitySummary> = snapshot
             .entities
             .iter()
@@ -484,6 +495,7 @@ impl AiObservation {
             visible_enemies,
             ability_states,
             smokes,
+            visible_tank_traps,
             pending_builds,
             upgrades,
         })

@@ -52,6 +52,9 @@ const CONTAINMENT_LONGITUDINAL_SPREAD_TILES: f32 = 2.0;
 const CONTAINMENT_LATERAL_SLOP_TILES: f32 = 1.0;
 const CONTAINMENT_RIFLE_COHESION_TILES: f32 = 7.0;
 const CONTAINMENT_MARCH_STEP_TILES: f32 = 8.0;
+/// A marching push halts for ordinary combat units this close; anti-armor threats halt it from
+/// the policy's contact range.
+const MARCH_CLOSE_CONTACT_TILES: f32 = 10.0;
 const CONTAINMENT_FORMATION_REISSUE_TICKS: u32 = config::TICK_HZ * 2;
 const CONTAINMENT_ASSEMBLY_TIMEOUT_TICKS: u32 = config::TICK_HZ * 8;
 const CONTAINMENT_ASSEMBLY_HARD_TIMEOUT_TICKS: u32 = config::TICK_HZ * 12;
@@ -780,8 +783,11 @@ fn issue_expansion_containment_wave(
         observation.map,
         policy.scout_trailing_tiles,
     )?;
-    let contact_target =
-        visible_combat_target_within_tiles(observation, &tanks, policy.contact_stop_tiles);
+    let contact_target = if push_uses_available_armor {
+        march_contact_target(observation, &tanks, policy.contact_stop_tiles)
+    } else {
+        visible_combat_target_within_tiles(observation, &tanks, policy.contact_stop_tiles)
+    };
     if contact_target.is_some() {
         memory.containment.contact_last_tick = Some(observation.tick);
     }
@@ -797,6 +803,19 @@ fn issue_expansion_containment_wave(
         memory.containment.last_formation_command_tick = None;
     }
     let should_stop = (tanks_in_position || contact_active) && !creep_step;
+    // A Tank Trap across the way is cleared before marching on, while nothing hostile is near.
+    if push_uses_available_armor && !contact_active && !creep_step && !tanks_in_position {
+        if let Some(trap) = obstacles::trap_across_push(observation, &tanks, tank_point) {
+            let refresh = memory.containment.trap_order_tick.is_none_or(|last| {
+                observation.tick.saturating_sub(last) >= obstacles::TRAP_ORDER_REFRESH_TICKS
+            });
+            if refresh {
+                actions::clear_obstacle_area(actions, tanks.iter().copied(), trap);
+                memory.containment.trap_order_tick = Some(observation.tick);
+            }
+            return Some(AiIntent::Attack { units: tanks });
+        }
+    }
     let stationary_range_ready = if should_stop {
         let since = memory
             .containment
@@ -1006,17 +1025,27 @@ fn issue_expansion_containment_wave(
                     tank_center,
                 );
             }
-            if formation_units_in_position(
-                observation,
-                &formation,
-                CONTAINMENT_ASSEMBLY_TOLERANCE_TILES,
-            ) || (waypoint_timed_out
-                && formation_vehicle_core_is_grouped(
+            // The current Jeff's Tanks and Scout Car lead: the next waypoint is ordered once they
+            // are in place, and the Riflemen catch up rather than holding every step.
+            let vehicles_placed = push_uses_available_armor
+                && formation_vehicles_in_position(
                     observation,
                     &formation,
-                    facing_from,
-                    objective,
-                ))
+                    CONTAINMENT_ASSEMBLY_TOLERANCE_TILES,
+                );
+            if vehicles_placed
+                || formation_units_in_position(
+                    observation,
+                    &formation,
+                    CONTAINMENT_ASSEMBLY_TOLERANCE_TILES,
+                )
+                || (waypoint_timed_out
+                    && formation_vehicle_core_is_grouped(
+                        observation,
+                        &formation,
+                        facing_from,
+                        objective,
+                    ))
             {
                 memory.containment.march_waypoint = None;
                 memory.containment.last_formation_command_tick = None;
@@ -1610,6 +1639,50 @@ fn visible_combat_target_within_tiles(
             )
         })
         .filter(|(_, _, distance2)| *distance2 <= max_distance2)
+        .min_by(|left, right| {
+            left.1
+                .cmp(&right.1)
+                .then_with(|| left.2.total_cmp(&right.2))
+                .then_with(|| left.0.cmp(&right.0))
+        })
+        .map(|(id, _, _)| id)
+}
+
+/// Enemies close enough, or dangerous enough, to halt a marching push and fight from where it
+/// stands: anti-armor units and guns out to `stop_tiles`, other combat units within
+/// `MARCH_CLOSE_CONTACT_TILES`. Halting for every Rifleman or Scout Car seen at 18 tiles made pushes
+/// crawl across the map.
+fn march_contact_target(
+    observation: &AiObservation,
+    unit_ids: &[u32],
+    stop_tiles: f32,
+) -> Option<u32> {
+    let center = group_center(observation, unit_ids)?;
+    let tile_size = observation.map.tile_size as f32;
+    observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| {
+            enemy.kind.is_unit()
+                && !matches!(enemy.kind, EntityKind::Worker | EntityKind::ScoutPlane)
+        })
+        .filter_map(|enemy| {
+            let reach = match enemy.kind {
+                EntityKind::Tank
+                | EntityKind::AntiTankGun
+                | EntityKind::Panzerfaust
+                | EntityKind::Artillery
+                | EntityKind::MortarTeam
+                | EntityKind::RocketLauncher => stop_tiles,
+                _ => MARCH_CLOSE_CONTACT_TILES,
+            };
+            let distance2 = geometry::dist2(center.0, center.1, enemy.x, enemy.y);
+            (distance2 <= geometry::squared(reach * tile_size)).then_some((
+                enemy.id,
+                outbound_wave_target_priority(enemy.kind),
+                distance2,
+            ))
+        })
         .min_by(|left, right| {
             left.1
                 .cmp(&right.1)
