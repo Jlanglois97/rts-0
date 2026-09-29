@@ -64,7 +64,7 @@ pub(super) fn command_budget_exceeded(entities: &EntityStore, player: u32, units
         let weight = command_weight(entity.kind);
         used = used.saturating_add(weight);
         if entity.kind == EntityKind::CommandCar {
-            cap = cap.saturating_add(COMMAND_CAR_SUPPLY_CAP_BONUS.saturating_add(weight));
+            cap = cap.saturating_add(COMMAND_CAR_SUPPLY_CAP_BONUS);
         }
     }
     used > cap
@@ -135,5 +135,8 @@ pub(super) fn rally_intent_for_map(
 }
 
 fn command_weight(kind: EntityKind) -> u32 {
+    if kind == EntityKind::CommandCar {
+        return 0;
+    }
     rules::economy::supply_cost(kind).max(1)
 }

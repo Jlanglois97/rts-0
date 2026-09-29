@@ -1365,9 +1365,8 @@ dedupes and caps unit-id lists, rejects over-budget human unit-list commands, bu
 facts for the referenced units/targets, and must produce unit-local actions that match the policy
 below. The budget scalars live in the sim-owned `command_budget` helper so parity checks can dump
 them without moving ownership into rules. Human command budget is supply-based: 24 base command
-supply plus `COMMAND_CAR_SUPPLY_CAP_BONUS = 20` per submitted owned Command Car plus that Command
-Car's own mirrored supply weight, so Command Cars offset their own weight before adding bonus
-capacity.
+supply. Command Cars have zero command weight and add no capacity
+(`COMMAND_CAR_SUPPLY_CAP_BONUS = 0`); other units use mirrored supply as command weight.
 AI-owned players are exempt from this budget because live AI
 still issues ordinary `SimCommand`s through
 `Game::enqueue`. Lab `issueCommandAs` can also opt into a lab-only admission mode that bypasses

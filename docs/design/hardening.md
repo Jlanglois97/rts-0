@@ -46,9 +46,9 @@ The server treats every client as potentially hostile. Scout Planes are exposed 
   `LAB_MAX_UNITS_PER_COMMAND = 4096` raw submitted ids, with the same whole-command rejection at
   cap plus one and still bounded by the WebSocket frame cap. Lab artifact validation uses the same
   selected raw boundary, and checkpoint restore uses the shared 4,096 persisted-command bound. The
-  human command budget is 24 supply plus
-  `COMMAND_CAR_SUPPLY_CAP_BONUS = 20` and the Command Car's own command weight for each submitted
-  owned Command Car, with mirrored unit supply as command weight and a fallback weight of 1.
+  human command budget is 24 supply. Command Cars have zero command weight and add no capacity
+  (`COMMAND_CAR_SUPPLY_CAP_BONUS = 0`); other units use mirrored supply as command weight with a
+  fallback weight of 1.
   AI-owned players are exempt from the command-budget gameplay limit because live AI still enqueues
   ordinary `SimCommand`s through the same `Game::enqueue` seam as humans. Raw-cap rejection drops
   the whole malformed command without trimming; command-budget rejection also emits a private

@@ -14,7 +14,7 @@ export function commandBudgetForEntities(entities) {
     if (!selectableCountsForCommandBudget(entity)) continue;
     const weight = commandWeight(entity.kind);
     used += weight;
-    if (entity.kind === KIND.COMMAND_CAR) cap += commandCarCapBonus(weight);
+    if (entity.kind === KIND.COMMAND_CAR) cap += COMMAND_CAR_SUPPLY_CAP_BONUS;
   }
   return { used, cap, over: used > cap };
 }
@@ -40,17 +40,13 @@ export function admitSelectionIds(state, ids, { baseIds = [], entityById = null,
 
   const admitted = base.slice();
   const admittedIds = new Set(admitted.map((entity) => entity.id));
-  const commandCars = candidates.filter((entity) => entity.kind === KIND.COMMAND_CAR);
-  const orderedCandidates = commandCars.concat(
-    candidates.filter((entity) => entity.kind !== KIND.COMMAND_CAR),
-  );
   let budget = commandBudgetForEntities(admitted);
   let overflow = false;
 
-  for (const entity of orderedCandidates) {
+  for (const entity of candidates) {
     if (admittedIds.has(entity.id)) continue;
     const weight = commandWeight(entity.kind);
-    const nextCap = budget.cap + (entity.kind === KIND.COMMAND_CAR ? commandCarCapBonus(weight) : 0);
+    const nextCap = budget.cap + (entity.kind === KIND.COMMAND_CAR ? COMMAND_CAR_SUPPLY_CAP_BONUS : 0);
     const nextUsed = budget.used + weight;
     if (nextUsed <= nextCap) {
       admitted.push(entity);
@@ -92,12 +88,9 @@ export function commandWithinBudget(state, command, { ownerId = null, ignoreComm
 }
 
 export function commandWeight(kind) {
+  if (kind === KIND.COMMAND_CAR) return 0;
   const supply = STATS[kind]?.supply;
   return Number.isFinite(supply) && supply > 0 ? supply : 1;
-}
-
-function commandCarCapBonus(weight) {
-  return COMMAND_CAR_SUPPLY_CAP_BONUS + weight;
 }
 
 function selectableCountsForCommandBudget(entity) {

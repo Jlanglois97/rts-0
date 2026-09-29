@@ -492,10 +492,9 @@ profiles and explicit activation/autocast policy instead of being folded into de
   `TICK_HZ * 3` ticks. Movement-path translation or hull rotation resets the ramp; autonomous armor
   reaction, turret aiming, collision shoves, and external pulls do not.
 - Human selection and command bandwidth is supply-based: `BASE_COMMAND_SUPPLY_CAP = 24` command
-  supply plus `COMMAND_CAR_SUPPLY_CAP_BONUS = 20` and the Command Car's own command weight for each
-  selected/commanded Command Car. Units use their mirrored supply as command weight, so current Tanks
-  consume 8 command supply and three Tanks fill the base budget; Command Cars still appear as weighted
-  selections but their own weight is offset before their bonus is added.
+  supply. Units use their mirrored supply as command weight, except Command Cars have zero command
+  weight and add no capacity (`COMMAND_CAR_SUPPLY_CAP_BONUS = 0`). Tanks consume 6 command supply,
+  so four Tanks fill the budget. A Command Car still uses 4 production supply.
 - **Methamphetamines** (Training Centre research): costs 100 steel / 100 oil and takes 600 ticks
   (~20s). Once complete, all current and future Riflemen for that player gain permanent moving rifle fire,
   1.25x movement speed (matching tank speed at 2.0 px/tick), no extra movement miss chance, and 50%
@@ -670,12 +669,12 @@ Unit stats (hp, dmg, range[tiles], cooldown[ticks], speed[px/tick], sight[tiles]
 | panzerfaust     | 45  | 5 rifle / 100 launcher | 5 | 32 rifle / one lifetime launcher | 1.6 | 11 | 55 | 10 | 1 | 300 (~10s); requires completed Panzerfausts research |
 | machine_gunner  | 55  | 4   | 6.1   | 12  | 1.28  | 11    | 75  | 10  | 2   | 400 (~13s) |
 | mortar_team     | 75  | 40 outer / 100 inner AOE | 5-17 | 120 | 1.6 | 10 | 100 | 40 | 3 | 460 (~15s); trained at Gun Works (`steelworks` kind) |
-| anti_tank_gun         | 45  | 100 deployed; cannot target infantry | 20 deployed | 144 | 1.672 | 9    | 150 | 40  | 6   | 440 (~15s); cannot fire while packed or transitioning; available immediately from a completed Gun Works (`steelworks` kind) |
+| anti_tank_gun         | 45  | 100 deployed; cannot target infantry | 20 deployed | 144 | 1.672 | 9    | 150 | 40  | 3   | 440 (~15s); cannot fire while packed or transitioning; available immediately from a completed Gun Works (`steelworks` kind) |
 | artillery       | 200 | 75 AP inner / 75-20 outer AOE | 10-35 artillery fire | 180 | 1.6 | 7 | 150 | 50 | 4 | 600 (~20s); requires Gun Works (`steelworks` kind) and Artillery (`artillery_unlock`) researched in Engineering Complex; rendered at 75% of its prior size with a matching 75%-of-Tank gameplay footprint; 2/3-tile inner and 2-tile outer blast radii; soft target with no armor damage reduction |
 | rocket_launcher (Rocket Truck) | 150 | 16 rockets, each 21 outer / 53 inner AOE; a rocket whose impact point intersects a target deals 70 armor-piercing damage instead; all resulting damage is reduced to 25% against buildings | 10-44 Barrage | 1800-tick (~60s) cooldown from activation | 2.0 | 8 | 225 | 100 | 6 | 600 (~20s); requires Gun Works (`steelworks` kind), a completed owned Vehicle Works (`factory` kind), and Rockets (`rockets`) researched in Engineering Complex; vehicle movement; must stop to launch; one manual command unloads exactly 16 rockets over 120 ticks (~4s) into a 6-tile scatter radius and then stops; its team-tinted rack carries 16 rounds, empties one slot per launch, and refills at cooldown completion; the PNG and collision footprint are enlarged by 20% (48×26.4 px body, 1.2 px clearance, 21.6 px selection radius); Barrage accepts in-range world points without requiring current vision; first barrage is free and later barrages cost 150 oil |
 | scout_car       | 100 | 6   | 7     | 12  | 2.35  | 15    | 125 | 60  | 3   | 480 (~16s) |
 | scout_plane     | 40  | 0   | 0     | 0  | 2.6   | 19    | 0   | 0   | 0   | 0; instant sorties are free from a Resource Depot or Command Car; both use the C slot after research; unlimited independent active sorties; non-combat recon with 2-tile orbit radius and a 30-second total lifetime from launch, including transit, followed by despawn; 30-second carrier-local cooldown, no ground collision reservation, and 48x34 px client render body |
-| tank            | 292 | 60 cannon; 4 coax | 5 moving / 14 fully stationary cannon; 6 coax | 144 cannon; 12 coax | 2.0   | 9     | 425 | 175 | 8   | 750 (~25s); requires Vehicle Works (`factory` kind) and Tank Production (`tank_unlock`) researched in Engineering Complex; coax is a secondary small-arms weapon that fires through the current turret arc |
+| tank            | 292 | 60 cannon; 4 coax | 5 moving / 14 fully stationary cannon; 6 coax | 144 cannon; 12 coax | 2.0   | 9     | 425 | 175 | 6   | 750 (~25s); requires Vehicle Works (`factory` kind) and Tank Production (`tank_unlock`) researched in Engineering Complex; coax is a secondary small-arms weapon that fires through the current turret arc |
 | command_car     | 150 | 0   | 0     | 0  | 2.35  | 8     | 150 | 85  | 4   | 450 (~15s); trained at Vehicle Works (`factory` kind) and requires a completed Engineering Complex, but no Tank Production research; no weapon; Scout Car-style movement with a smaller jeep-sized body |
 | ekat       | 150 | 0   | 0     | 0  | 1.6   | 12    | 0   | 0   | 0   | 0; Ekat faction hero; no default attack; no passive regeneration; consumes nearby Golems for recovery |
 

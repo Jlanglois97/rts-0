@@ -115,7 +115,7 @@ export const EKAT_MAGIC_ANCHOR_RADIUS_TILES = 3.0;
 export const EKAT_MAGIC_ANCHOR_PULL_AWAY_MULTIPLIER = 0.45;
 export const EKAT_MAGIC_ANCHOR_PULL_TOWARD_MULTIPLIER = 1.35;
 export const BASE_COMMAND_SUPPLY_CAP = 24;
-export const COMMAND_CAR_SUPPLY_CAP_BONUS = 20;
+export const COMMAND_CAR_SUPPLY_CAP_BONUS = 0;
 export const SCOUT_PLANE_ORBIT_RADIUS_TILES = 2;
 export const SCOUT_PLANE_SPEED_PX_PER_TICK = 2.6;
 export const SCOUT_PLANE_LIFETIME_TICKS = TICK_HZ * 30;
@@ -141,7 +141,7 @@ export const STATS = Object.freeze({
   [KIND.MACHINE_GUNNER]: { label: "Machine Gunner", icon: "MG", size: 10, sight: 11,
     rangeTiles: 6.1, cost: { steel: 75, oil: 10 }, supply: 2, buildTicks: 400, requires: KIND.TRAINING_CENTRE },
   [KIND.ANTI_TANK_GUN]: { label: "Anti-Tank Gun", icon: "ATG", size: 20, sight: 9, body: ANTI_TANK_GUN_BODY,
-    rangeTiles: ANTI_TANK_GUN_DEPLOYED_RANGE_TILES, cost: { steel: 150, oil: 40 }, supply: 6, buildTicks: 440,
+    rangeTiles: ANTI_TANK_GUN_DEPLOYED_RANGE_TILES, cost: { steel: 150, oil: 40 }, supply: 3, buildTicks: 440,
     requires: KIND.STEELWORKS },
   [KIND.MORTAR_TEAM]: { label: "Mortar Team", icon: "MT", size: 18, sight: 10,
     rangeTiles: MORTAR_RANGE_TILES, minRangeTiles: MORTAR_MIN_RANGE_TILES,
@@ -165,7 +165,7 @@ export const STATS = Object.freeze({
     blocksGroundPlacement: false,
     rangeTiles: 0, cost: { steel: 0, oil: 0 }, supply: 0, buildTicks: 0 },
   [KIND.TANK]: { label: "Tank", icon: "TK", size: 18, sight: 9, body: TANK_BODY,
-    rangeTiles: 5, cost: { steel: 425, oil: 175 }, supply: 8, buildTicks: 750,
+    rangeTiles: 5, cost: { steel: 425, oil: 175 }, supply: 6, buildTicks: 750,
     requires: KIND.FACTORY, upgradeRequires: UPGRADE.TANK_UNLOCK,
     upgradeRequiresText: "Requires research in Engineering Complex" },
   [KIND.COMMAND_CAR]: { label: "Command Car", icon: "CAR", size: 12.6, sight: 8, body: COMMAND_CAR_BODY,
