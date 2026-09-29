@@ -67,8 +67,7 @@ fn researched_resource_depot_launches_a_free_scout_plane_ability_without_resourc
         .expect("resource depot should spawn");
     let mut players = vec![player_state(1), player_state(2)];
     players[0].upgrades.insert(UpgradeKind::ScoutPlaneUnlock);
-    players[0].steel = 0;
-    players[0].oil = 0;
+    players[0].set_resources(0, 0);
 
     let events = apply_with_players(
         &map,
@@ -105,8 +104,7 @@ fn command_car_scout_plane_ability_launches_from_caster_without_a_resource_depot
         .expect("command car should spawn");
     let mut players = vec![player_state(1), player_state(2)];
     players[0].upgrades.insert(UpgradeKind::ScoutPlaneUnlock);
-    players[0].steel = 0;
-    players[0].oil = 0;
+    players[0].set_resources(0, 0);
 
     let events = apply_with_players(
         &map,
