@@ -809,7 +809,7 @@ fn crossroads_main_buildings_are_placed_by_how_far_behind_the_hq_they_are() {
             assert!(ahead < 0.0, "{kind:?} at {destroyed:?}: {ahead}");
             let behind = depth(kind, sheltered, Some(&analysis)).unwrap();
             assert!(
-                behind >= CROSSROADS_SHELTERED_DEPTH_TILES,
+                behind >= production::CROSSROADS_SHELTERED_DEPTH_TILES,
                 "{kind:?} at {sheltered:?}: {behind}"
             );
         }

@@ -40,7 +40,9 @@ mod production;
 mod resources;
 mod trace;
 mod turtle;
+mod unit_mix;
 mod upgrades;
+use self::unit_mix::*;
 use self::upgrades::*;
 
 #[cfg(test)]
@@ -59,11 +61,11 @@ use self::economy_manager::{
     propose_economy, EconomyManagerInput, EconomyManagerOutput, EconomyManagerSignals,
     EconomyProposal, OilDemandSignal,
 };
-use self::expansion::{plan_expansion, try_build_expansion_resource_depot, ExpansionBlocker};
-use self::frontal::{issue_frontal_wave, plan_frontal_wave, sync_containment_recovery};
-use self::geometry::{
-    clamp_to_map, footprint_top_left_for_center, normalized_direction, tile_center,
+use self::expansion::{
+    plan_expansion, resource_depot_to_resume, try_build_expansion_resource_depot, ExpansionBlocker,
 };
+use self::frontal::{issue_frontal_wave, plan_frontal_wave, sync_containment_recovery};
+use self::geometry::{clamp_to_map, normalized_direction, tile_center};
 use self::jeff::{
     production_rally as jeffs_production_rally, rifleman_home_rally as jeffs_rifleman_home_rally,
     uses_current_jeff_defense, uses_home_rifle_coverage,
@@ -78,7 +80,7 @@ use self::production::{
     relocate_machine_gunners_blocking_factory, relocate_machine_gunners_from_factory_site,
     should_build_extra_factory, should_build_extra_turtle_gun_works,
     should_save_for_first_tech_unit, should_save_for_required_tech_building, try_build_kind,
-    unit_counts_for_priorities,
+    try_build_production, unit_counts_for_priorities,
 };
 use self::trace::{build_manager_trace, ManagerOutputTrace, TraceInput};
 use self::turtle::{
@@ -1408,68 +1410,6 @@ fn planned_train_in_intents(intents: &[AiIntent], kind: EntityKind) -> bool {
         .any(|intent| matches!(intent, AiIntent::Train { kind: trained } if *trained == kind))
 }
 
-fn resource_depot_to_resume(
-    observation: &AiObservation,
-    memory: &AiDecisionMemory,
-) -> Option<(u32, u32)> {
-    observation
-        .owned
-        .iter()
-        .filter(|site| site.kind == EntityKind::ResourceDepot && !site.is_complete)
-        .find_map(|site| {
-            if !memory.resource_depot_is_safe_to_resume(site.id, observation.tick) {
-                return None;
-            }
-            let (tile_x, tile_y) = resource_depot_site_tile(observation, site)?;
-            if resource_depot_has_assigned_builder(observation, site.id, tile_x, tile_y) {
-                None
-            } else {
-                Some((tile_x, tile_y))
-            }
-        })
-}
-
-fn resource_depot_has_assigned_builder(
-    observation: &AiObservation,
-    site_id: u32,
-    tile_x: u32,
-    tile_y: u32,
-) -> bool {
-    observation.owned.iter().any(|entity| {
-        entity.kind == EntityKind::Worker
-            && entity.state == AiEntityState::Build
-            && entity.target_id == Some(site_id)
-    }) || observation.pending_builds.iter().any(|intent| {
-        intent.kind == EntityKind::ResourceDepot
-            && intent.tile_x == tile_x
-            && intent.tile_y == tile_y
-    })
-}
-
-fn resource_depot_site_tile(
-    observation: &AiObservation,
-    site: &AiEntitySummary,
-) -> Option<(u32, u32)> {
-    let tile_size = observation.map.tile_size as f32;
-    if tile_size <= 0.0
-        || !site.x.is_finite()
-        || !site.y.is_finite()
-        || site.x < 0.0
-        || site.y < 0.0
-    {
-        return None;
-    }
-    let center_tile = (
-        (site.x / tile_size).floor() as u32,
-        (site.y / tile_size).floor() as u32,
-    );
-    let (tile_x, tile_y) = footprint_top_left_for_center(center_tile, EntityKind::ResourceDepot)?;
-    let stats = config::building_stats(EntityKind::ResourceDepot)?;
-    (tile_x <= observation.map.width.saturating_sub(stats.foot_w)
-        && tile_y <= observation.map.height.saturating_sub(stats.foot_h))
-    .then_some((tile_x, tile_y))
-}
-
 fn turtle_opening_pending(profile: &AiProfile, memory: &AiDecisionMemory) -> bool {
     profile
         .turtle_defense
@@ -1497,188 +1437,6 @@ fn should_build_expansion_from_economy_manager(output: &EconomyManagerOutput) ->
     output.proposes(EconomyProposal::BuildExpansionResourceDepot)
 }
 
-fn turtle_should_delay_tech_for_entrenchment(
-    profile: &AiProfile,
-    memory: &AiDecisionMemory,
-    facts: &AiFacts,
-    kind: EntityKind,
-) -> bool {
-    if profile.turtle_defense.is_none() {
-        return false;
-    }
-    if matches!(kind, EntityKind::Barracks | EntityKind::TrainingCentre) {
-        return false;
-    }
-    if facts.complete_building_count(EntityKind::TrainingCentre) == 0 {
-        return true;
-    }
-    if !turtle_entrenchment_started_or_done(memory, facts) {
-        return true;
-    }
-    false
-}
-
-fn turtle_barracks_target(profile: &AiProfile, facts: &AiFacts, base_target: usize) -> usize {
-    let Some(policy) = profile.turtle_defense else {
-        return base_target;
-    };
-    if facts.complete_building_count(EntityKind::TrainingCentre) == 0 {
-        return base_target.min(1);
-    }
-    base_target.max(policy.support_barracks_target)
-}
-
-fn effective_unit_priorities_for_upgrades(
-    profile: &AiProfile,
-    unit_priorities: &[EntityKind],
-    completed_upgrades: &[UpgradeKind],
-) -> Vec<EntityKind> {
-    if profile.fast_tank_timing.is_some() {
-        return unit_priorities.to_vec();
-    }
-    let methamphetamines_ready = completed_upgrades.contains(&UpgradeKind::Methamphetamines);
-    unit_priorities
-        .iter()
-        .copied()
-        .filter(|unit| *unit != EntityKind::Tank || methamphetamines_ready)
-        .collect()
-}
-
-fn effective_unit_priorities_for_fast_tank_timing(
-    profile: &AiProfile,
-    facts: &AiFacts,
-    unit_priorities: &[EntityKind],
-) -> Vec<EntityKind> {
-    let Some(timing) = profile.fast_tank_timing else {
-        return unit_priorities.to_vec();
-    };
-    let mut priorities: Vec<EntityKind> = unit_priorities
-        .iter()
-        .copied()
-        .filter(|unit| {
-            *unit != EntityKind::ScoutCar
-                || facts.unit_count(EntityKind::Tank) >= timing.tanks_before_scout_car
-        })
-        .collect();
-    if facts.unit_count(EntityKind::Tank) >= timing.tanks_before_scout_car
-        && facts.unit_count(EntityKind::ScoutCar) < timing.scout_car_target
-    {
-        priorities.sort_by_key(|unit| (*unit != EntityKind::ScoutCar) as u8);
-    }
-    priorities
-}
-
-fn effective_unit_priorities_for_turtle(
-    profile: &AiProfile,
-    memory: &AiDecisionMemory,
-    facts: &AiFacts,
-    observation: &AiObservation,
-    map_analysis: Option<&AiMapAnalysis>,
-    unit_priorities: &[EntityKind],
-) -> Vec<EntityKind> {
-    let Some(policy) = profile.turtle_defense else {
-        return unit_priorities.to_vec();
-    };
-    let opening_done = memory.turtle_opening_riflemen_ordered >= policy.opening_riflemen;
-    let entrenchment_started_or_done = turtle_entrenchment_started_or_done(memory, facts);
-    let machine_gunner_lines_staffed =
-        turtle_machine_gunner_lines_staffed(observation, map_analysis, policy);
-    unit_priorities
-        .iter()
-        .copied()
-        .filter(|unit| match *unit {
-            EntityKind::Rifleman => !opening_done,
-            EntityKind::MachineGunner => {
-                opening_done && entrenchment_started_or_done && !machine_gunner_lines_staffed
-            }
-            EntityKind::AntiTankGun => opening_done && entrenchment_started_or_done,
-            _ => true,
-        })
-        .collect()
-}
-
-fn turtle_entrenchment_started_or_done(memory: &AiDecisionMemory, facts: &AiFacts) -> bool {
-    facts
-        .completed_upgrades()
-        .contains(&UpgradeKind::Entrenchment)
-        || memory.pending_upgrades.contains(&UpgradeKind::Entrenchment)
-}
-
-fn effective_unit_priorities_for_defensive_machine_gunners(
-    profile: &AiProfile,
-    facts: &AiFacts,
-    unit_priorities: &[EntityKind],
-) -> Vec<EntityKind> {
-    let mut priorities = unit_priorities.to_vec();
-    let Some(policy) = profile.defensive_machine_gunners else {
-        return priorities;
-    };
-    if policy.target_count == 0 || facts.complete_building_count(EntityKind::TrainingCentre) == 0 {
-        return priorities;
-    }
-    if priorities.contains(&EntityKind::MachineGunner) {
-        return priorities;
-    }
-    let insert_at = priorities
-        .iter()
-        .position(|unit| *unit == EntityKind::Tank)
-        .map(|index| index + 1)
-        .unwrap_or(0);
-    priorities.insert(insert_at, EntityKind::MachineGunner);
-    priorities
-}
-
-fn production_max_counts(
-    profile: &AiProfile,
-    observation: &AiObservation,
-    map_analysis: Option<&AiMapAnalysis>,
-) -> Vec<(EntityKind, usize)> {
-    let mut counts = profile
-        .defensive_machine_gunners
-        .map(|policy| vec![(EntityKind::MachineGunner, policy.target_count)])
-        .unwrap_or_default();
-    if let Some(policy) = profile.turtle_defense {
-        counts.push((EntityKind::Rifleman, policy.opening_riflemen));
-        let target_chokes = map_analysis
-            .map(|analysis| {
-                analysis
-                    .base_chokes_for_player(observation.player_id, policy.max_chokes)
-                    .len()
-                    .min(policy.machine_gunner_target_chokes)
-            })
-            .unwrap_or(policy.machine_gunner_target_chokes);
-        counts.push((
-            EntityKind::MachineGunner,
-            target_chokes.saturating_mul(policy.machine_gunners_per_choke),
-        ));
-    }
-    if let Some(timing) = profile.fast_tank_timing {
-        counts.push((EntityKind::ScoutCar, timing.scout_car_target));
-    }
-    if let Some(policy) = profile.home_anti_tank {
-        counts.push((EntityKind::AntiTankGun, policy.target_guns));
-    }
-    counts
-}
-
-fn can_train_pre_tank_defensive_machine_gunner(
-    profile: &AiProfile,
-    facts: &AiFacts,
-    building_kind: EntityKind,
-) -> bool {
-    if profile.defensive_machine_gunners.is_none() || building_kind != EntityKind::Barracks {
-        return false;
-    }
-    let tank_production_available = !facts.production_buildings(EntityKind::Factory).is_empty()
-        && facts
-            .completed_upgrades()
-            .contains(&UpgradeKind::TankUnlock)
-        && facts
-            .completed_upgrades()
-            .contains(&UpgradeKind::Methamphetamines);
-    !tank_production_available
-}
-
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -1687,77 +1445,3 @@ mod vehicle_worker_tests;
 /// On Crossroads Jeff stops turning surplus Steel into Riflemen at this many. It fielded 30-40,
 /// most of them idle, while Oil held it to 2-4 Tanks and it never took a third base.
 const CROSSROADS_MAX_SURPLUS_RIFLEMEN: usize = 24;
-
-/// On Crossroads each main has ground behind the HQ, walled off by water, that the enemy can only
-/// reach by walking past the HQ. A main-base building goes first to the nearest site at least this
-/// many tiles deeper than the HQ on the enemy's walk.
-const CROSSROADS_SHELTERED_DEPTH_TILES: f32 = 6.0;
-
-/// How far from the HQ Jeff looks for a sheltered Crossroads site. The sheltered ground starts
-/// 11 tiles from the north HQ, and the east start's usual 6-8 tile Factory band lies almost
-/// entirely on the way-in side.
-const CROSSROADS_SHELTER_SEARCH_MAX_RADIUS: i32 = 18;
-
-/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff places its
-/// Barracks, Training Centre, Engineering Complex and Factory at the nearest sheltered site behind
-/// its HQ, else the nearest site no nearer the enemy on foot than the HQ, and only when neither
-/// exists at the usual site.
-#[allow(clippy::too_many_arguments)]
-fn try_build_production<F>(
-    observation: &AiObservation,
-    facts: &AiFacts,
-    actions: &mut AiActionContext<'_>,
-    builder_pools: &[&[u32]],
-    profile: &AiProfile,
-    kind: EntityKind,
-    build_search: ai_shared::BuildSearch,
-    map_analysis: Option<&AiMapAnalysis>,
-    placeable: &mut F,
-) -> Option<actions::BuildAction>
-where
-    F: FnMut(EntityKind, u32, u32) -> bool,
-{
-    if uses_current_jeffs_ai_policy(profile.id)
-        && jeff::crossroads_sheltered_kind(kind)
-        && defense::crossroads_wall_aware_approach_direction(observation).is_some()
-        && map_analysis.is_some()
-    {
-        let usual = production::build_search_for_kind(build_search, profile, kind);
-        // Nearest first: the rings grow outward from the HQ with no pull toward the map centre.
-        let sheltered_search = ai_shared::BuildSearch {
-            max_radius: usual.max_radius.max(CROSSROADS_SHELTER_SEARCH_MAX_RADIUS),
-            prefer_away_from_center: false,
-            prefer_toward_center: false,
-            ..usual
-        };
-        for min_depth in [CROSSROADS_SHELTERED_DEPTH_TILES, 0.0] {
-            let built = production::try_build_kind_with_search(
-                observation,
-                facts,
-                actions,
-                builder_pools,
-                profile,
-                kind,
-                sheltered_search,
-                &mut |building, x, y| {
-                    placeable(building, x, y)
-                        && jeff::crossroads_site_depth(observation, map_analysis, building, x, y)
-                            .is_some_and(|depth| depth >= min_depth)
-                },
-            );
-            if built.is_some() {
-                return built;
-            }
-        }
-    }
-    try_build_kind(
-        observation,
-        facts,
-        actions,
-        builder_pools,
-        profile,
-        kind,
-        build_search,
-        placeable,
-    )
-}

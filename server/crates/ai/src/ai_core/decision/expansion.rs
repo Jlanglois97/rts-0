@@ -844,6 +844,68 @@ pub(super) fn resource_is_near_player_start(
     })
 }
 
+pub(super) fn resource_depot_to_resume(
+    observation: &AiObservation,
+    memory: &AiDecisionMemory,
+) -> Option<(u32, u32)> {
+    observation
+        .owned
+        .iter()
+        .filter(|site| site.kind == EntityKind::ResourceDepot && !site.is_complete)
+        .find_map(|site| {
+            if !memory.resource_depot_is_safe_to_resume(site.id, observation.tick) {
+                return None;
+            }
+            let (tile_x, tile_y) = resource_depot_site_tile(observation, site)?;
+            if resource_depot_has_assigned_builder(observation, site.id, tile_x, tile_y) {
+                None
+            } else {
+                Some((tile_x, tile_y))
+            }
+        })
+}
+
+fn resource_depot_has_assigned_builder(
+    observation: &AiObservation,
+    site_id: u32,
+    tile_x: u32,
+    tile_y: u32,
+) -> bool {
+    observation.owned.iter().any(|entity| {
+        entity.kind == EntityKind::Worker
+            && entity.state == AiEntityState::Build
+            && entity.target_id == Some(site_id)
+    }) || observation.pending_builds.iter().any(|intent| {
+        intent.kind == EntityKind::ResourceDepot
+            && intent.tile_x == tile_x
+            && intent.tile_y == tile_y
+    })
+}
+
+fn resource_depot_site_tile(
+    observation: &AiObservation,
+    site: &AiEntitySummary,
+) -> Option<(u32, u32)> {
+    let tile_size = observation.map.tile_size as f32;
+    if tile_size <= 0.0
+        || !site.x.is_finite()
+        || !site.y.is_finite()
+        || site.x < 0.0
+        || site.y < 0.0
+    {
+        return None;
+    }
+    let center_tile = (
+        (site.x / tile_size).floor() as u32,
+        (site.y / tile_size).floor() as u32,
+    );
+    let (tile_x, tile_y) = footprint_top_left_for_center(center_tile, EntityKind::ResourceDepot)?;
+    let stats = config::building_stats(EntityKind::ResourceDepot)?;
+    (tile_x <= observation.map.width.saturating_sub(stats.foot_w)
+        && tile_y <= observation.map.height.saturating_sub(stats.foot_h))
+    .then_some((tile_x, tile_y))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
