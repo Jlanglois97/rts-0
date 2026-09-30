@@ -2183,6 +2183,13 @@ placement mode. Moving off the oil hit area, changing selection, dragging, targe
 command, or hovering UI clears or suppresses the hint. The hint identifies the command; the
 server still validates construction when the order arrives.
 
+Tank selections expose **Point** in the bottom-middle command slot (Grid X, Classic RTS O).
+Existing mortar/artillery commands retain priority in mixed selections that share X.
+Point is available without research and uses the normal targeted-command click/cancel flow on
+both battlefield and minimap. Only selected controllable tanks are sent in `pointTanks`.
+The cursor selects one shared heading from the tanks’ center, keeping their hulls parallel.
+Point immediately stops previous movement and holds that heading; Shift does not queue it.
+
 ### 4.1a Targeted ability mode (Smoke, Mortar Fire, Artillery Fire, Scout Plane)
 
 `input/commands.js` exposes `_onAbilityTarget` and `_refreshAbilityTargetPreview` for world-point

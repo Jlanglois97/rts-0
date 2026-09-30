@@ -96,6 +96,7 @@ fn is_combat_command(command: &Command) -> bool {
         | Command::ClearObstacleArea { .. }
         | Command::AttackMove { .. }
         | Command::Move { .. }
+        | Command::PointTanks { .. }
         | Command::SetupAntiTankGuns { .. }
         | Command::TearDownAntiTankGuns { .. }
         | Command::UseAbility { .. }

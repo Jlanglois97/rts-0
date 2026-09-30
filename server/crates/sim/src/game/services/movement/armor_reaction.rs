@@ -68,7 +68,8 @@ fn tank_can_react(tank: &Entity) -> bool {
         Order::Idle | Order::HoldPosition => true,
         Order::Attack(order) => order.execution.phase == AttackPhase::Firing,
         Order::AttackMove(_) => tank.move_phase() == Some(MovePhase::Arrived),
-        Order::Move(_)
+        Order::Point { .. }
+        | Order::Move(_)
         | Order::Gather(_)
         | Order::Build(_)
         | Order::Deconstruct(_)

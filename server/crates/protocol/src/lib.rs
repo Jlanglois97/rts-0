@@ -184,6 +184,11 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "is_false")]
         construction: bool,
     },
+    PointTanks {
+        units: Vec<u32>,
+        x: f32,
+        y: f32,
+    },
     Stop {
         units: Vec<u32>,
     },

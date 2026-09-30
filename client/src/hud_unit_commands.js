@@ -56,6 +56,16 @@ export function stopDescriptor(unitIds) {
   };
 }
 
+export function pointTanksDescriptor(ctx) {
+  return {
+    id: "unit:point", commandId: "unit.pointTanks", kind: "button",
+    action: "pointTanks", intent: { type: "beginCommandTarget", target: "pointTanks" },
+    icon: "PNT", label: "Point", enabled: true,
+    title: "Stop and turn tank hulls to one shared heading toward the cursor",
+    cls: ctx.commandTarget === "pointTanks" ? "active" : "",
+  };
+}
+
 export function setupSupportWeaponDescriptor(ctx, setupWeapons) {
   return {
     id: "unit:setup",

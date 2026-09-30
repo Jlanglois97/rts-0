@@ -115,7 +115,9 @@ pub(super) fn planner_facts(
             });
             facts.active_build = matches!(e.order(), Order::Build(_) | Order::Deconstruct(_));
             facts.activity = match e.order() {
-                Order::Idle | Order::HoldPosition => planner::UnitActivity::Idle,
+                Order::Idle | Order::HoldPosition | Order::Point { .. } => {
+                    planner::UnitActivity::Idle
+                }
                 Order::Move(_) | Order::AttackMove(_) | Order::Ability(_) => {
                     planner::UnitActivity::Moving
                 }

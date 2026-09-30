@@ -466,6 +466,7 @@ impl PlayerMilestones {
             | Command::FormationMove {
                 attack_move: false, ..
             }
+            | Command::PointTanks { .. }
             | Command::SetupAntiTankGuns { .. }
             | Command::TearDownAntiTankGuns { .. }
             | Command::UseAbility { .. }

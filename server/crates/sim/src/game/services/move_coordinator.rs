@@ -1180,6 +1180,7 @@ fn pathing_source_from_order(order: &Order) -> PathingRequestSource {
         Order::Deconstruct(_) => PathingRequestSource::Deconstruct,
         Order::Ability(_) => PathingRequestSource::Ability,
         Order::Idle
+        | Order::Point { .. }
         | Order::HoldPosition
         | Order::ArtilleryPointFire(_)
         | Order::ArtilleryBlanketFire { .. } => PathingRequestSource::Other,

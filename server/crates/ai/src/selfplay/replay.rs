@@ -588,6 +588,7 @@ fn command_stats_by_player(commands: &[CommandLogEntry]) -> BTreeMap<u32, Comman
             | WireCommand::FormationMove {
                 attack_move: false, ..
             }
+            | WireCommand::PointTanks { .. }
             | WireCommand::SetupAntiTankGuns { .. }
             | WireCommand::TearDownAntiTankGuns { .. }
             | WireCommand::Charge { .. }
@@ -750,6 +751,7 @@ fn command_units(command: &rts_sim::game::command::SimCommand) -> Option<&[u32]>
         | rts_sim::game::command::SimCommand::ClearObstacleArea { units, .. }
         | rts_sim::game::command::SimCommand::Attack { units, .. }
         | rts_sim::game::command::SimCommand::AttackTankTrapCluster { units, .. }
+        | rts_sim::game::command::SimCommand::PointTanks { units, .. }
         | rts_sim::game::command::SimCommand::SetupAntiTankGuns { units, .. }
         | rts_sim::game::command::SimCommand::TearDownAntiTankGuns { units }
         | rts_sim::game::command::SimCommand::UseAbility { units, .. }

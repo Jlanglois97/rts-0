@@ -118,6 +118,11 @@ pub enum SimCommand {
         #[serde(default)]
         construction: bool,
     },
+    PointTanks {
+        units: Vec<u32>,
+        x: f32,
+        y: f32,
+    },
     Stop {
         units: Vec<u32>,
     },
@@ -387,6 +392,7 @@ impl SimCommand {
                 building,
                 construction,
             },
+            protocol::Command::PointTanks { units, x, y } => SimCommand::PointTanks { units, x, y },
             protocol::Command::Stop { units } => SimCommand::Stop { units },
             protocol::Command::HoldPosition { units, queued } => {
                 SimCommand::HoldPosition { units, queued }
@@ -602,6 +608,11 @@ impl SimCommand {
             } => protocol::Command::Cancel {
                 building: *building,
                 construction: *construction,
+            },
+            SimCommand::PointTanks { units, x, y } => protocol::Command::PointTanks {
+                units: units.clone(),
+                x: *x,
+                y: *y,
             },
             SimCommand::Stop { units } => protocol::Command::Stop {
                 units: units.clone(),

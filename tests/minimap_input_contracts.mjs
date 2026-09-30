@@ -1,3 +1,4 @@
+import { runPointInputContracts } from "./point_input_contracts.mjs";
 import { createFormationGesture } from "../client/src/input/formation_gesture.js";
 import { runMinimapFormationContracts } from "./minimap_formation_contracts.mjs";
 import { runMinimapPresentationContracts } from "./minimap_presentation_contracts.mjs";
@@ -14,11 +15,9 @@ import {
   TERRAIN_VARIANT_PALETTES,
 } from "../client/src/config.js";
 import { ABILITY, cmd, KIND, LAB_ROLE, ORDER_STAGE, SETUP, TERRAIN, UPGRADE } from "../client/src/protocol.js";
-
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || "Assertion failed");
 }
-
 function assertApprox(actual, expected, epsilon, msg) {
   assert(Math.abs(actual - expected) <= epsilon, `${msg}: expected ${expected}, got ${actual}`);
 }
@@ -1543,3 +1542,4 @@ runMinimapPresentationContracts({ installWindowStub, fakeRenderableCanvas });
 
 console.log("minimap_input_contracts: ok");
 runMinimapFormationContracts({ minimapHarness, lockedEvent, pointerEvent, listenerFor, recordingContext, assert });
+await runPointInputContracts({ minimapHarness, lockedEvent, assert });

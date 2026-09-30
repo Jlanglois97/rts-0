@@ -28,6 +28,7 @@ mod pivot_drive;
 mod side_push;
 mod static_repath;
 mod steering_proximity;
+mod tank_point;
 mod tree_trunks;
 mod vehicle_traffic;
 

@@ -81,6 +81,16 @@ export function _issueTargetedCommand(p, ev = {}) {
     }
     return true;
   }
+  if (commandTarget === "pointTanks") {
+    if (!world) return false;
+    const tanks = this.state.selectedEntities().filter((e) =>
+      ownOwner(this.state, e.owner, this.controlPolicy) && e.kind === KIND.TANK);
+    if (tanks.length > 0) {
+      this.commandInteraction.issueCommand(cmd.pointTanks(tanks.map((e) => e.id), world.x, world.y));
+      this._addCommandFeedback("move", world.x, world.y, false);
+    }
+    return true;
+  }
   if (commandTarget === "setupAntiTankGuns") {
     if (!world) return false;
     const supportWeapons = selectedOwnSupportWeaponEntities(this);

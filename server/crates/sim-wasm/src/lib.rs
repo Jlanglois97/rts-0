@@ -660,6 +660,7 @@ impl CorePredictor {
             }
             Command::Attack { .. }
             | Command::ClearObstacleArea { .. }
+            | Command::PointTanks { .. }
             | Command::SetupAntiTankGuns { .. }
             | Command::TearDownAntiTankGuns { .. }
             | Command::Charge { .. }
@@ -1160,6 +1161,7 @@ fn command_kind(command: &Command) -> &'static str {
         Command::SetAutoBuildSettings { .. } => "setAutoBuildSettings",
         Command::Research { .. } => "research",
         Command::Cancel { .. } => "cancel",
+        Command::PointTanks { .. } => "pointTanks",
         Command::Stop { .. } => "stop",
         Command::HoldPosition { .. } => "holdPosition",
         Command::SetRally { .. } => "setRally",

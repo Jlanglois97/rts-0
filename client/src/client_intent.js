@@ -25,7 +25,7 @@ export class ClientIntent {
     this.placement = null;
     /** @type {null | "workerBuild"} */
     this.commandCardMode = null;
-    /** @type {null | "move" | "attack" | "setupAntiTankGuns" | {kind:"ability",ability:string}} */
+    /** @type {null | "move" | "attack" | "setupAntiTankGuns" | "pointTanks" | {kind:"ability",ability:string}} */
     this.commandTarget = null;
     this.commandComposer = new CommandComposer();
     /** @type {null | {id:string,kind:string,payload?:object,label?:string,keepArmedOnWorldClick?:boolean,paintOnDrag?:boolean,consumeBoxSelection?:boolean,keepArmedOnBoxSelection?:boolean}} */
@@ -118,7 +118,7 @@ export class ClientIntent {
 
   /**
    * Arm a one-click command target mode from the HUD.
-   * @param {"move"|"attack"|"setupAntiTankGuns"|{kind:"ability",ability:string}} kind
+   * @param {"move"|"attack"|"setupAntiTankGuns" | "pointTanks"|{kind:"ability",ability:string}} kind
    */
   beginCommandTarget(kind, options = {}) {
     this._clearActiveLabTool();

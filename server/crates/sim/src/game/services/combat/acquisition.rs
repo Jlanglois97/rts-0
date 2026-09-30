@@ -30,7 +30,7 @@ pub(super) enum CombatMode {
 pub(super) fn combat_mode_with_moving_fire(e: &Entity, can_fire_while_moving: bool) -> CombatMode {
     match e.order() {
         Order::Attack(_) => CombatMode::Ordered,
-        Order::HoldPosition => CombatMode::Opportunistic,
+        Order::HoldPosition | Order::Point { .. } => CombatMode::Opportunistic,
         Order::AttackMove(_)
             if entrenchment_combat::is_actively_entrenched(e)
                 && e.move_phase() == Some(MovePhase::Arrived) =>

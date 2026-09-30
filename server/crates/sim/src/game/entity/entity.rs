@@ -1347,7 +1347,7 @@ impl Entity {
             return states::MOVE;
         }
         match self.order() {
-            Order::Idle | Order::HoldPosition => states::IDLE,
+            Order::Idle | Order::HoldPosition | Order::Point { .. } => states::IDLE,
             Order::Move(_) => states::MOVE,
             Order::AttackMove(_) => {
                 if self.target_id().is_some() {

@@ -280,6 +280,7 @@ pub(in crate::game) fn combat_system(
                         | Order::AttackMove(_)
                         | Order::Move(_)
                         | Order::Idle
+                        | Order::Point { .. }
                         | Order::HoldPosition
                 ) {
                     e.set_target_id(None);

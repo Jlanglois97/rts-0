@@ -107,6 +107,7 @@ export const CMD = Object.freeze({
   SET_AUTO_BUILD_SETTINGS: "setAutoBuildSettings",
   RESEARCH: "research",
   CANCEL: "cancel",
+  POINT_TANKS: "pointTanks",
   STOP: "stop",
   HOLD_POSITION: "holdPosition",
   SET_RALLY: "setRally",
