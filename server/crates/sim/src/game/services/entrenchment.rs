@@ -161,7 +161,7 @@ fn holds_ground(entity: &Entity) -> bool {
         return false;
     }
     match entity.order() {
-        Order::Idle | Order::HoldPosition => true,
+        Order::Idle | Order::HoldPosition | Order::Point { .. } => true,
         Order::Attack(order) => order.execution.phase == AttackPhase::Firing,
         Order::AttackMove(_) => entity.move_phase() == Some(MovePhase::Arrived),
         Order::Move(_)

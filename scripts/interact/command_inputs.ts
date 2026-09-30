@@ -36,6 +36,7 @@ const COMMAND_FIELDS = Object.freeze({
   attackMove: ["c", "units", "x", "y", "queued"],
   attack: ["c", "units", "target", "tankTrapCluster", "queued"],
   deconstruct: ["c", "units", "target", "queued"],
+  pointTanks: ["c", "units", "x", "y"],
   setupAntiTankGuns: ["c", "units", "x", "y", "queued"],
   tearDownAntiTankGuns: ["c", "units"],
   charge: ["c", "units"],

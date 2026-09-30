@@ -616,6 +616,7 @@ pub fn protocol_contract() -> ProtocolContract {
             ("SET_AUTO_BUILD_SETTINGS", "setAutoBuildSettings"),
             ("RESEARCH", "research"),
             ("CANCEL", "cancel"),
+            ("POINT_TANKS", "pointTanks"),
             ("STOP", "stop"),
             ("HOLD_POSITION", "holdPosition"),
             ("SET_RALLY", "setRally"),

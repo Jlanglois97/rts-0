@@ -270,7 +270,8 @@ const LARGE_FILE_BASELINES = new Map(Object.entries({
   // Entrenchment Phase 3 adds the occupiedTrenchId slot; Panzerfaust reserves compact events.
   "protocol_snapshot.js": 24192,
   // Lab MVP Phase 5 lets command descriptors ask the injected policy which owner is controllable.
-  "hud_command_card.js": 29519,
+  // Point adds a tank hotkey catalog sample and delegates its descriptor to hud_unit_commands.
+  "hud_command_card.js": 29598,
   // Interact Phase 6 centralizes renderer visual-clock fallback so extracted draw modules
   // share the injected clock without each growing its own compatibility expression.
   "renderer/shared.js": 28217,

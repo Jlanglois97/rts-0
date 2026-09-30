@@ -335,7 +335,9 @@ fn ready_for_next_order(
         return false;
     }
     match e.order() {
-        Order::Idle | Order::HoldPosition => !e.queued_orders().is_empty() && e.path_is_empty(),
+        Order::Idle | Order::HoldPosition | Order::Point { .. } => {
+            !e.queued_orders().is_empty() && e.path_is_empty()
+        }
         Order::Move(_) | Order::AttackMove(_) => {
             !e.queued_orders().is_empty()
                 && e.path_is_empty()

@@ -22,6 +22,7 @@ import {
   attackDescriptor,
   holdDescriptor,
   moveDescriptor,
+  pointTanksDescriptor,
   setupSupportWeaponDescriptor,
   stopDescriptor,
 } from "./hud_unit_commands.js";
@@ -197,6 +198,7 @@ export function buildCommandCardContextCatalog() {
     { id: "command-car", card: buildCommandCardDescriptors(ctx([commandCar], {
       entities: allEntities.filter((e) => e.id !== scoutPlane.id),
     })) },
+    { id: "tank", card: buildCommandCardDescriptors(ctx([{ id: 17, owner: playerId, kind: KIND.TANK }])) },
     { id: "artillery", card: buildCommandCardDescriptors(ctx([artillery])) },
     { id: "resource-depot-train", card: buildCommandCardDescriptors(ctx([baseEntities[0]])) },
     { id: "barracks-train", card: buildCommandCardDescriptors(ctx([baseEntities[1]])) },
@@ -372,6 +374,8 @@ export function buildUnitCard(ctx, selection) {
       slots[setupSlot] = setupSupportWeaponDescriptor(ctx, setupWeapons);
     }
   }
+
+  if (!slots[7] && ownUnits.some((e) => e.kind === KIND.TANK)) slots[7] = pointTanksDescriptor(ctx);
 
   return card("unit", signature, slots, { abilityAffordances });
 }

@@ -53,6 +53,7 @@ mod planner_facts;
 mod production_repeat;
 mod scout_plane_ability;
 mod support_weapon_setup;
+mod tank_point;
 use self::command_helpers::{
     artillery_fire_mode_for, choose_smoke_caster, clear_queued_orders,
     clear_staged_anti_tank_gun_setup, gather_node_valid, immediate_unit_can_replace,
@@ -433,6 +434,14 @@ pub(in crate::game) fn apply_commands(
                     command_admission
                 );
             }
+            SimCommand::PointTanks { units, x, y } => {
+                let Some(units) =
+                    validate_command_units(entities, events, player, units, command_admission)
+                else {
+                    continue;
+                };
+                tank_point::apply(entities, player, &units, x, y);
+            }
             SimCommand::SetupAntiTankGuns {
                 units,
                 x,
@@ -701,7 +710,6 @@ pub(in crate::game) fn apply_commands(
                     notice(events, player, "Already researching");
                     continue;
                 }
-
                 let Some(ps) = players.iter_mut().find(|p| p.id == player) else {
                     continue;
                 };

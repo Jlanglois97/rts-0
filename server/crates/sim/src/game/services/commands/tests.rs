@@ -25,6 +25,7 @@ mod rally;
 mod scout_plane_production;
 mod support_weapon_setup;
 mod support_weapons;
+mod tank_point;
 mod tank_traps;
 
 /// Run `apply_commands` with throwaway derived state for command-validation tests.

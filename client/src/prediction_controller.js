@@ -20,6 +20,7 @@ export const COMMAND_PREDICTION_POLICIES = Object.freeze({
   deconstruct: Object.freeze({ family: "deconstruct", uiOptimism: false, confirmation: "authoritativeOnly" }),
   research: Object.freeze({ family: "research", uiOptimism: false, confirmation: "authoritativeOnly" }),
   useAbility: Object.freeze({ family: "ability", uiOptimism: false, confirmation: "authoritativeOnly" }),
+  pointTanks: Object.freeze({ family: "point", uiOptimism: false, confirmation: "authoritativeOnly" }),
   setupAntiTankGuns: Object.freeze({ family: "setup", uiOptimism: false, confirmation: "authoritativeOnly" }),
   tearDownAntiTankGuns: Object.freeze({ family: "teardown", uiOptimism: false, confirmation: "authoritativeOnly" }),
 });

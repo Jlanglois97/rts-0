@@ -12,6 +12,18 @@ mod tests {
     use rts_sim::game::entity::EntityKind;
 
     #[test]
+    fn point_tanks_command_round_trips_through_sim_adapter() {
+        let wire: Command =
+            serde_json::from_str(r#"{"c":"pointTanks","units":[1,2],"x":300.0,"y":400.0}"#)
+                .unwrap();
+        let sim = rts_sim::game::command::SimCommand::from_protocol(wire);
+        assert_eq!(
+            serde_json::to_value(sim.to_protocol()).unwrap(),
+            serde_json::json!({"c":"pointTanks","units":[1,2],"x":300.0,"y":400.0})
+        );
+    }
+
+    #[test]
     fn reexported_kind_wire_adapter_round_trips_every_domain_kind() {
         for kind in EntityKind::ALL {
             let wire = kind_to_wire(kind);

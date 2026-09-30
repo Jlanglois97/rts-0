@@ -9,6 +9,7 @@ import {
   HOTKEY_STORAGE_PROFILES_KEY,
   HotkeyProfileService,
   buildHotkeyCommandCatalog,
+  createClassicPreset,
 } from "../client/src/hotkey_profiles.js";
 import {
   buildCommandCardContextCatalog,
@@ -692,3 +693,5 @@ function ekatCard() {
   assert.equal(profile.mode, "grid", "imports replace the target profile payload");
   assert.deepEqual(profile.bindings, {}, "replacement import does not merge old bindings");
 }
+
+assert.equal(createClassicPreset(buildHotkeyCommandCatalog(buildCommandCardContextCatalog())).bindings["unit.pointTanks"], "KeyO");

@@ -350,6 +350,9 @@ const approvedCurrentFactionFiles = new Set([
   "server/crates/sim/src/game/services/combat/projection.rs",
   "server/crates/sim/src/game/services/combat/weapons.rs",
   "server/crates/sim/src/game/services/commands.rs",
+  // Point is deliberately a Tank-only hull command; other units must retain their orders.
+  "server/crates/sim/src/game/services/commands/tank_point.rs",
+  "server/crates/sim/src/game/services/movement/tank_point.rs",
   // Command helper extraction preserves existing support-weapon setup timing and staged-state
   // cleanup special cases moved out of commands.rs; it does not expand faction admission.
   "server/crates/sim/src/game/services/commands/command_helpers.rs",

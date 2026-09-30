@@ -249,6 +249,9 @@ fn command_trace_label(command: &Command) -> String {
             format!("research building={} upgrade={:?}", building, upgrade)
         }
         Command::Cancel { building, .. } => format!("cancel building={}", building),
+        Command::PointTanks { units, x, y } => {
+            format!("pointTanks units={} x={x} y={y}", id_list(units))
+        }
         Command::Stop { units } => format!("stop units={}", id_list(units)),
         Command::HoldPosition { units, .. } => format!("hold_position units={}", id_list(units)),
         Command::SetRally {

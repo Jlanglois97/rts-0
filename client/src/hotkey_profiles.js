@@ -23,6 +23,7 @@ const CLASSIC_DIRECT_BINDINGS = Object.freeze({
   "unit.attack": "KeyA",
   "unit.holdPosition": "KeyH",
   "unit.stop": "KeyS",
+  "unit.pointTanks": "KeyO",
   "unit.setupSupportWeapon": "KeyU",
   "worker.buildMenu": "KeyB",
   "worker.return": "KeyW",

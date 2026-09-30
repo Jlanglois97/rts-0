@@ -61,6 +61,11 @@ but the server assigns lobby/start colors and the client keeps a fallback/render
 cross-surface guard intentionally lives with the protocol parity smoke test until a structured
 lobby/config dump replaces the source scrape.
 
+`pointTanks { units, x, y }` is an immediate tank-only command. The server validates the unit
+list and computes one heading from the eligible tanks’ centroid to the world point. It clears
+active/queued orders and holds the hulls at that heading using normal turn speed. A click at
+the centroid is a no-op. It has no queued form, research requirement, cost, or cooldown.
+
 ### 2.1 Client → Server (`ClientMessage`)
 
 | `t`        | Fields | Meaning |

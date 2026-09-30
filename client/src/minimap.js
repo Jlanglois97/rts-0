@@ -1368,6 +1368,14 @@ export class Minimap {
   _issueOrder(wx, wy, queued = false) {
     const commandTarget = this._intent()?.commandTarget;
     const sel = this.state.selectedEntities() || [];
+    if (commandTarget === "pointTanks") {
+      const tanks = sel.filter((e) => ownOwner(this.state, e.owner, this.controlPolicy) && e.kind === KIND.TANK);
+      if (tanks.length > 0) {
+        this.commandInteraction.issueCommand(cmd.pointTanks(tanks.map((e) => e.id), wx, wy));
+        this._addCommandFeedback("move", wx, wy, false);
+      }
+      return;
+    }
     if (commandTarget === "setupAntiTankGuns") {
       const supportWeaponEntities = this._selectedOwnSupportWeapons();
       const supportWeapons = supportWeaponEntities.map((e) => e.id);

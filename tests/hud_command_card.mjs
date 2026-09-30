@@ -672,6 +672,7 @@ for (const [kind, upgrade] of [
     "worker-build",
     "mixed-army-support",
     "command-car",
+    "tank",
     "artillery",
     "resource-depot-train",
     "barracks-train",
@@ -779,4 +780,15 @@ for (const researched of [false, true]) {
     assert.equal(rocketTruck.enabled, researched && hasVehicleWorks,
       "Rocket Truck training requires Rockets research and a completed Vehicle Works");
   }
+}
+
+{
+  const tank = { id: 90, owner: 1, kind: KIND.TANK };
+  const ctx = { playerId: 1, selection: [tank], entities: [tank], upgrades: [] };
+  const point = buildCommandCardDescriptors(ctx).slots[7];
+  assert.equal(point.commandId, "unit.pointTanks");
+  assert.equal(point.hotkey, "X");
+  assert.equal(point.enabled, true);
+  assert.deepEqual(point.intent, { type: "beginCommandTarget", target: "pointTanks" });
+  assert.equal(buildCommandCardDescriptors({ ...ctx, playerId: 2 }).slots.some((s) => s?.commandId === "unit.pointTanks"), false);
 }

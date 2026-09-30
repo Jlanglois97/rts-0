@@ -23,6 +23,7 @@ mod collision;
 mod pivot_drive;
 mod standability;
 mod steering;
+mod tank_point;
 mod traffic;
 mod vehicle_profiles;
 mod vehicle_route;
@@ -114,6 +115,7 @@ pub(crate) fn movement_system_with_context(
         }
     }
     scout_plane::advance_scout_planes(map, entities);
+    tank_point::advance(map, entities, occ);
     armor_reaction::turn_stationary_tanks_toward_locked_ap_source(
         entities,
         tick,
