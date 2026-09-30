@@ -5,15 +5,16 @@ pub(super) fn active_smoke_focus(
     memory: &mut AiDecisionMemory,
 ) -> Option<u32> {
     let active = memory
-        .containment_smoke_expires_tick
+        .containment
+        .smoke_expires_tick
         .is_some_and(|expires| observation.tick < expires);
     if !active {
-        memory.containment_smoke_target = None;
-        memory.containment_smoke_focus_target = None;
-        memory.containment_smoke_expires_tick = None;
+        memory.containment.smoke_target = None;
+        memory.containment.smoke_focus_target = None;
+        memory.containment.smoke_expires_tick = None;
         return None;
     }
-    let focus = memory.containment_smoke_focus_target?;
+    let focus = memory.containment.smoke_focus_target?;
     if observation
         .visible_enemies
         .iter()
@@ -23,7 +24,7 @@ pub(super) fn active_smoke_focus(
     } else {
         // The exposed target can die before the cloud expires. Keep excluding the obscured Tank
         // for the cloud's lifetime, but release the obsolete focus lock immediately.
-        memory.containment_smoke_focus_target = None;
+        memory.containment.smoke_focus_target = None;
         None
     }
 }
@@ -32,6 +33,7 @@ pub(super) fn issue_hp_aware_tank_volley(
     actions: &mut AiActionContext<'_>,
     observation: &AiObservation,
     tanks: &[u32],
+    already_holding: &[u32],
     primary_target: u32,
     range_tiles: f32,
     excluded_target: Option<u32>,
@@ -68,9 +70,9 @@ pub(super) fn issue_hp_aware_tank_volley(
         let assigned = remaining_tanks.drain(..assigned_count).collect::<Vec<_>>();
         actions::attack_units(actions, assigned, target.id);
     }
-    if !remaining_tanks.is_empty() {
-        actions::hold_position_units(actions, remaining_tanks);
-    }
+    // Tanks without a volley target hold. One already holding keeps its own target.
+    remaining_tanks.retain(|tank| !already_holding.contains(tank));
+    actions::hold_position_units(actions, remaining_tanks);
 }
 
 pub(super) fn maybe_issue_isolation_smoke(
@@ -82,11 +84,11 @@ pub(super) fn maybe_issue_isolation_smoke(
     memory: &mut AiDecisionMemory,
     require_stable_focus: bool,
 ) -> Option<(f32, f32)> {
-    if memory.containment_smoke_expires_tick.is_some() {
+    if memory.containment.smoke_expires_tick.is_some() {
         return None;
     }
     if require_stable_focus
-        && memory.containment_focus_stable_since.is_none_or(|since| {
+        && memory.containment.focus_stable_since.is_none_or(|since| {
             observation.tick.saturating_sub(since) < CONTAINMENT_FOCUS_STABLE_TICKS
         })
     {
@@ -145,8 +147,8 @@ pub(super) fn maybe_issue_isolation_smoke(
             let candidate = focus;
             focus = alternate;
             *focus_target = alternate.id;
-            memory.containment_focus_target = Some(alternate.id);
-            memory.containment_focus_stable_since = Some(observation.tick);
+            memory.containment.focus_target = Some(alternate.id);
+            memory.containment.focus_stable_since = Some(observation.tick);
             candidate
         } else {
             // Compact fronts sometimes expose one Tank and nothing else in shared range. Blind it
@@ -265,14 +267,14 @@ pub(super) fn maybe_issue_isolation_smoke(
         smoke_point.0,
         smoke_point.1,
     );
-    memory.containment_smoke_target = Some(candidate.id);
-    memory.containment_smoke_focus_target = (!singleton_suppression).then_some(*focus_target);
+    memory.containment.smoke_target = Some(candidate.id);
+    memory.containment.smoke_focus_target = (!singleton_suppression).then_some(*focus_target);
     let smoke_duration = if observation.upgrades.contains(&UpgradeKind::SmokePlus) {
         CONTAINMENT_SMOKE_DURATION_TICKS * 2
     } else {
         CONTAINMENT_SMOKE_DURATION_TICKS
     };
-    memory.containment_smoke_expires_tick = Some(
+    memory.containment.smoke_expires_tick = Some(
         observation
             .tick
             .saturating_add(smoke_duration + config::TICK_HZ),
@@ -330,7 +332,8 @@ pub(in crate::ai_core::decision) fn maybe_issue_local_defense_smoke(
         .0;
 
     if let Some(target) = memory
-        .containment_smoke_target
+        .containment
+        .smoke_target
         .filter(|target| local_targets.contains(target))
     {
         return Some(LocalDefenseSmokeDirective::Obscure { target, scout });
@@ -360,7 +363,8 @@ pub(in crate::ai_core::decision) fn maybe_issue_local_defense_smoke(
         return Some(LocalDefenseSmokeDirective::Reposition { scout });
     }
     memory
-        .containment_smoke_target
+        .containment
+        .smoke_target
         .filter(|target| local_targets.contains(target))
         .map(|target| LocalDefenseSmokeDirective::Obscure { target, scout })
 }

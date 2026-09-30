@@ -202,7 +202,18 @@ const approvedCurrentFactionFiles = new Set([
   // modules; roster ownership and faction admission remain in the profile/catalog layers.
   "server/crates/ai/src/ai_core/decision/defense/envelope.rs",
   "server/crates/ai/src/ai_core/decision/defense/incident.rs",
+  // Jeff's route picket and warned sealing is a further focused defense module.
+  "server/crates/ai/src/ai_core/decision/defense/route_line.rs",
   "server/crates/ai/src/ai_core/decision/expansion.rs",
+  // Jeff's Kriegsia-only home Tank post, later bases, Tank Trap clearing and Crossroads placement
+  // policies are focused modules beneath the approved decision controller; profile/catalog layers
+  // still own faction admission.
+  "server/crates/ai/src/ai_core/decision/home_armor.rs",
+  "server/crates/ai/src/ai_core/decision/jeff.rs",
+  "server/crates/ai/src/ai_core/decision/later_bases.rs",
+  "server/crates/ai/src/ai_core/decision/obstacles.rs",
+  // Unit priority and cap adjustments moved verbatim out of the approved decision orchestrator.
+  "server/crates/ai/src/ai_core/decision/unit_mix.rs",
   // Jeff's Kriegsia-only expansion screen and upgrade policy are focused modules beneath the
   // approved decision controller; profile/catalog layers still own faction admission.
   "server/crates/ai/src/ai_core/decision/expansion_security.rs",
@@ -210,6 +221,8 @@ const approvedCurrentFactionFiles = new Set([
   // Jeff's current-roster formation, legacy comparison, and smoke policies were extracted
   // from the approved frontal controller; profile/catalog layers still own faction admission.
   "server/crates/ai/src/ai_core/decision/frontal/formation.rs",
+  // The push controller moved verbatim out of the approved frontal controller.
+  "server/crates/ai/src/ai_core/decision/frontal/containment.rs",
   "server/crates/ai/src/ai_core/decision/frontal/legacy_beta.rs",
   "server/crates/ai/src/ai_core/decision/frontal/smoke.rs",
   "server/crates/ai/src/ai_core/decision/harassment.rs",

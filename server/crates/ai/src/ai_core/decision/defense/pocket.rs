@@ -157,6 +157,15 @@ pub(super) fn defensive_pocket_basis(
     if let Some(direction) = crossroads_wall_aware_direction_for_observation(observation) {
         return Some((anchor, direction));
     }
+    // Face the side an attack actually arrives from: where the enemy's shortest ground route
+    // enters the base. The map centre can point away from it; on Schone Tage raids come down the
+    // northern corridor while the centre lies to the south, so the pocket sat behind the Depot.
+    if let Some(direction) = map_analysis
+        .and_then(|analysis| analysis.base_route_entry(observation.player_id))
+        .and_then(|entry| normalized_direction(anchor, entry))
+    {
+        return Some((anchor, direction));
+    }
     let target = map_analysis
         .and_then(|analysis| {
             central_base_approach(observation.player_id, analysis, anchor, map_center)
@@ -368,6 +377,60 @@ mod tests {
                 central_base_approach(player.id, &analysis, anchor, map_center)
             })
             .collect()
+    }
+
+    /// Per start: the route-facing direction and the previous centre-facing direction.
+    fn route_facing(map_name: &str) -> Vec<((f32, f32), (f32, f32))> {
+        let (analysis, start) = fixture(map_name);
+        let tile_size = start.map.tile_size as f32;
+        let map_center = (
+            start.map.width as f32 * tile_size * 0.5,
+            start.map.height as f32 * tile_size * 0.5,
+        );
+        start
+            .players
+            .iter()
+            .map(|player| {
+                let anchor = tile_center(
+                    (player.start_tile_x, player.start_tile_y),
+                    start.map.tile_size,
+                );
+                let route = analysis
+                    .base_route_entry(player.id)
+                    .and_then(|entry| normalized_direction(anchor, entry))
+                    .expect("every start has a route entry");
+                let central = central_base_approach(player.id, &analysis, anchor, map_center)
+                    .and_then(|approach| normalized_direction(anchor, approach))
+                    .or_else(|| normalized_direction(anchor, map_center))
+                    .expect("a start is never the map centre");
+                (route, central)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn schone_tage_pocket_faces_the_northern_corridor_raids_arrive_through() {
+        // Both mains sit on the east-west axis; attacks come down the northern corridor while the
+        // map centre lies to the south.
+        for (route, _) in route_facing("Schone Tage") {
+            assert!(
+                route.1 < -0.5,
+                "Schone pocket should face north, got {route:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn route_facing_keeps_the_river_and_classic_pockets() {
+        for map_name in ["The River", "Classic"] {
+            for (route, central) in route_facing(map_name) {
+                let alignment = route.0 * central.0 + route.1 * central.1;
+                assert!(
+                    alignment > 0.99,
+                    "{map_name} pocket moved: {route:?} vs {central:?}"
+                );
+            }
+        }
     }
 
     #[test]

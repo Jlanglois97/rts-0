@@ -71,6 +71,34 @@ pub(super) fn try_build_kind<F>(
 where
     F: FnMut(EntityKind, u32, u32) -> bool,
 {
+    let build_search = build_search_for_kind(build_search, profile, kind);
+    try_build_kind_with_search(
+        observation,
+        facts,
+        actions,
+        builder_pools,
+        profile,
+        kind,
+        build_search,
+        placeable,
+    )
+}
+
+/// `try_build_kind` with the search band already chosen for `kind`.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn try_build_kind_with_search<F>(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    actions: &mut AiActionContext<'_>,
+    builder_pools: &[&[u32]],
+    profile: &AiProfile,
+    kind: EntityKind,
+    build_search: ai_shared::BuildSearch,
+    placeable: &mut F,
+) -> Option<actions::BuildAction>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
     config::building_stats(kind)?;
     if !rts_rules::economy::build_requirement_met(kind, facts.complete_building_kinds()) {
         return None;
@@ -79,7 +107,6 @@ where
     if counts.incomplete + counts.intended >= profile.buildings.max_pending_per_kind {
         return None;
     }
-    let build_search = build_search_for_kind(build_search, profile, kind);
     let empty = BTreeSet::new();
     if uses_jeff_opposite_spawn_layout(observation, profile) {
         let mirrored = ai_shared::find_build_spot_mirrored_from_opposite_spawn_with(
@@ -409,6 +436,80 @@ pub(super) fn unit_counts_for_priorities(
         .copied()
         .map(|unit| (unit, counts.get(&unit).copied().unwrap_or(0)))
         .collect()
+}
+
+/// On Crossroads each main has ground behind the HQ, walled off by water, that the enemy can only
+/// reach by walking past the HQ. A main-base building goes first to the nearest site at least this
+/// many tiles deeper than the HQ on the enemy's walk.
+pub(super) const CROSSROADS_SHELTERED_DEPTH_TILES: f32 = 6.0;
+
+/// How far from the HQ Jeff looks for a sheltered Crossroads site. The sheltered ground starts
+/// 11 tiles from the north HQ, and the east start's usual 6-8 tile Factory band lies almost
+/// entirely on the way-in side.
+const CROSSROADS_SHELTER_SEARCH_MAX_RADIUS: i32 = 18;
+
+/// Builds `kind` like `try_build_kind`, except that on Crossroads the current Jeff places its
+/// Barracks, Training Centre, Engineering Complex and Factory at the nearest sheltered site behind
+/// its HQ, else the nearest site no nearer the enemy on foot than the HQ, and only when neither
+/// exists at the usual site.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn try_build_production<F>(
+    observation: &AiObservation,
+    facts: &AiFacts,
+    actions: &mut AiActionContext<'_>,
+    builder_pools: &[&[u32]],
+    profile: &AiProfile,
+    kind: EntityKind,
+    build_search: ai_shared::BuildSearch,
+    map_analysis: Option<&AiMapAnalysis>,
+    placeable: &mut F,
+) -> Option<actions::BuildAction>
+where
+    F: FnMut(EntityKind, u32, u32) -> bool,
+{
+    if uses_current_jeffs_ai_policy(profile.id)
+        && jeff::crossroads_sheltered_kind(kind)
+        && defense::crossroads_wall_aware_approach_direction(observation).is_some()
+        && map_analysis.is_some()
+    {
+        let usual = production::build_search_for_kind(build_search, profile, kind);
+        // Nearest first: the rings grow outward from the HQ with no pull toward the map centre.
+        let sheltered_search = ai_shared::BuildSearch {
+            max_radius: usual.max_radius.max(CROSSROADS_SHELTER_SEARCH_MAX_RADIUS),
+            prefer_away_from_center: false,
+            prefer_toward_center: false,
+            ..usual
+        };
+        for min_depth in [CROSSROADS_SHELTERED_DEPTH_TILES, 0.0] {
+            let built = production::try_build_kind_with_search(
+                observation,
+                facts,
+                actions,
+                builder_pools,
+                profile,
+                kind,
+                sheltered_search,
+                &mut |building, x, y| {
+                    placeable(building, x, y)
+                        && jeff::crossroads_site_depth(observation, map_analysis, building, x, y)
+                            .is_some_and(|depth| depth >= min_depth)
+                },
+            );
+            if built.is_some() {
+                return built;
+            }
+        }
+    }
+    try_build_kind(
+        observation,
+        facts,
+        actions,
+        builder_pools,
+        profile,
+        kind,
+        build_search,
+        placeable,
+    )
 }
 
 #[cfg(test)]

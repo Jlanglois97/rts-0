@@ -6,18 +6,24 @@ use super::*;
 
 mod envelope;
 mod incident;
+mod line;
 mod pocket;
+mod route_line;
 mod spacing;
 pub(super) use spacing::{separated_rifle_position, separated_rifle_position_where};
 
-pub(super) use self::envelope::local_defense_contact;
 use self::envelope::{
     defended_building_sites, defended_envelope_center, defended_envelope_support,
     defensive_formation_sites, DefendedBuildingSite,
 };
-pub(super) use self::incident::respond_to_local_incident;
+pub(super) use self::envelope::{local_defense_contact, tank_siege_contact};
 #[cfg(test)]
 pub(super) use self::incident::select_defensive_interceptors;
+pub(super) use self::incident::{respond_to_local_incident, tank_siege};
+pub(super) use self::line::{
+    main_steel_defensive_line_assignments, main_steel_line_center, stage_defensive_line_at,
+    stage_main_steel_defensive_line,
+};
 #[cfg(test)]
 use self::pocket::{
     defensive_pocket_basis, defensive_pocket_machine_gunner_assignments,
@@ -26,6 +32,7 @@ use self::pocket::{
 pub(super) use self::pocket::{
     stage_defensive_pocket_machine_gunners, stage_home_defensive_pocket_riflemen,
 };
+pub(super) use self::route_line::{plan_route_line, RouteLine};
 
 pub(super) fn crossroads_wall_aware_approach_direction(
     observation: &AiObservation,
@@ -287,68 +294,6 @@ pub(super) fn defensive_threat_dps(enemy: &AiEntitySummary) -> f32 {
         return 0.0;
     }
     profile.dmg as f32 / profile.cooldown as f32
-}
-
-pub(super) fn stage_main_steel_defensive_line(
-    actions: &mut AiActionContext<'_>,
-    observation: &AiObservation,
-    ready_units: &[u32],
-    enemy_base: EnemyBaseFact,
-    distance_tiles: f32,
-) -> Option<Vec<u32>> {
-    stage_main_steel_defensive_line_with_spacing(
-        actions,
-        observation,
-        ready_units,
-        enemy_base,
-        distance_tiles,
-        EXPANSION_DEFENSIVE_LINE_SPACING_TILES,
-        ready_units.len(),
-    )
-}
-
-pub(super) fn stage_main_steel_defensive_line_with_spacing(
-    actions: &mut AiActionContext<'_>,
-    observation: &AiObservation,
-    ready_units: &[u32],
-    enemy_base: EnemyBaseFact,
-    distance_tiles: f32,
-    lateral_spacing_tiles: f32,
-    formation_slots: usize,
-) -> Option<Vec<u32>> {
-    let assignments = main_steel_defensive_line_assignments(
-        observation,
-        ready_units,
-        enemy_base,
-        distance_tiles,
-        lateral_spacing_tiles,
-        formation_slots,
-    )?;
-    let units_by_id: BTreeMap<u32, &AiEntitySummary> = observation
-        .owned
-        .iter()
-        .map(|entity| (entity.id, entity))
-        .collect();
-    let close_enough_px =
-        EXPANSION_DEFENSIVE_LINE_REISSUE_EPS_TILES * observation.map.tile_size as f32;
-    let close_enough2 = squared(close_enough_px);
-    let mut staged = Vec::new();
-
-    for assignment in assignments {
-        let Some(unit) = units_by_id.get(&assignment.unit_id).copied() else {
-            continue;
-        };
-        if dist2(unit.x, unit.y, assignment.x, assignment.y) <= close_enough2 {
-            continue;
-        }
-        if let Some(units) =
-            actions::attack_move_units(actions, [assignment.unit_id], assignment.x, assignment.y)
-        {
-            staged.extend(units);
-        }
-    }
-
-    (!staged.is_empty()).then_some(staged)
 }
 
 pub(super) fn defensive_machine_gunner_units(
@@ -1183,7 +1128,7 @@ fn defensive_firing_sector_is_clear(
         })
 }
 
-fn defensive_position_is_open(
+pub(super) fn defensive_position_is_open(
     observation: &AiObservation,
     map_analysis: Option<&AiMapAnalysis>,
     x: f32,
@@ -1273,57 +1218,6 @@ pub(super) struct DefensiveLineAssignment {
     unit_id: u32,
     x: f32,
     y: f32,
-}
-
-pub(super) fn main_steel_defensive_line_assignments(
-    observation: &AiObservation,
-    ready_units: &[u32],
-    enemy_base: EnemyBaseFact,
-    distance_tiles: f32,
-    lateral_spacing_tiles: f32,
-    formation_slots: usize,
-) -> Option<Vec<DefensiveLineAssignment>> {
-    if ready_units.is_empty() {
-        return None;
-    }
-    let steel_center = main_steel_cluster_center(observation)?;
-    let enemy = (enemy_base.x, enemy_base.y);
-    let (dir_x, dir_y) = normalized_direction(steel_center, enemy)?;
-    let tile_size = observation.map.tile_size as f32;
-    if tile_size <= 0.0 {
-        return None;
-    }
-    let front_distance = distance_tiles.max(1.0) * tile_size;
-    let line_center = clamp_to_map(
-        (
-            steel_center.0 + dir_x * front_distance,
-            steel_center.1 + dir_y * front_distance,
-        ),
-        observation.map,
-    );
-    let perp = (-dir_y, dir_x);
-    let spacing = lateral_spacing_tiles.max(0.0) * tile_size;
-    let mut units = ready_units.to_vec();
-    units.sort_unstable();
-    units.dedup();
-    let center_index = (formation_slots.max(units.len()).saturating_sub(1)) as f32 * 0.5;
-
-    let assignments = units
-        .into_iter()
-        .enumerate()
-        .map(|(index, unit_id)| {
-            let offset = (index as f32 - center_index) * spacing;
-            let (x, y) = clamp_to_map(
-                (
-                    line_center.0 + perp.0 * offset,
-                    line_center.1 + perp.1 * offset,
-                ),
-                observation.map,
-            );
-            DefensiveLineAssignment { unit_id, x, y }
-        })
-        .collect();
-    Some(assignments)
 }
 
 pub(super) fn main_steel_cluster_center(observation: &AiObservation) -> Option<(f32, f32)> {

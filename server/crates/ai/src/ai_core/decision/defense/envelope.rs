@@ -182,6 +182,51 @@ pub(in crate::ai_core::decision) fn local_defense_contact(
     })
 }
 
+/// A Tank that has stood still for three seconds hits from 14 tiles; half a tile more covers the
+/// edge of a building's footprint.
+const TANK_SIEGE_REACH_TILES: f32 = 14.5;
+
+/// Enemy Tanks close enough to shell one of the base's buildings but outside the local defense
+/// zone, which only reaches `BUILDING_DEFENSE_RADIUS_TILES` past a building. A Tank shelling the
+/// natural from ten tiles away was never an attacker, even in plain sight: in the lost games AI 2.1
+/// parked Tanks 7-13 tiles from a base and shelled it for up to two minutes while Jeff's Tanks
+/// stood out of range. Only called when the zone itself holds no enemy.
+pub(in crate::ai_core::decision) fn tank_siege_contact(
+    observation: &AiObservation,
+) -> Option<LocalDefenseContact> {
+    let sites = defended_building_sites(observation, false);
+    let reach2 = squared(TANK_SIEGE_REACH_TILES * observation.map.tile_size as f32);
+    let tanks: Vec<&AiEntitySummary> = observation
+        .visible_enemies
+        .iter()
+        .filter(|enemy| enemy.kind == EntityKind::Tank && enemy.hp > 0)
+        .filter(|enemy| {
+            sites
+                .iter()
+                .any(|site| site.distance2_to_footprint((enemy.x, enemy.y)) <= reach2)
+        })
+        .collect();
+    if tanks.is_empty() {
+        return None;
+    }
+    let centroid = tanks
+        .iter()
+        .fold((0.0, 0.0), |sum, enemy| (sum.0 + enemy.x, sum.1 + enemy.y));
+    let centroid = (
+        centroid.0 / tanks.len() as f32,
+        centroid.1 / tanks.len() as f32,
+    );
+    let mut target_ids: Vec<u32> = tanks.iter().map(|enemy| enemy.id).collect();
+    target_ids.sort_unstable();
+    Some(LocalDefenseContact {
+        target_ids,
+        centroid,
+        intercept: centroid,
+        threat_value: sector_threat_value(&tanks),
+        armored_threat: true,
+    })
+}
+
 fn defensive_intercept_point(
     observation: &AiObservation,
     sites: &[DefendedBuildingSite],

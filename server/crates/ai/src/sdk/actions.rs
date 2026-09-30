@@ -753,6 +753,12 @@ pub(crate) enum AiActionRequest {
         units: Vec<u32>,
         queued: bool,
     },
+    /// Clear the Tank Traps within four tiles of `target`, a completed trap in sight.
+    ClearObstacleArea {
+        units: Vec<u32>,
+        target: u32,
+        queued: bool,
+    },
     SetupAntiTankGuns {
         units: Vec<u32>,
         x: f32,

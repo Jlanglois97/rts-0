@@ -157,6 +157,7 @@ fn observation(economy: AiEconomy, owned: Vec<AiEntitySummary>) -> AiObservation
         visible_enemies: Vec::new(),
         ability_states: Vec::new(),
         smokes: Vec::new(),
+        visible_tank_traps: Vec::new(),
         pending_builds: Vec::new(),
         upgrades: Vec::new(),
     }
@@ -490,6 +491,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
         policy,
         EntityKind::ResourceDepot,
         profile.id,
+        None,
         &mut |_, _, _| true,
     )
     .expect("natural site");
@@ -507,6 +509,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
             policy,
             EntityKind::ResourceDepot,
             profile.id,
+            None,
             &mut |_, _, _| true,
         )
         .is_none(),
@@ -530,6 +533,7 @@ fn expansion_search_skips_occupied_natural_and_chooses_next_resource_site() {
         policy,
         EntityKind::ResourceDepot,
         profile.id,
+        None,
         &mut |_, _, _| true,
     )
     .expect("next unoccupied resource site");
@@ -724,4 +728,126 @@ fn assert_classic_three_separate_bases(under_pressure: bool) {
             "player {player_id}: no completed third base by tick 15000"
         );
     }
+}
+
+fn crossroads_east_observation() -> AiObservation {
+    let mut obs = observation(
+        AiEconomy {
+            steel: 0,
+            oil: 0,
+            supply_used: 0,
+            supply_cap: 100,
+        },
+        Vec::new(),
+    );
+    obs.map.width = 126;
+    obs.map.height = 126;
+    obs.own_start_tile = (117, 78);
+    obs.players = [(1, (117, 78)), (2, (47, 8))]
+        .into_iter()
+        .map(
+            |(id, start_tile)| crate::ai_core::observation::AiPlayerSummary {
+                id,
+                team_id: id,
+                start_tile,
+                is_ai: true,
+                is_alive: true,
+            },
+        )
+        .collect();
+    obs
+}
+
+#[test]
+fn crossroads_main_buildings_are_placed_by_how_far_behind_the_hq_they_are() {
+    use rts_sim::game::map::Map;
+    use rts_sim::game::{Game, PlayerInit};
+    let players: Vec<_> = (1..=2)
+        .map(|id| PlayerInit {
+            id,
+            team_id: id,
+            faction_id: "kriegsia".into(),
+            name: format!("P{id}"),
+            color: "#ffffff".into(),
+            is_ai: true,
+        })
+        .collect();
+    let map = Map::load_for_players("Crossroads", &[(1, 1), (2, 2)], 0x1234_5678).unwrap();
+    let game = Game::new_with_random_ai_profiles_and_map_metadata(
+        &players,
+        0x1234_5678,
+        map,
+        Map::metadata_for_name("Crossroads").unwrap(),
+    );
+    let start = game.start_payload();
+    let analysis = AiMapAnalysis::analyze(&start);
+    for player in [1, 2] {
+        let obs = AiObservation::from_snapshot_with_alive(
+            &start,
+            &game.snapshot_for(player),
+            player,
+            [],
+            None,
+        )
+        .unwrap();
+        // A Factory site raids destroyed in the 120 test, and the walled-off ground behind the HQ.
+        let (destroyed, sheltered) = match obs.own_start_tile {
+            (117, 78) => ((110, 85), (120, 64)),
+            (47, 8) => ((47, 15), (63, 5)),
+            other => panic!("unexpected Crossroads start {other:?}"),
+        };
+        let depth = |kind, tile: (u32, u32), analysis| {
+            jeff::crossroads_site_depth(&obs, analysis, kind, tile.0, tile.1)
+        };
+        for kind in [
+            EntityKind::Barracks,
+            EntityKind::TrainingCentre,
+            EntityKind::EngineeringComplex,
+            EntityKind::Factory,
+        ] {
+            let ahead = depth(kind, destroyed, Some(&analysis)).unwrap();
+            assert!(ahead < 0.0, "{kind:?} at {destroyed:?}: {ahead}");
+            let behind = depth(kind, sheltered, Some(&analysis)).unwrap();
+            assert!(
+                behind >= production::CROSSROADS_SHELTERED_DEPTH_TILES,
+                "{kind:?} at {sheltered:?}: {behind}"
+            );
+        }
+        // Other buildings, and play without map analysis, are placed as before.
+        assert_eq!(
+            depth(EntityKind::ResourceDepot, destroyed, Some(&analysis)),
+            None
+        );
+        assert_eq!(depth(EntityKind::Factory, destroyed, None), None);
+    }
+}
+
+#[test]
+fn the_most_enemy_tanks_seen_together_are_remembered_for_ninety_seconds() {
+    let mut obs = crossroads_east_observation();
+    let mut memory = AiDecisionMemory::for_profile(&crate::ai_core::profiles::JEFFS_AI);
+    for id in [500, 501] {
+        let mut tank = combat_at(id, EntityKind::Tank, 3200.0, 2400.0);
+        tank.owner = 2;
+        obs.visible_enemies.push(tank);
+    }
+    memory.note_enemy_tanks(&obs);
+    // Two other Tanks later, perhaps replacements for two that were destroyed: still two.
+    for tank in &mut obs.visible_enemies {
+        tank.id += 100;
+    }
+    obs.tick += 90;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(
+        memory.recent_enemy_tanks(),
+        2,
+        "counted together, not one by one"
+    );
+    obs.visible_enemies.clear();
+    obs.tick += memory::ENEMY_TANK_MEMORY_TICKS;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(memory.recent_enemy_tanks(), 2, "still remembered");
+    obs.tick += 9;
+    memory.note_enemy_tanks(&obs);
+    assert_eq!(memory.recent_enemy_tanks(), 0);
 }
